@@ -743,19 +743,15 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       const activos = (data.recurringExpenses || []).filter(g => g.active);
       if (!activos.length) return `📭 No tenés gastos fijos configurados todavía. ¿Querés que agregue alguno?`;
       const fecha = action.date || today();
-      const nuevasTx = activos.map(g => ({
-        id: Date.now().toString() + Math.random().toString(36).slice(2),
-        type: 'gasto',
-        description: g.description,
-        amount: g.amount,
-        category: g.category || 'Otros',
-        date: fecha,
-        savingsId: '',
-      }));
-      await saveData(userId, { ...data, transactions: [...data.transactions, ...nuevasTx] });
       const total = activos.reduce((s, g) => s + g.amount, 0);
       const lineas = activos.map(g => `• ${g.description}: ${fmt(g.amount)}`).join('\n');
-      return `✅ *Gastos fijos registrados* (${fecha})\n\n${lineas}\n\n💸 Total: ${fmt(total)}`;
+      // Guardar confirmación pendiente antes de asentar
+      await savePendingSuggestion(phone, JSON.stringify({
+        type: 'confirm_gastos_fijos',
+        gastos: activos,
+        date: fecha,
+      }));
+      return `¿Registramos todos?\n\n${lineas}\n\n💸 Total: ${fmt(total)}\n\n(Sí / No, o decime cuáles no)`;
     }
 
     case 'agregar_gasto_fijo': {
@@ -1346,12 +1342,14 @@ app.post('/webhook', async (req, res) => {
     let pendingUSD = null;
     let pendingVocabConfirm = null;
     let pendingVocabClarify = null;
+    let pendingGastosFijos = null;
     if (pendingRaw) {
       try {
         const parsed = JSON.parse(pendingRaw);
         if (parsed.type === 'usd_tx') pendingUSD = parsed;
         else if (parsed.type === 'vocab_confirm') pendingVocabConfirm = parsed;
         else if (parsed.type === 'vocab_clarify') pendingVocabClarify = parsed;
+        else if (parsed.type === 'confirm_gastos_fijos') pendingGastosFijos = parsed;
       } catch {}
     }
 
@@ -1413,6 +1411,55 @@ app.post('/webhook', async (req, res) => {
 
       await saveHistory(from, [...history, { role: 'user', content: incomingMsg }, { role: 'assistant', content: confirmMsg }]);
       await sendWhatsAppMessage(from, confirmMsg);
+      return;
+    }
+
+    // ── Flujo de confirmación de gastos fijos ──────────────
+    if (pendingGastosFijos) {
+      await clearPendingSuggestion(from);
+      const esAfirmativo = /\b(sí|si|dale|todos|yes|ok|listo|confirmo|claro|así|asi)\b/i.test(incomingMsg);
+      const esNegativo   = /\b(no\b|ninguno|cancel)/i.test(incomingMsg);
+
+      let gastosARegistrar = pendingGastosFijos.gastos;
+
+      if (!esAfirmativo && !esNegativo) {
+        // El usuario mencionó cuáles sí — filtrar por los que nombró
+        gastosARegistrar = pendingGastosFijos.gastos.filter(g =>
+          incomingMsg.toLowerCase().includes(g.description.toLowerCase())
+        );
+        if (!gastosARegistrar.length) {
+          // No matcheó ninguno, re-preguntar
+          const lineas = pendingGastosFijos.gastos.map(g => `• ${g.description}: ${fmt(g.amount)}`).join('\n');
+          await savePendingSuggestion(from, JSON.stringify(pendingGastosFijos));
+          const msg = `No entendí bien cuáles. ¿Registramos todos o me decís cuáles?\n\n${lineas}`;
+          await sendWhatsAppMessage(from, msg);
+          return;
+        }
+      }
+
+      if (esNegativo) {
+        const msg = `Dale, no registré nada. Avisame cuando quieras hacerlo.`;
+        await saveHistory(from, [...history, { role: 'user', content: incomingMsg }, { role: 'assistant', content: msg }]);
+        await sendWhatsAppMessage(from, msg);
+        return;
+      }
+
+      const fecha = pendingGastosFijos.date || today();
+      const nuevasTx = gastosARegistrar.map(g => ({
+        id: Date.now().toString() + Math.random().toString(36).slice(2),
+        type: 'gasto',
+        description: g.description,
+        amount: g.amount,
+        category: g.category || 'Otros',
+        date: fecha,
+        savingsId: '',
+      }));
+      await saveData(userId, { ...data, transactions: [...data.transactions, ...nuevasTx] });
+      const total = gastosARegistrar.reduce((s, g) => s + g.amount, 0);
+      const lineas = gastosARegistrar.map(g => `✅ ${g.description}: ${fmt(g.amount)}`).join('\n');
+      const msg = `Listo, registré los gastos fijos:\n\n${lineas}\n\n💸 Total: ${fmt(total)}`;
+      await saveHistory(from, [...history, { role: 'user', content: incomingMsg }, { role: 'assistant', content: msg }]);
+      await sendWhatsAppMessage(from, msg);
       return;
     }
 
