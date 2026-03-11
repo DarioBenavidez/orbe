@@ -480,13 +480,19 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       const ingresos = txs.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((a, t) => a + t.amount, 0);
       const gastos = txs.filter(t => t.type === 'gasto').reduce((a, t) => a + t.amount, 0);
       const gastosFijos = (data.recurringExpenses || []).filter(g => g.active).reduce((a, g) => a + g.amount, 0);
+      const ingFijosNoRecibidos = (data.recurringIncomes || []).filter(r => r.active).reduce((a, r) => {
+        const yaRecibido = txs.some(t => (t.type === 'ingreso' || t.type === 'sueldo') && t.description?.toLowerCase().includes(r.name.toLowerCase()));
+        return yaRecibido ? a : a + r.amount;
+      }, 0);
       const balance = ingresos - gastos;
-      const proyectado = balance - gastosFijos;
+      const proyectado = balance - gastosFijos + ingFijosNoRecibidos;
       const balanceMsg = balance >= 0
         ? ['Vas muy bien por ahora!', 'Todo en orden por el momento.', 'Buen ritmo este mes!'][Math.floor(Math.random() * 3)]
         : ['Estás un poco ajustado este mes, ojo.', 'El mes está apretado, pero se puede revertir.', 'Cuidado con los gastos, el balance está en rojo.'][Math.floor(Math.random() * 3)];
       let resp = `📊 *Balance de ${MONTH_NAMES[month]}${name ? ', ' + name : ''}*\n\n💰 Ingresos: ${fmt(ingresos)}\n💸 Gastos registrados: ${fmt(gastos)}\n${balance >= 0 ? '✅' : '⚠️'} Disponible ahora: ${fmtSigned(balance)}`;
-      if (gastosFijos > 0) resp += `\n🔄 Gastos fijos del mes: ${fmt(gastosFijos)}\n📉 Proyectado real: ${fmtSigned(proyectado)}`;
+      if (gastosFijos > 0) resp += `\n🔄 Gastos fijos pendientes: ${fmt(gastosFijos)}`;
+      if (ingFijosNoRecibidos > 0) resp += `\n💵 Ingresos esperados: ${fmt(ingFijosNoRecibidos)}`;
+      if (gastosFijos > 0 || ingFijosNoRecibidos > 0) resp += `\n📅 Estimado fin de mes: ${fmtSigned(proyectado)}`;
       resp += `\n\n${balanceMsg}`;
       return resp;
     }
@@ -832,8 +838,12 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       const gastos = txs.filter(t => t.type === 'gasto').reduce((a, t) => a + t.amount, 0);
       const balance = ingresos - gastos;
       const gastosFijos = (data.recurringExpenses || []).filter(g => g.active).reduce((a, g) => a + g.amount, 0);
-      const ingresosFijos = (data.recurringIncomes || []).filter(r => r.active).reduce((a, r) => a + r.amount, 0);
-      const proyectado = balance - gastosFijos + ingresosFijos;
+      // Ingresos fijos: solo los que NO llegaron todavía este mes (no están en transacciones)
+      const ingFijosNoRecibidos = (data.recurringIncomes || []).filter(r => r.active).reduce((a, r) => {
+        const yaRecibido = txs.some(t => (t.type === 'ingreso' || t.type === 'sueldo') && t.description?.toLowerCase().includes(r.name.toLowerCase()));
+        return yaRecibido ? a : a + r.amount;
+      }, 0);
+      const proyectado = balance - gastosFijos + ingFijosNoRecibidos;
       const totalDeudas = data.debts.reduce((s, d) => s + d.remaining, 0);
       const totalAhorros = data.savings.reduce((s, sv) => s + (sv.current || 0), 0);
       const totalPrestamos = (data.loans || []).reduce((s, l) => s + l.remaining, 0);
@@ -841,9 +851,9 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       const proxVenc = (data.events || []).filter(ev => ev.day >= todayDay && ev.day <= todayDay + 7);
       let resp = `🌟 *Resumen de ${MONTH_NAMES[month]}${name ? ', ' + name : ''}*\n\n`;
       resp += `💰 Ingresos: ${fmt(ingresos)}\n💸 Gastos: ${fmt(gastos)}\n${balance >= 0 ? '✅' : '⚠️'} Disponible: ${fmtSigned(balance)}\n`;
-      if (gastosFijos > 0) resp += `🔄 Gastos fijos/mes: ${fmt(gastosFijos)}\n`;
-      if (ingresosFijos > 0) resp += `💵 Ingresos fijos esperados/mes: ${fmt(ingresosFijos)}\n`;
-      if (gastosFijos > 0 || ingresosFijos > 0) resp += `📉 Proyectado real: ${fmtSigned(proyectado)}\n`;
+      if (gastosFijos > 0) resp += `🔄 Gastos fijos pendientes: ${fmt(gastosFijos)}\n`;
+      if (ingFijosNoRecibidos > 0) resp += `💵 Ingresos esperados aún no recibidos: ${fmt(ingFijosNoRecibidos)}\n`;
+      if (gastosFijos > 0 || ingFijosNoRecibidos > 0) resp += `📅 Estimado fin de mes: ${fmtSigned(proyectado)}\n`;
       if (totalDeudas > 0) resp += `💳 Deudas: ${fmt(totalDeudas)}\n`;
       if (totalAhorros > 0) resp += `🐷 Ahorros: ${fmt(totalAhorros)}\n`;
       if (totalPrestamos > 0) resp += `📋 Te deben: ${fmt(totalPrestamos)}\n`;
