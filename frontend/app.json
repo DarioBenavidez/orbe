@@ -1,7 +1,7 @@
 {
   "expo": {
     "name": "Orbe",
-    "slug": "MisFinanzas",
+    "slug": "orbe",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -20,7 +20,7 @@
       },
       "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
-      "package": "com.dariobenavidez.MisFinanzas"
+      "package": "com.dariobenavidez.orbe"
     },
     "web": {
       "output": "static",
@@ -49,8 +49,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "916da859-5cf0-45fe-adb4-f5f2e5f038fe"
+        "projectId": "f2dbe64b-1bad-4d42-ab93-b70ed7dfd011"
       }
-    }
+    },
+    "owner": "dariobenavidez"
   }
 }
