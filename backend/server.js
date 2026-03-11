@@ -242,6 +242,7 @@ ACCIONES DISPONIBLES:
 {"type":"simular_sin_gasto","keyword":"netflix","amount":0}
 {"type":"planear_compra","name":"auto","amount":5000000,"months":12}
 {"type":"gasto_en_dolares","description":"Netflix","amountUSD":15,"category":"Entretenimiento","date":"YYYY-MM-DD","source":"tarjeta"}
+{"type":"guardar_vocabulario","expresion":"el chino","descripcion":"Chino del barrio","categoria":"Comida"}
 {"type":"confirmar_vocabulario","expresion":"gym","interpretacion":"Gimnasio","categoria":"Salud","tx":{"txType":"gasto","description":"Gimnasio","amount":5000,"category":"Salud","date":"YYYY-MM-DD"}}
 {"type":"conversacion","respuesta":"..."}
 {"type":"unknown"}
@@ -261,6 +262,7 @@ REGLAS DE INTERPRETACIÓN:
 - "quiero comprar/me quiero comprar/estoy pensando en comprar/cómo llego a/cómo ahorro para" → planear_compra (si el usuario menciona un plazo, usalo en months; si no, omitilo)
 - "gasté X dólares/USD", "pagué X USD", "compré en dólares", "usé mis dólares", "gasté en dólares" → gasto_en_dolares (source: "tarjeta" si menciona tarjeta/crédito/débito, "cuenta" si dice cuenta/efectivo/mis dólares/ahorros)
 - "chau / hasta luego / buenas noches / nos vemos" AL FINAL de una conversación o junto a "gracias" → conversacion con despedida breve. NUNCA disparar el saludo completo en una despedida.
+- "cuando diga/digo X es/significa/quiero decir Y", "aprendé que X es Y", "guardá que X es Y", "X = Y" (enseñanza explícita de vocabulario) → guardar_vocabulario (categoria: inferila del contexto o usá "Otros")
 - Si el mensaje incluye una expresión coloquial, abreviación o apodo propio del usuario (ej: "gym", "el super", "la cuota", "el kiosco", "el chino") que NO está en el vocabulario aprendido y cuyo significado podría ser ambiguo, devolvé "confirmar_vocabulario" con tu mejor interpretación como sugerencia. Si la expresión YA está en el vocabulario aprendido, usala directamente sin preguntar. Si la expresión es completamente obvia y universal (ej: "supermercado", "restaurante", "taxi", "comida", "farmacia"), NO preguntes — usá agregar_transaccion directamente.
 
 CÓMO RAZONÁS (lo más importante):
@@ -341,6 +343,18 @@ ${proxVenc2.length > 0 ? `- Vencimientos próximos (próx. 3 días): ${proxVenc2
 Tu tarea: escribí un saludo natural, breve y conversacional. Pensá qué es lo más relevante de la situación financiera para mencionar — no todo, lo que realmente importa ahora mismo. Si hay vencimientos urgentes, son lo primero. Si el balance está justo, es el momento de mencionarlo. Si todo va bien, podés ser más liviana y simplemente preguntar cómo arrancó el día. Una sola pregunta, nunca varias. No uses listas ni asteriscos. Variá el estilo — no empieces siempre igual, no digas siempre "¡Buenos días!". Máximo 4 líneas. Escribí como alguien que genuinamente se acuerda de la situación del usuario, no como un bot que ejecuta un template.`;
 
       return await callClaude(saludoPrompt, [], 'hola');
+    }
+
+    case 'guardar_vocabulario': {
+      const vocab = Array.isArray(data.vocabulario) ? [...data.vocabulario] : [];
+      const idx = vocab.findIndex(v => v.expresion.toLowerCase() === action.expresion.toLowerCase());
+      if (idx !== -1) {
+        vocab[idx] = { expresion: action.expresion, descripcion: action.descripcion, categoria: action.categoria || 'Otros' };
+      } else {
+        vocab.push({ expresion: action.expresion, descripcion: action.descripcion, categoria: action.categoria || 'Otros' });
+      }
+      await saveData(userId, { ...data, vocabulario: vocab });
+      return `Guardado 💾 Ya sé que *"${action.expresion}"* = *${action.descripcion}* (${action.categoria || 'Otros'}). La próxima lo uso directamente.`;
     }
 
     case 'confirmar_vocabulario': {
