@@ -1348,7 +1348,7 @@ export default function MainApp({ user, onLogout }) {
     </View>
   );
 
-  const PICKER_YEARS = [2024, 2025, 2026, 2027, 2028];
+  const PICKER_YEARS = [2026, 2027, 2028, 2029, 2030];
 
   const handleTab = (key) => {
     if (key === '__add__') { setAddModal(true); return; }
