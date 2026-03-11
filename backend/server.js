@@ -1280,7 +1280,7 @@ function scheduleDaily() {
   }, 'Saludo matutino');
   scheduleAt(21, 0, sendEveningCheckin, 'Check-in nocturno');
 }
-scheduleDaily();
+if (process.env.NODE_ENV !== 'test') scheduleDaily();
 
 // ── Webhook: verificación Meta ─────────────────────────────
 app.get('/webhook', (req, res) => {
@@ -1627,5 +1627,12 @@ app.post('/webhook', async (req, res) => {
 });
 
 app.get('/', (req, res) => res.json({ status: 'ok', app: 'Orbe', version: '5.0.0' }));
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`🚀 Orbe v5.0 en puerto ${PORT}`));
+
+if (process.env.NODE_ENV !== 'test') {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => console.log(`🚀 Orbe v5.0 en puerto ${PORT}`));
+}
+
+if (process.env.NODE_ENV === 'test') {
+  module.exports = { processAction, interpretMessage, defaultData, fmt, today };
+}
