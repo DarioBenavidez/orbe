@@ -56,7 +56,8 @@ export async function loadData(uid) {
     savings:         Array.isArray(d.savings)         ? d.savings        : [],
     debts:           Array.isArray(d.debts)           ? d.debts          : [],
     events:          Array.isArray(d.events)          ? d.events         : [],
-    vocabulario:     Array.isArray(d.vocabulario)     ? d.vocabulario    : [],
+    vocabulario:        Array.isArray(d.vocabulario)        ? d.vocabulario        : [],
+    recurringIncomes:   Array.isArray(d.recurringIncomes)   ? d.recurringIncomes   : [],
     selectedMonth:   typeof d.selectedMonth === 'number' ? d.selectedMonth : new Date().getMonth(),
     selectedYear:    typeof d.selectedYear  === 'number' ? d.selectedYear  : new Date().getFullYear(),
   };

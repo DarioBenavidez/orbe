@@ -74,7 +74,7 @@ async function sendWhatsAppMessage(to, body) {
 function defaultData() {
   return {
     transactions: [], budgets: [], categories: {}, savings: [], debts: [], events: [],
-    vocabulario: [],
+    vocabulario: [], recurringIncomes: [],
     selectedMonth: new Date().getMonth(), selectedYear: new Date().getFullYear(),
   };
 }
@@ -227,11 +227,13 @@ ACCIONES DISPONIBLES:
 {"type":"agregar_evento","title":"...","day":15,"eventType":"vencimiento|pago|recordatorio","notify":true}
 {"type":"eliminar_evento","keyword":"..."}
 {"type":"resumen_general"}
+{"type":"agregar_ingreso_recurrente","name":"Astrid","amount":150000,"reason":"venta","day":1}
 {"type":"agregar_prestamo","name":"Claudio","amount":4000,"reason":"coca cola"}
 {"type":"registrar_pago_prestamo","name":"Claudio","amount":100}
 {"type":"consultar_prestamo","name":"Claudio"}
 {"type":"consultar_todos_prestamos"}
 {"type":"agregar_gasto_fijo","description":"Gimnasio","amount":8000,"category":"Salud","day":1}
+{"type":"actualizar_gasto_fijo","keyword":"internet","day":5,"amount":0,"description":""}
 {"type":"eliminar_gasto_fijo","keyword":"gimnasio"}
 {"type":"consolidar_prestamos","name":"Samy"}
 {"type":"agregar_ahorro","name":"Vacaciones","target":50000,"current":0}
@@ -261,6 +263,8 @@ REGLAS DE INTERPRETACIÓN:
 - "qué pasaría si dejo de pagar/si cancelo/si me doy de baja/si elimino X" → simular_sin_gasto (si el usuario menciona un monto explícito, usalo en amount; si no, dejá amount en 0 para que se busque en los registros)
 - "quiero comprar/me quiero comprar/estoy pensando en comprar/cómo llego a/cómo ahorro para" → planear_compra (si el usuario menciona un plazo, usalo en months; si no, omitilo)
 - "gasté X dólares/USD", "pagué X USD", "compré en dólares", "usé mis dólares", "gasté en dólares" → gasto_en_dolares (source: "tarjeta" si menciona tarjeta/crédito/débito, "cuenta" si dice cuenta/efectivo/mis dólares/ahorros)
+- "X me paga/viene pagando Y por mes", "tengo un ingreso mensual de Y de X", "X me debe pagar Y todos los meses", "acuerdo de pago mensual con X" → agregar_ingreso_recurrente (name: quien paga, amount: monto mensual, reason: motivo si se menciona, day: día del mes si se menciona)
+- "cambiá el día de X al Y", "pasá el gasto fijo X al día Y", "actualizá el monto de X a Y", "el X ahora cuesta Y", "poneles el día Y a todos los gastos fijos" → actualizar_gasto_fijo (keyword: nombre del gasto o "todos" si aplica a todos, day y/o amount solo si se mencionan, omitir los que no cambian)
 - "chau / hasta luego / buenas noches / nos vemos" AL FINAL de una conversación o junto a "gracias" → conversacion con despedida breve. NUNCA disparar el saludo completo en una despedida.
 - "cuando diga/digo X es/significa/quiero decir Y", "aprendé que X es Y", "guardá que X es Y", "X = Y" (enseñanza explícita de vocabulario) → guardar_vocabulario (categoria: inferila del contexto o usá "Otros")
 - Hay palabras genéricas que son SIEMPRE ambiguas porque pueden referirse a muchas cosas distintas: "cuota", "pago", "factura", "el pago", "la cuenta", "el servicio", "la mensualidad". Si el usuario las usa SIN especificar de qué (ej: "pagué la cuota", "aboné la factura"), NO asumas ni uses confirmar_vocabulario — usá conversacion para preguntar "¿cuota de qué?" o "¿factura de qué servicio?". Si el usuario YA especificó (ej: "pagué la cuota del auto", "cuota del colegio"), procesá normalmente.
@@ -475,11 +479,16 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       const txs = data.transactions.filter(t => { const { month: m, year: y } = parseDateParts(t.date); return m === month && y === year; });
       const ingresos = txs.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((a, t) => a + t.amount, 0);
       const gastos = txs.filter(t => t.type === 'gasto').reduce((a, t) => a + t.amount, 0);
+      const gastosFijos = (data.recurringExpenses || []).filter(g => g.active).reduce((a, g) => a + g.amount, 0);
       const balance = ingresos - gastos;
+      const proyectado = balance - gastosFijos;
       const balanceMsg = balance >= 0
         ? ['Vas muy bien por ahora!', 'Todo en orden por el momento.', 'Buen ritmo este mes!'][Math.floor(Math.random() * 3)]
         : ['Estás un poco ajustado este mes, ojo.', 'El mes está apretado, pero se puede revertir.', 'Cuidado con los gastos, el balance está en rojo.'][Math.floor(Math.random() * 3)];
-      return `📊 *Balance de ${MONTH_NAMES[month]}${name ? ', ' + name : ''}*\n\n💰 Ingresos: ${fmt(ingresos)}\n💸 Gastos: ${fmt(gastos)}\n${balance >= 0 ? '✅' : '⚠️'} Disponible: ${fmtSigned(balance)}\n\n${balanceMsg}`;
+      let resp = `📊 *Balance de ${MONTH_NAMES[month]}${name ? ', ' + name : ''}*\n\n💰 Ingresos: ${fmt(ingresos)}\n💸 Gastos registrados: ${fmt(gastos)}\n${balance >= 0 ? '✅' : '⚠️'} Disponible ahora: ${fmtSigned(balance)}`;
+      if (gastosFijos > 0) resp += `\n🔄 Gastos fijos del mes: ${fmt(gastosFijos)}\n📉 Proyectado real: ${fmtSigned(proyectado)}`;
+      resp += `\n\n${balanceMsg}`;
+      return resp;
     }
 
     case 'ultimas_transacciones': {
@@ -727,6 +736,40 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       return `🔄 *Gasto fijo agregado!*\n\n📝 ${gasto.description}: ${fmt(gasto.amount)}/mes\n📆 Se registra el día ${gasto.day} automáticamente.`;
     }
 
+    case 'agregar_ingreso_recurrente': {
+      const ri = {
+        id: Date.now().toString(),
+        name: action.name,
+        amount: parseFloat(action.amount),
+        reason: action.reason || '',
+        day: parseInt(action.day) || 1,
+        active: true,
+      };
+      const recurringIncomes = [...(data.recurringIncomes || []), ri];
+      await saveData(userId, { ...data, recurringIncomes });
+      return `💰 *Ingreso mensual registrado!*\n\n👤 ${ri.name}\n💵 ${fmt(ri.amount)}/mes${ri.reason ? `\n📝 Por: ${ri.reason}` : ''}\n📆 Esperado el día ${ri.day} de cada mes\n\nCuando llegue el pago, decime y lo registro como ingreso.`;
+    }
+
+    case 'actualizar_gasto_fijo': {
+      const esTotal = !action.keyword || action.keyword.toLowerCase() === 'todos' || action.keyword.toLowerCase() === 'all';
+      const recurringExpenses = (data.recurringExpenses || []).map(g => {
+        const match = esTotal || g.description.toLowerCase().includes(action.keyword.toLowerCase());
+        if (!match) return g;
+        const updated = { ...g };
+        if (action.day)    updated.day    = parseInt(action.day);
+        if (action.amount) updated.amount = parseFloat(action.amount);
+        if (action.description) updated.description = action.description;
+        return updated;
+      });
+      await saveData(userId, { ...data, recurringExpenses });
+      const afectados = esTotal ? recurringExpenses : recurringExpenses.filter(g => g.description.toLowerCase().includes((action.keyword || '').toLowerCase()));
+      const cambios = [];
+      if (action.day)    cambios.push(`día → ${action.day}`);
+      if (action.amount) cambios.push(`monto → ${fmt(action.amount)}`);
+      if (action.description) cambios.push(`nombre → ${action.description}`);
+      return `✅ Actualicé ${esTotal ? 'todos los gastos fijos' : `*${afectados[0]?.description || action.keyword}*`}: ${cambios.join(', ')}.`;
+    }
+
     case 'eliminar_gasto_fijo': {
       const recurringExpenses = (data.recurringExpenses || []).map(g =>
         g.description.toLowerCase().includes(action.keyword.toLowerCase()) ? { ...g, active: false } : g
@@ -788,6 +831,9 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       const ingresos = txs.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((a, t) => a + t.amount, 0);
       const gastos = txs.filter(t => t.type === 'gasto').reduce((a, t) => a + t.amount, 0);
       const balance = ingresos - gastos;
+      const gastosFijos = (data.recurringExpenses || []).filter(g => g.active).reduce((a, g) => a + g.amount, 0);
+      const ingresosFijos = (data.recurringIncomes || []).filter(r => r.active).reduce((a, r) => a + r.amount, 0);
+      const proyectado = balance - gastosFijos + ingresosFijos;
       const totalDeudas = data.debts.reduce((s, d) => s + d.remaining, 0);
       const totalAhorros = data.savings.reduce((s, sv) => s + (sv.current || 0), 0);
       const totalPrestamos = (data.loans || []).reduce((s, l) => s + l.remaining, 0);
@@ -795,6 +841,9 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       const proxVenc = (data.events || []).filter(ev => ev.day >= todayDay && ev.day <= todayDay + 7);
       let resp = `🌟 *Resumen de ${MONTH_NAMES[month]}${name ? ', ' + name : ''}*\n\n`;
       resp += `💰 Ingresos: ${fmt(ingresos)}\n💸 Gastos: ${fmt(gastos)}\n${balance >= 0 ? '✅' : '⚠️'} Disponible: ${fmtSigned(balance)}\n`;
+      if (gastosFijos > 0) resp += `🔄 Gastos fijos/mes: ${fmt(gastosFijos)}\n`;
+      if (ingresosFijos > 0) resp += `💵 Ingresos fijos esperados/mes: ${fmt(ingresosFijos)}\n`;
+      if (gastosFijos > 0 || ingresosFijos > 0) resp += `📉 Proyectado real: ${fmtSigned(proyectado)}\n`;
       if (totalDeudas > 0) resp += `💳 Deudas: ${fmt(totalDeudas)}\n`;
       if (totalAhorros > 0) resp += `🐷 Ahorros: ${fmt(totalAhorros)}\n`;
       if (totalPrestamos > 0) resp += `📋 Te deben: ${fmt(totalPrestamos)}\n`;
