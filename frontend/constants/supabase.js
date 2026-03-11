@@ -46,7 +46,20 @@ export async function loadData(uid) {
     .eq('id', uid)
     .single();
   if (error || !data) return null;
-  return data.data;
+  const d = data.data;
+  if (!d || typeof d !== 'object') return null;
+  // Merge with defaults to handle users with older schema (missing fields)
+  return {
+    transactions:    Array.isArray(d.transactions)   ? d.transactions   : [],
+    budgets:         Array.isArray(d.budgets)         ? d.budgets        : [],
+    categories:      d.categories && typeof d.categories === 'object' ? d.categories : {},
+    savings:         Array.isArray(d.savings)         ? d.savings        : [],
+    debts:           Array.isArray(d.debts)           ? d.debts          : [],
+    events:          Array.isArray(d.events)          ? d.events         : [],
+    vocabulario:     Array.isArray(d.vocabulario)     ? d.vocabulario    : [],
+    selectedMonth:   typeof d.selectedMonth === 'number' ? d.selectedMonth : new Date().getMonth(),
+    selectedYear:    typeof d.selectedYear  === 'number' ? d.selectedYear  : new Date().getFullYear(),
+  };
 }
 
 export async function saveData(uid, payload) {

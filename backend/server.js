@@ -74,6 +74,7 @@ async function sendWhatsAppMessage(to, body) {
 function defaultData() {
   return {
     transactions: [], budgets: [], categories: {}, savings: [], debts: [], events: [],
+    vocabulario: [],
     selectedMonth: new Date().getMonth(), selectedYear: new Date().getFullYear(),
   };
 }
@@ -203,6 +204,7 @@ CONTEXTO ACTUAL:
 - Gastos del mes: ${fmt(gastos)}
 - Balance disponible: ${fmt(balance)}${balance < 0 ? ' ← NEGATIVO, mencionalo con tacto si intenta gastar más' : ''}
 - Categorías disponibles: ${Object.keys(data.categories || {}).join(', ') || 'ninguna aún'}
+- Vocabulario personalizado del usuario: ${(data.vocabulario || []).length > 0 ? (data.vocabulario || []).map(v => `"${v.expresion}" → ${v.descripcion} (${v.categoria})`).join(', ') : 'ninguno aún — si usá expresiones propias, pedíle confirmación'}
 - Metas de ahorro: ${data.savings?.length || 0} (total acumulado: ${fmt((data.savings || []).reduce((s, sv) => s + (sv.current || 0), 0))})${data.savings?.length > 0 ? ' — ' + data.savings.map(sv => `${sv.name}: ${fmt(sv.current)}/${fmt(sv.target)}`).join(', ') : ''}
 - Deudas: ${data.debts?.length || 0} (total pendiente: ${fmt((data.debts || []).reduce((s, d) => s + d.remaining, 0))})${data.debts?.length > 0 ? ' — ' + data.debts.map(d => `${d.name}: ${fmt(d.remaining)}`).join(', ') : ''}
 - Préstamos pendientes (te deben): ${(data.loans || []).filter(l => l.remaining > 0).length}${(data.loans || []).filter(l => l.remaining > 0).length > 0 ? ' — ' + (data.loans || []).filter(l => l.remaining > 0).map(l => `${l.name}: ${fmt(l.remaining)}`).join(', ') : ''}
@@ -240,6 +242,7 @@ ACCIONES DISPONIBLES:
 {"type":"simular_sin_gasto","keyword":"netflix","amount":0}
 {"type":"planear_compra","name":"auto","amount":5000000,"months":12}
 {"type":"gasto_en_dolares","description":"Netflix","amountUSD":15,"category":"Entretenimiento","date":"YYYY-MM-DD","source":"tarjeta"}
+{"type":"confirmar_vocabulario","expresion":"gym","interpretacion":"Gimnasio","categoria":"Salud","tx":{"txType":"gasto","description":"Gimnasio","amount":5000,"category":"Salud","date":"YYYY-MM-DD"}}
 {"type":"conversacion","respuesta":"..."}
 {"type":"unknown"}
 
@@ -258,6 +261,7 @@ REGLAS DE INTERPRETACIÓN:
 - "quiero comprar/me quiero comprar/estoy pensando en comprar/cómo llego a/cómo ahorro para" → planear_compra (si el usuario menciona un plazo, usalo en months; si no, omitilo)
 - "gasté X dólares/USD", "pagué X USD", "compré en dólares", "usé mis dólares", "gasté en dólares" → gasto_en_dolares (source: "tarjeta" si menciona tarjeta/crédito/débito, "cuenta" si dice cuenta/efectivo/mis dólares/ahorros)
 - "chau / hasta luego / buenas noches / nos vemos" AL FINAL de una conversación o junto a "gracias" → conversacion con despedida breve. NUNCA disparar el saludo completo en una despedida.
+- Si el mensaje incluye una expresión coloquial, abreviación o apodo propio del usuario (ej: "gym", "el super", "la cuota", "el kiosco", "el chino") que NO está en el vocabulario aprendido y cuyo significado podría ser ambiguo, devolvé "confirmar_vocabulario" con tu mejor interpretación como sugerencia. Si la expresión YA está en el vocabulario aprendido, usala directamente sin preguntar. Si la expresión es completamente obvia y universal (ej: "supermercado", "restaurante", "taxi", "comida", "farmacia"), NO preguntes — usá agregar_transaccion directamente.
 
 CÓMO RAZONÁS (lo más importante):
 Pensás antes de responder. No das respuestas automáticas. Te hacés preguntas: ¿qué está necesitando realmente esta persona? ¿hay algo en los números que debería mencionar aunque no me lo pidió? ¿el contexto financiero cambia lo que voy a decir?
@@ -337,6 +341,18 @@ ${proxVenc2.length > 0 ? `- Vencimientos próximos (próx. 3 días): ${proxVenc2
 Tu tarea: escribí un saludo natural, breve y conversacional. Pensá qué es lo más relevante de la situación financiera para mencionar — no todo, lo que realmente importa ahora mismo. Si hay vencimientos urgentes, son lo primero. Si el balance está justo, es el momento de mencionarlo. Si todo va bien, podés ser más liviana y simplemente preguntar cómo arrancó el día. Una sola pregunta, nunca varias. No uses listas ni asteriscos. Variá el estilo — no empieces siempre igual, no digas siempre "¡Buenos días!". Máximo 4 líneas. Escribí como alguien que genuinamente se acuerda de la situación del usuario, no como un bot que ejecuta un template.`;
 
       return await callClaude(saludoPrompt, [], 'hola');
+    }
+
+    case 'confirmar_vocabulario': {
+      const pendingJson = JSON.stringify({
+        type: 'vocab_confirm',
+        expresion: action.expresion,
+        interpretacion: action.interpretacion,
+        categoria: action.categoria,
+        tx: action.tx,
+      });
+      await savePendingSuggestion(phone, pendingJson);
+      return `Una pregunta rápida: cuando decís *"${action.expresion}"*, ¿te referís a *${action.interpretacion}*? (Sí / No)`;
     }
 
     case 'consultar_dolar': {
@@ -1231,10 +1247,14 @@ app.post('/webhook', async (req, res) => {
     // ── Flujo de transacción USD pendiente ─────────────────
     const pendingRaw = await getPendingSuggestion(from);
     let pendingUSD = null;
+    let pendingVocabConfirm = null;
+    let pendingVocabClarify = null;
     if (pendingRaw) {
       try {
         const parsed = JSON.parse(pendingRaw);
         if (parsed.type === 'usd_tx') pendingUSD = parsed;
+        else if (parsed.type === 'vocab_confirm') pendingVocabConfirm = parsed;
+        else if (parsed.type === 'vocab_clarify') pendingVocabClarify = parsed;
       } catch {}
     }
 
@@ -1299,9 +1319,75 @@ app.post('/webhook', async (req, res) => {
       return;
     }
 
+    // ── Flujo de confirmación de vocabulario ───────────────
+    if (pendingVocabConfirm) {
+      await clearPendingSuggestion(from);
+      const esAfirmativo = /\b(sí|si|dale|yes|correcto|exacto|eso|claro|obvio|justo|así|asi|confirmo|ok|okok|aja|ajá)\b/i.test(incomingMsg);
+      const esNegativo = /\b(no|nope|incorrecto|mal|para nada|negativo|tampoco|nada que ver)\b/i.test(incomingMsg);
+
+      if (esAfirmativo) {
+        const txRaw = pendingVocabConfirm.tx || {};
+        const tx = {
+          id: Date.now().toString(),
+          type: txRaw.txType || 'gasto',
+          description: txRaw.description || pendingVocabConfirm.interpretacion,
+          amount: parseFloat(txRaw.amount) || 0,
+          category: txRaw.category || pendingVocabConfirm.categoria || 'Otros',
+          date: txRaw.date || today(),
+          savingsId: '',
+        };
+        const vocab = Array.isArray(data.vocabulario) ? [...data.vocabulario] : [];
+        if (!vocab.find(v => v.expresion.toLowerCase() === pendingVocabConfirm.expresion.toLowerCase())) {
+          vocab.push({ expresion: pendingVocabConfirm.expresion, descripcion: pendingVocabConfirm.interpretacion, categoria: pendingVocabConfirm.categoria || 'Otros' });
+        }
+        await saveData(userId, { ...data, transactions: [...data.transactions, tx], vocabulario: vocab });
+        const confirmMsg = `✅ Anotado: *${tx.description}*, ${fmt(tx.amount)}.\n\nY ya aprendí que *"${pendingVocabConfirm.expresion}"* = *${pendingVocabConfirm.interpretacion}* — no te pregunto más 😊`;
+        await saveHistory(from, [...history, { role: 'user', content: incomingMsg }, { role: 'assistant', content: confirmMsg }]);
+        await sendWhatsAppMessage(from, confirmMsg);
+        return;
+      } else if (esNegativo) {
+        await savePendingSuggestion(from, JSON.stringify({ type: 'vocab_clarify', expresion: pendingVocabConfirm.expresion, tx: pendingVocabConfirm.tx }));
+        const msg = `Ah, copado. Entonces decime: ¿a qué te referís con *"${pendingVocabConfirm.expresion}"*?`;
+        await saveHistory(from, [...history, { role: 'user', content: incomingMsg }, { role: 'assistant', content: msg }]);
+        await sendWhatsAppMessage(from, msg);
+        return;
+      } else {
+        // Respuesta ambigua — volver a preguntar
+        await savePendingSuggestion(from, JSON.stringify(pendingVocabConfirm));
+        const msg = `¿Es sí o no? Cuando decís *"${pendingVocabConfirm.expresion}"*, ¿te referís a *${pendingVocabConfirm.interpretacion}*?`;
+        await sendWhatsAppMessage(from, msg);
+        return;
+      }
+    }
+
+    // ── Flujo de aclaración de vocabulario ─────────────────
+    if (pendingVocabClarify) {
+      await clearPendingSuggestion(from);
+      const expresion = pendingVocabClarify.expresion;
+      const txRaw = pendingVocabClarify.tx || {};
+      const tx = {
+        id: Date.now().toString(),
+        type: txRaw.txType || 'gasto',
+        description: incomingMsg,
+        amount: parseFloat(txRaw.amount) || 0,
+        category: txRaw.category || 'Otros',
+        date: txRaw.date || today(),
+        savingsId: '',
+      };
+      const vocab = Array.isArray(data.vocabulario) ? [...data.vocabulario] : [];
+      if (!vocab.find(v => v.expresion.toLowerCase() === expresion.toLowerCase())) {
+        vocab.push({ expresion, descripcion: incomingMsg, categoria: txRaw.category || 'Otros' });
+      }
+      await saveData(userId, { ...data, transactions: [...data.transactions, tx], vocabulario: vocab });
+      const confirmMsg = `Perfecto, guardé que *"${expresion}"* = *${incomingMsg}* 💾 Y anoté el ${tx.type === 'gasto' ? 'gasto' : 'ingreso'}: ${fmt(tx.amount)}.`;
+      await saveHistory(from, [...history, { role: 'user', content: incomingMsg }, { role: 'assistant', content: confirmMsg }]);
+      await sendWhatsAppMessage(from, confirmMsg);
+      return;
+    }
+
     // ── Flujo de sugerencia pendiente ──────────────────────
-    if (pendingRaw) {
-      // Es un string plano (no JSON usd_tx) → feature request
+    if (pendingRaw && !pendingUSD) {
+      // Es un string plano (no JSON conocido) → feature request
       await saveFeatureRequest(from, userName, pendingRaw, incomingMsg);
       await clearPendingSuggestion(from);
       const confirmPrompt = `Sos Orbe, asistente financiera. El usuario acaba de explicarte en detalle algo que querían hacer y que no pudiste interpretar. Agradecéle de forma genuina y breve que se haya tomado el tiempo. Decile que lo guardaste para evaluarlo y que si es viable lo sumás próximamente. Español rioplatense informal. Sin asteriscos. Máximo 2 líneas.`;
