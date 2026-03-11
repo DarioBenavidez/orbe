@@ -208,6 +208,8 @@ CONTEXTO ACTUAL:
 - Metas de ahorro: ${data.savings?.length || 0} (total acumulado: ${fmt((data.savings || []).reduce((s, sv) => s + (sv.current || 0), 0))})${data.savings?.length > 0 ? ' — ' + data.savings.map(sv => `${sv.name}: ${fmt(sv.current)}/${fmt(sv.target)}`).join(', ') : ''}
 - Deudas: ${data.debts?.length || 0} (total pendiente: ${fmt((data.debts || []).reduce((s, d) => s + d.remaining, 0))})${data.debts?.length > 0 ? ' — ' + data.debts.map(d => `${d.name}: ${fmt(d.remaining)}`).join(', ') : ''}
 - Préstamos pendientes (te deben): ${(data.loans || []).filter(l => l.remaining > 0).length}${(data.loans || []).filter(l => l.remaining > 0).length > 0 ? ' — ' + (data.loans || []).filter(l => l.remaining > 0).map(l => `${l.name}: ${fmt(l.remaining)}`).join(', ') : ''}
+- Gastos fijos configurados (${(data.recurringExpenses || []).filter(g => g.active).length}): ${(data.recurringExpenses || []).filter(g => g.active).length > 0 ? (data.recurringExpenses || []).filter(g => g.active).map(g => `${g.description} ${fmt(g.amount)}/mes día ${g.day}`).join(', ') : 'ninguno'}
+- Ingresos fijos esperados (${(data.recurringIncomes || []).filter(r => r.active).length}): ${(data.recurringIncomes || []).filter(r => r.active).length > 0 ? (data.recurringIncomes || []).filter(r => r.active).map(r => `${r.name} ${fmt(r.amount)}/mes día ${r.day}${r.reason ? ' por ' + r.reason : ''}`).join(', ') : 'ninguno'}
 - Mes anterior (${MONTH_NAMES[prevMonth]}): ingresos ${fmt(ingresosPrev)}, gastos ${fmt(gastosPrev)}${gastosPrev > 0 && gastos > gastosPrev ? ' ← este mes está gastando más que el anterior' : gastosPrev > 0 && gastos < gastosPrev * 0.8 ? ' ← este mes está gastando menos, buen dato' : ''}
 ${proxVenc.length > 0 ? `- Vencimientos próximos (7 días): ${proxVenc.map(ev => ev.title).join(', ')} ← mencionálos si viene al caso` : ''}
 
@@ -232,6 +234,7 @@ ACCIONES DISPONIBLES:
 {"type":"registrar_pago_prestamo","name":"Claudio","amount":100}
 {"type":"consultar_prestamo","name":"Claudio"}
 {"type":"consultar_todos_prestamos"}
+{"type":"registrar_gastos_fijos","date":"YYYY-MM-DD"}
 {"type":"agregar_gasto_fijo","description":"Gimnasio","amount":8000,"category":"Salud","day":1}
 {"type":"actualizar_gasto_fijo","keyword":"internet","day":5,"amount":0,"description":""}
 {"type":"eliminar_gasto_fijo","keyword":"gimnasio"}
@@ -264,6 +267,7 @@ REGLAS DE INTERPRETACIÓN:
 - "quiero comprar/me quiero comprar/estoy pensando en comprar/cómo llego a/cómo ahorro para" → planear_compra (si el usuario menciona un plazo, usalo en months; si no, omitilo)
 - "gasté X dólares/USD", "pagué X USD", "compré en dólares", "usé mis dólares", "gasté en dólares" → gasto_en_dolares (source: "tarjeta" si menciona tarjeta/crédito/débito, "cuenta" si dice cuenta/efectivo/mis dólares/ahorros)
 - "X me paga/viene pagando Y por mes", "tengo un ingreso mensual de Y de X", "X me debe pagar Y todos los meses", "acuerdo de pago mensual con X" → agregar_ingreso_recurrente (name: quien paga, amount: monto mensual, reason: motivo si se menciona, day: día del mes si se menciona)
+- "ya pagué mis gastos fijos", "pagué todos los fijos", "este mes pagué los gastos fijos", "ya aboné los gastos del mes" → registrar_gastos_fijos (date: fecha que mencione o today si no dice)
 - "cambiá el día de X al Y", "pasá el gasto fijo X al día Y", "actualizá el monto de X a Y", "el X ahora cuesta Y", "poneles el día Y a todos los gastos fijos" → actualizar_gasto_fijo (keyword: nombre del gasto o "todos" si aplica a todos, day y/o amount solo si se mencionan, omitir los que no cambian)
 - "chau / hasta luego / buenas noches / nos vemos" AL FINAL de una conversación o junto a "gracias" → conversacion con despedida breve. NUNCA disparar el saludo completo en una despedida.
 - "cuando diga/digo X es/significa/quiero decir Y", "aprendé que X es Y", "guardá que X es Y", "X = Y" (enseñanza explícita de vocabulario) → guardar_vocabulario (categoria: inferila del contexto o usá "Otros")
@@ -733,6 +737,25 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       await saveData(userId, { ...data, debts, transactions: [...data.transactions, tx] });
       if (deuda.remaining === 0) return `🎉 *¡Deuda saldada!*\n\n✅ *${deuda.name}* quedó en cero. Pagaste ${fmt(monto)} y cerramos esa deuda. ¡Una menos!`;
       return `💳 *Pago registrado!*\n\n📝 ${deuda.name}\n💵 Pagaste: ${fmt(monto)}\n⏳ Queda: ${fmt(deuda.remaining)}${deuda.remainingInstallments > 0 ? `\n📆 Cuotas restantes: ${deuda.remainingInstallments}` : ''}`;
+    }
+
+    case 'registrar_gastos_fijos': {
+      const activos = (data.recurringExpenses || []).filter(g => g.active);
+      if (!activos.length) return `📭 No tenés gastos fijos configurados todavía. ¿Querés que agregue alguno?`;
+      const fecha = action.date || today();
+      const nuevasTx = activos.map(g => ({
+        id: Date.now().toString() + Math.random().toString(36).slice(2),
+        type: 'gasto',
+        description: g.description,
+        amount: g.amount,
+        category: g.category || 'Otros',
+        date: fecha,
+        savingsId: '',
+      }));
+      await saveData(userId, { ...data, transactions: [...data.transactions, ...nuevasTx] });
+      const total = activos.reduce((s, g) => s + g.amount, 0);
+      const lineas = activos.map(g => `• ${g.description}: ${fmt(g.amount)}`).join('\n');
+      return `✅ *Gastos fijos registrados* (${fecha})\n\n${lineas}\n\n💸 Total: ${fmt(total)}`;
     }
 
     case 'agregar_gasto_fijo': {
