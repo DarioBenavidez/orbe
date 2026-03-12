@@ -1344,8 +1344,7 @@ export default function MainApp({ user, onLogout }) {
   const fullName = meta.full_name || nombre;
 
   const connectWhatsApp = () => {
-    const message = `ORBE_ACTIVATE:${user.id}:${fullName}`;
-    const waUrl   = `https://wa.me/5491125728211?text=${encodeURIComponent(message)}`;
+    const waUrl = `https://wa.me/5491125728211?text=${encodeURIComponent('Hola')}`;
     Linking.openURL(waUrl).catch(() => {
       Alert.alert('Error', 'No se pudo abrir WhatsApp. Verificá que esté instalado.');
     });

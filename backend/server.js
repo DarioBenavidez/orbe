@@ -7,6 +7,7 @@ const app = express();
 app.use(express.json());
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
+const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
@@ -1414,7 +1415,7 @@ app.post('/webhook', async (req, res) => {
 
     console.log(`📩 ${from}: ${incomingMsg}`);
 
-    // Activación desde la app — formato: ORBE_ACTIVATE:userId:Nombre Apellido
+    // Activación legacy — formato: ORBE_ACTIVATE:userId:Nombre (compatibilidad hacia atrás)
     if (incomingMsg.startsWith('ORBE_ACTIVATE:')) {
       const parts = incomingMsg.replace('ORBE_ACTIVATE:', '').split(':');
       const userId   = parts[0]?.trim();
@@ -1431,7 +1432,37 @@ app.post('/webhook', async (req, res) => {
 
     const userInfo = await getUserIdByPhone(from);
     if (!userInfo) {
-      await sendWhatsAppMessage(from, '👋 Para usar Orbe por WhatsApp, abrí la app y tocá *"Conectar WhatsApp"* 📱');
+      // Si tiene un email pendiente de confirmación, intentar vincularlo
+      const pendingRawLink = await getPendingSuggestion(from);
+      if (pendingRawLink) {
+        try {
+          const parsed = JSON.parse(pendingRawLink);
+          if (parsed.type === 'awaiting_email') {
+            // El usuario respondió con su email
+            const email = incomingMsg.trim().toLowerCase();
+            const { data: { users }, error: authErr } = await supabaseAdmin.auth.admin.listUsers();
+            if (!authErr && users) {
+              const found = users.find(u => u.email?.toLowerCase() === email);
+              if (found) {
+                const userName = found.user_metadata?.full_name || found.user_metadata?.nombre || found.email.split('@')[0];
+                await linkPhoneToUser(from, found.id, userName);
+                await clearPendingSuggestion(from);
+                const greeting = getGreeting();
+                const firstName = userName.split(' ')[0];
+                await sendWhatsAppMessage(from, `✅ *¡${greeting}, ${firstName}! Soy Orbe* 🌟\n\nYa estamos conectados. Podés registrar gastos, consultar tu balance y mucho más por acá.\n\nProbá con:\n• *"hola"*\n• *"balance"*\n• *"gasté $500 en café"*`);
+                return;
+              }
+            }
+            await sendWhatsAppMessage(from, `🤔 No encontré ninguna cuenta con el email *${email}*. Verificá que sea el mismo con el que te registraste en Orbe e intentá de nuevo.`);
+            await savePendingSuggestion(from, JSON.stringify({ type: 'awaiting_email' }));
+            return;
+          }
+        } catch {}
+      }
+
+      // Primer contacto — pedir email
+      await savePendingSuggestion(from, JSON.stringify({ type: 'awaiting_email' }));
+      await sendWhatsAppMessage(from, `👋 ¡Hola! Soy *Orbe*, tu asistente financiera personal.\n\nPara conectar tu cuenta, escribime el *email* con el que te registraste en la app de Orbe.`);
       return;
     }
 
