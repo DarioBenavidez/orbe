@@ -232,7 +232,7 @@ function FAB({ onPress }) {
 }
 
 // ── Transaction Row ────────────────────────────────────────────
-function TxRow({ tx, cats, onDelete }) {
+function TxRow({ tx, cats, onDelete, onEdit }) {
   const C = useC();
   const isGasto  = tx.type === 'gasto';
   const isIncome = tx.type === 'ingreso' || tx.type === 'sueldo';
@@ -250,11 +250,18 @@ function TxRow({ tx, cats, onDelete }) {
         <Text style={{ fontSize:14, fontWeight:'700', color: isGasto ? C.red : C.green }}>
           {isGasto ? '-' : '+'}{fmt(tx.amount)}
         </Text>
-        {onDelete && (
-          <TouchableOpacity onPress={() => onDelete(tx.id)}>
-            <Text style={{ fontSize:10, color:C.textDim, marginTop:2 }}>Eliminar</Text>
-          </TouchableOpacity>
-        )}
+        <View style={{ flexDirection:'row', gap:10, marginTop:2 }}>
+          {onEdit && (
+            <TouchableOpacity onPress={() => onEdit(tx)}>
+              <Text style={{ fontSize:10, color:C.accent }}>Editar</Text>
+            </TouchableOpacity>
+          )}
+          {onDelete && (
+            <TouchableOpacity onPress={() => onDelete(tx.id)}>
+              <Text style={{ fontSize:10, color:C.textDim }}>Eliminar</Text>
+            </TouchableOpacity>
+          )}
+        </View>
       </View>
     </View>
   );
@@ -608,6 +615,7 @@ function AnalisisTab({ data, onSave }) {
 function TransaccionesTab({ data, onSave, onAdd }) {
   const C = useC();
   const cats = data.categories || DEFAULT_CATEGORIES;
+  const [editingTx, setEditingTx] = useState(null);
   const txs  = data.transactions.filter(t => {
     const { month, year } = parseDateParts(t.date);
     return month===data.selectedMonth && year===data.selectedYear;
@@ -628,49 +636,67 @@ function TransaccionesTab({ data, onSave, onAdd }) {
           <Card style={{ marginBottom:32 }}>
             {txs.length === 0
               ? <Text style={{ color:C.textDim, fontSize:13, textAlign:'center', paddingVertical:24 }}>Sin transacciones este mes</Text>
-              : txs.map(t => <TxRow key={t.id} tx={t} cats={cats} onDelete={delTx}/>)
+              : txs.map(t => <TxRow key={t.id} tx={t} cats={cats} onDelete={delTx} onEdit={setEditingTx}/>)
             }
           </Card>
         </ScrollView>
         <FAB onPress={onAdd}/>
       </View>
+      <AddTxModal
+        visible={!!editingTx}
+        onClose={() => setEditingTx(null)}
+        data={data}
+        onSave={onSave}
+        editTx={editingTx}
+      />
     </ScreenWithHeader>
   );
 }
 
 // ── Add Transaction Modal ──────────────────────────────────────
-function AddTxModal({ visible, onClose, data, onSave }) {
+function AddTxModal({ visible, onClose, data, onSave, editTx }) {
   const C = useC();
   const cats = data.categories || DEFAULT_CATEGORIES;
+  const isEditing = !!editTx;
   const TYPES = [
     { key:'gasto', label:'Gasto' }, { key:'ingreso', label:'Ingreso' },
     { key:'sueldo', label:'Sueldo 💼' }, { key:'ahorro_meta', label:'Ahorro 🐷' },
   ];
-  const [form, setForm] = useState({
-    type:'gasto', description:'', amount:'',
-    category: Object.keys(cats)[0]||'Alimentación',
-    date: new Date().toISOString().split('T')[0], savingsId:'',
-  });
-  const addTx = () => {
+  const emptyForm = { type:'gasto', description:'', amount:'', category: Object.keys(cats)[0]||'Alimentación', date: new Date().toISOString().split('T')[0], savingsId:'' };
+  const [form, setForm] = useState(emptyForm);
+
+  useEffect(() => {
+    if (editTx) {
+      setForm({ ...editTx, amount: String(editTx.amount) });
+    } else {
+      setForm(emptyForm);
+    }
+  }, [editTx, visible]);
+
+  const saveTx = () => {
     if (!form.description || !form.amount) return;
     const amt = parseFloat(form.amount);
     let newData = { ...data };
-    const tx = { ...form, id:Date.now().toString(), amount:amt };
-    if (form.type==='ahorro_meta' && form.savingsId) {
-      const savings = data.savings.map(sv =>
-        sv.id===form.savingsId
-          ? { ...sv, current:(sv.current||0)+amt, history:[...(sv.history||[]), { date:form.date, amount:amt }] }
-          : sv
-      );
-      newData = { ...newData, savings };
+    if (isEditing) {
+      newData = { ...newData, transactions: newData.transactions.map(t => t.id===editTx.id ? { ...form, amount:amt } : t) };
+    } else {
+      const tx = { ...form, id:Date.now().toString(), amount:amt };
+      if (form.type==='ahorro_meta' && form.savingsId) {
+        const savings = data.savings.map(sv =>
+          sv.id===form.savingsId
+            ? { ...sv, current:(sv.current||0)+amt, history:[...(sv.history||[]), { date:form.date, amount:amt }] }
+            : sv
+        );
+        newData = { ...newData, savings };
+      }
+      newData = { ...newData, transactions:[...newData.transactions, tx] };
     }
-    newData = { ...newData, transactions:[...newData.transactions, tx] };
     onSave(newData);
     onClose();
-    setForm({ type:'gasto', description:'', amount:'', category:Object.keys(cats)[0]||'Alimentación', date:new Date().toISOString().split('T')[0], savingsId:'' });
+    setForm(emptyForm);
   };
   return (
-    <ModalSheet visible={visible} onClose={onClose} title="Nueva transacción">
+    <ModalSheet visible={visible} onClose={onClose} title={isEditing ? 'Editar transacción' : 'Nueva transacción'}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:16 }}>
           {TYPES.map(t => (
@@ -707,7 +733,7 @@ function AddTxModal({ visible, onClose, data, onSave }) {
         )}
         <View style={{ flexDirection:'row', gap:10, marginTop:4 }}>
           <Btn label="Cancelar" variant="ghost" style={{ flex:1 }} onPress={onClose}/>
-          <Btn label="Guardar" style={{ flex:1 }} onPress={addTx}/>
+          <Btn label="Guardar" style={{ flex:1 }} onPress={saveTx}/>
         </View>
       </ScrollView>
     </ModalSheet>

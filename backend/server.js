@@ -249,6 +249,7 @@ ACCIONES DISPONIBLES:
 {"type":"gasto_en_dolares","description":"Netflix","amountUSD":15,"category":"Entretenimiento","date":"YYYY-MM-DD","source":"tarjeta"}
 {"type":"guardar_vocabulario","expresion":"el chino","descripcion":"Chino del barrio","categoria":"Comida"}
 {"type":"confirmar_vocabulario","expresion":"gym","interpretacion":"Gimnasio","categoria":"Salud","tx":{"txType":"gasto","description":"Gimnasio","amount":5000,"category":"Salud","date":"YYYY-MM-DD"}}
+{"type":"editar_transaccion","keyword":"sueldo","newAmount":1600000,"newDescription":"","newCategory":""}
 {"type":"conversacion","respuesta":"..."}
 {"type":"unknown"}
 
@@ -270,6 +271,7 @@ REGLAS DE INTERPRETACIÓN:
 - "ya pagué mis gastos fijos", "pagué todos los fijos", "este mes pagué los gastos fijos", "ya aboné los gastos del mes" → registrar_gastos_fijos (date: fecha que mencione o today si no dice)
 - "cambiá el día de X al Y", "pasá el gasto fijo X al día Y", "actualizá el monto de X a Y", "el X ahora cuesta Y", "poneles el día Y a todos los gastos fijos" → actualizar_gasto_fijo (keyword: nombre del gasto o "todos" si aplica a todos, day y/o amount solo si se mencionan, omitir los que no cambian)
 - "chau / hasta luego / buenas noches / nos vemos" AL FINAL de una conversación o junto a "gracias" → conversacion con despedida breve. NUNCA disparar el saludo completo en una despedida.
+- "corregí/cambié/el X era Y/el monto del X era Y/modificá el X a Y" → editar_transaccion (keyword: parte de la descripción, newAmount si cambia monto, newDescription si cambia descripción, newCategory si cambia categoría — solo los campos que se modifican)
 - "cuando diga/digo X es/significa/quiero decir Y", "aprendé que X es Y", "guardá que X es Y", "X = Y" (enseñanza explícita de vocabulario) → guardar_vocabulario (categoria: inferila del contexto o usá "Otros")
 - Hay palabras genéricas que son SIEMPRE ambiguas porque pueden referirse a muchas cosas distintas: "cuota", "pago", "factura", "el pago", "la cuenta", "el servicio", "la mensualidad". Si el usuario las usa SIN especificar de qué (ej: "pagué la cuota", "aboné la factura"), NO asumas ni uses confirmar_vocabulario — usá conversacion para preguntar "¿cuota de qué?" o "¿factura de qué servicio?". Si el usuario YA especificó (ej: "pagué la cuota del auto", "cuota del colegio"), procesá normalmente.
 - Si el mensaje incluye una expresión coloquial, abreviación o apodo propio del usuario (ej: "gym", "el super", "el kiosco", "el chino") que NO está en el vocabulario aprendido y cuyo significado podría ser ambiguo, devolvé "confirmar_vocabulario" con tu mejor interpretación como sugerencia. Si la expresión YA está en el vocabulario aprendido, usala directamente sin preguntar. Si la expresión es completamente obvia y universal (ej: "supermercado", "restaurante", "taxi", "comida", "farmacia"), NO preguntes — usá agregar_transaccion directamente.
@@ -352,6 +354,33 @@ ${proxVenc2.length > 0 ? `- Vencimientos próximos (próx. 3 días): ${proxVenc2
 Tu tarea: escribí un saludo natural, breve y conversacional. Pensá qué es lo más relevante de la situación financiera para mencionar — no todo, lo que realmente importa ahora mismo. Si hay vencimientos urgentes, son lo primero. Si el balance está justo, es el momento de mencionarlo. Si todo va bien, podés ser más liviana y simplemente preguntar cómo arrancó el día. Una sola pregunta, nunca varias. No uses listas ni asteriscos. Variá el estilo — no empieces siempre igual, no digas siempre "¡Buenos días!". Máximo 4 líneas. Escribí como alguien que genuinamente se acuerda de la situación del usuario, no como un bot que ejecuta un template.`;
 
       return await callClaude(saludoPrompt, [], 'hola');
+    }
+
+    case 'editar_transaccion': {
+      const { month: cm, year: cy } = currentMonth();
+      const keyword = (action.keyword || '').toLowerCase();
+      const txs = data.transactions;
+      // Buscar la más reciente que matchee el keyword en el mes actual
+      const idx = [...txs].reverse().findIndex(t => {
+        const p = parseDateParts(t.date);
+        return p.month === cm && p.year === cy && t.description.toLowerCase().includes(keyword);
+      });
+      const realIdx = idx !== -1 ? txs.length - 1 - idx : -1;
+      if (realIdx === -1) return `🤔 No encontré ninguna transacción de este mes que coincida con *"${action.keyword}"*.`;
+      const original = txs[realIdx];
+      const updated = {
+        ...original,
+        ...(action.newAmount    ? { amount:      parseFloat(action.newAmount) }   : {}),
+        ...(action.newDescription ? { description: action.newDescription }         : {}),
+        ...(action.newCategory  ? { category:    action.newCategory }             : {}),
+      };
+      const newTxs = txs.map((t, i) => i === realIdx ? updated : t);
+      await saveData(userId, { ...data, transactions: newTxs });
+      const cambios = [];
+      if (action.newAmount)      cambios.push(`monto: ${fmt(original.amount)} → ${fmt(updated.amount)}`);
+      if (action.newDescription) cambios.push(`descripción: "${original.description}" → "${updated.description}"`);
+      if (action.newCategory)    cambios.push(`categoría: ${original.category} → ${updated.category}`);
+      return `✏️ *Transacción actualizada*\n\n📝 ${updated.description}\n${cambios.join('\n')}`;
     }
 
     case 'guardar_vocabulario': {
