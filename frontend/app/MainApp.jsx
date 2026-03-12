@@ -1343,15 +1343,12 @@ export default function MainApp({ user, onLogout }) {
   const nombre   = meta.nombre || user?.email?.split('@')[0] || 'Usuario';
   const fullName = meta.full_name || nombre;
 
-  const connectWhatsApp = async () => {
+  const connectWhatsApp = () => {
     const message = `ORBE_ACTIVATE:${user.id}:${fullName}`;
     const waUrl   = `https://wa.me/5491125728211?text=${encodeURIComponent(message)}`;
-    const canOpen = await Linking.canOpenURL(waUrl).catch(() => false);
-    if (canOpen) {
-      Linking.openURL(waUrl);
-    } else {
-      Alert.alert('WhatsApp no encontrado', 'Instalá WhatsApp para conectar con Orbe.');
-    }
+    Linking.openURL(waUrl).catch(() => {
+      Alert.alert('Error', 'No se pudo abrir WhatsApp. Verificá que esté instalado.');
+    });
   };
 
   useEffect(() => {
