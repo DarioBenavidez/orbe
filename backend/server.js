@@ -1453,8 +1453,8 @@ app.post('/webhook', async (req, res) => {
                 return;
               }
             }
-            await sendWhatsAppMessage(from, `🤔 No encontré ninguna cuenta con el email *${email}*. Verificá que sea el mismo con el que te registraste en Orbe e intentá de nuevo.`);
-            await savePendingSuggestion(from, JSON.stringify({ type: 'awaiting_email' }));
+            await clearPendingSuggestion(from);
+            await sendWhatsAppMessage(from, `🤔 No encontré ninguna cuenta con el email *${email}*.\n\nSi todavía no te registraste, descargá la app de Orbe, creá tu cuenta y después volvé por acá para conectar WhatsApp. 📱\n\nSi ya tenés cuenta, asegurate de escribir el mismo email con el que te registraste.`);
             return;
           }
         } catch {}
