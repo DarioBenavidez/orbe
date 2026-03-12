@@ -304,7 +304,7 @@ function ScreenWithHeader({ header, children }) {
 }
 
 // ── Inicio Tab ─────────────────────────────────────────────────
-function InicioTab({ data, onMonthPress }) {
+function InicioTab({ data, onSave, onMonthPress }) {
   const C = useC();
   const txs = data.transactions.filter(t => {
     const { month, year } = parseDateParts(t.date);
@@ -391,7 +391,7 @@ function InicioTab({ data, onMonthPress }) {
           <Text style={{ fontSize:15, fontWeight:'700', color:C.text, marginBottom:14 }}>Últimas transacciones</Text>
           {txs.length === 0
             ? <Text style={{ color:C.textDim, fontSize:13, textAlign:'center', paddingVertical:20 }}>Sin transacciones este mes</Text>
-            : txs.slice().reverse().slice(0,10).map(t => <TxRow key={t.id} tx={t} cats={cats}/>)
+            : txs.slice().reverse().slice(0,10).map(t => <TxRow key={t.id} tx={t} cats={cats} onDelete={id => Alert.alert('Eliminar','¿Eliminar esta transacción?',[{text:'Cancelar'},{text:'Eliminar',style:'destructive',onPress:()=>onSave({...data,transactions:data.transactions.filter(t=>t.id!==id)})}])}/>)
           }
         </Card>
       </ScrollView>
@@ -1386,7 +1386,7 @@ export default function MainApp({ user, onLogout }) {
       <View style={{ flex:1, backgroundColor:C.bg }}>
         {/* Content */}
         <View style={{ flex:1 }}>
-          {tab==='inicio'   && <InicioTab data={data} onMonthPress={() => setMonthPicker(true)}/>}
+          {tab==='inicio'   && <InicioTab data={data} onSave={save} onMonthPress={() => setMonthPicker(true)}/>}
           {tab==='analisis' && <AnalisisTab data={data} onSave={save}/>}
           {tab==='planear'  && <PlanearTab data={data} onSave={save}/>}
           {tab==='perfil'   && <PerfilTab user={user} onLogout={onLogout} connectWhatsApp={connectWhatsApp} dark={dark} setDark={setDark}/>}

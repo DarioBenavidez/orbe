@@ -218,6 +218,7 @@ Interpretá el mensaje y devolvé SOLO un JSON con la acción a realizar.
 
 ACCIONES DISPONIBLES:
 {"type":"agregar_transaccion","txType":"gasto|ingreso|sueldo","description":"...","amount":1234,"category":"...","date":"YYYY-MM-DD"}
+{"type":"borrar_transaccion","keyword":"...","amount":0}
 {"type":"consultar_balance"}
 {"type":"ultimas_transacciones"}
 {"type":"consultar_presupuesto"}
@@ -226,6 +227,7 @@ ACCIONES DISPONIBLES:
 {"type":"consultar_ahorros"}
 {"type":"consultar_deudas"}
 {"type":"consultar_vencimientos"}
+{"type":"consultar_eventos"}
 {"type":"agregar_evento","title":"...","day":15,"eventType":"vencimiento|pago|recordatorio","notify":true}
 {"type":"eliminar_evento","keyword":"..."}
 {"type":"resumen_general"}
@@ -250,6 +252,7 @@ ACCIONES DISPONIBLES:
 {"type":"guardar_vocabulario","expresion":"el chino","descripcion":"Chino del barrio","categoria":"Comida"}
 {"type":"confirmar_vocabulario","expresion":"gym","interpretacion":"Gimnasio","categoria":"Salud","tx":{"txType":"gasto","description":"Gimnasio","amount":5000,"category":"Salud","date":"YYYY-MM-DD"}}
 {"type":"editar_transaccion","keyword":"sueldo","newAmount":1600000,"newDescription":"","newCategory":""}
+{"type":"limpiar_transacciones","scope":"mes"}
 {"type":"conversacion","respuesta":"..."}
 {"type":"unknown"}
 
@@ -259,6 +262,8 @@ REGLAS DE INTERPRETACIÓN:
 - "me debe/le presté/le fié/fiado" → agregar_prestamo
 - "X me pagó/me devolvió/abonó" → registrar_pago_prestamo
 - "¿a cuánto está el dólar? / cotización / precio del dólar / blue" → consultar_dolar SOLO cuando preguntan el precio. "quiero comprar dólares / me conviene comprar dólares / qué hago con los dólares" → conversacion (consejo financiero, NO consultar_dolar)
+- "tengo eventos?", "qué eventos tengo?", "mostrá mis eventos", "qué tengo anotado?", "cuáles son mis eventos?" → consultar_eventos (muestra TODOS los eventos sin importar si ya pasaron este mes)
+- "qué vence?", "qué tengo que pagar?", "vencimientos del mes?", "qué me vence este mes?" → consultar_vencimientos (solo próximos del mes actual)
 - "quiero ahorrar X para Y / quiero juntar X para Y / estoy ahorrando para Y" → SIEMPRE agregar_ahorro (target=X, name=Y). NUNCA agregar_evento.
 - "agregá X al ahorro de Y / depositá X en Y / sumá X para Y / puse X en el ahorro" → SIEMPRE depositar_ahorro (keyword=Y, amount=X). NUNCA agregar_transaccion.
 - "unir los préstamos de X / consolidar / juntá todo de X" → consolidar_prestamos
@@ -271,6 +276,8 @@ REGLAS DE INTERPRETACIÓN:
 - "ya pagué mis gastos fijos", "pagué todos los fijos", "este mes pagué los gastos fijos", "ya aboné los gastos del mes" → registrar_gastos_fijos (date: fecha que mencione o today si no dice)
 - "cambiá el día de X al Y", "pasá el gasto fijo X al día Y", "actualizá el monto de X a Y", "el X ahora cuesta Y", "poneles el día Y a todos los gastos fijos" → actualizar_gasto_fijo (keyword: nombre del gasto o "todos" si aplica a todos, day y/o amount solo si se mencionan, omitir los que no cambian)
 - "chau / hasta luego / buenas noches / nos vemos" AL FINAL de una conversación o junto a "gracias" → conversacion con despedida breve. NUNCA disparar el saludo completo en una despedida.
+- "borrá/eliminá todo el historial", "empezar de cero", "limpiá todo", "quiero borrar todo", "borrá todas las transacciones" → limpiar_transacciones (scope: "mes" si dice "de este mes", "todo" si dice "todo" o "empezar de cero")
+- "borrá/eliminá/quitá/sacá el gasto/ingreso de X", "borrá el X", "ese no va" → borrar_transaccion (keyword: parte del nombre/descripción/categoría, amount: monto si lo mencionan para asegurarse de borrar la correcta, omitir si no especifica)
 - "corregí/cambié/el X era Y/el monto del X era Y/modificá el X a Y" → editar_transaccion (keyword: parte de la descripción, newAmount si cambia monto, newDescription si cambia descripción, newCategory si cambia categoría — solo los campos que se modifican)
 - "cuando diga/digo X es/significa/quiero decir Y", "aprendé que X es Y", "guardá que X es Y", "X = Y" (enseñanza explícita de vocabulario) → guardar_vocabulario (categoria: inferila del contexto o usá "Otros")
 - Hay palabras genéricas que son SIEMPRE ambiguas porque pueden referirse a muchas cosas distintas: "cuota", "pago", "factura", "el pago", "la cuenta", "el servicio", "la mensualidad". Si el usuario las usa SIN especificar de qué (ej: "pagué la cuota", "aboné la factura"), NO asumas ni uses confirmar_vocabulario — usá conversacion para preguntar "¿cuota de qué?" o "¿factura de qué servicio?". Si el usuario YA especificó (ej: "pagué la cuota del auto", "cuota del colegio"), procesá normalmente.
@@ -363,7 +370,8 @@ Tu tarea: escribí un saludo natural, breve y conversacional. Pensá qué es lo 
       // Buscar la más reciente que matchee el keyword en el mes actual
       const idx = [...txs].reverse().findIndex(t => {
         const p = parseDateParts(t.date);
-        return p.month === cm && p.year === cy && t.description.toLowerCase().includes(keyword);
+        if (p.month !== cm || p.year !== cy) return false;
+        return t.description?.toLowerCase().includes(keyword) || t.category?.toLowerCase().includes(keyword);
       });
       const realIdx = idx !== -1 ? txs.length - 1 - idx : -1;
       if (realIdx === -1) return `🤔 No encontré ninguna transacción de este mes que coincida con *"${action.keyword}"*.`;
@@ -484,6 +492,40 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       return respuesta;
     }
 
+    case 'borrar_transaccion': {
+      const { month: cm, year: cy } = currentMonth();
+      const keyword = (action.keyword || '').toLowerCase();
+      const targetAmount = parseFloat(action.amount) || 0;
+      // Buscar la transacción más reciente del mes actual que matchee keyword en descripción O categoría
+      const txsRev = [...data.transactions].reverse();
+      const found = txsRev.find(t => {
+        const p = parseDateParts(t.date);
+        if (p.month !== cm || p.year !== cy) return false;
+        const matchDesc = t.description?.toLowerCase().includes(keyword);
+        const matchCat = t.category?.toLowerCase().includes(keyword);
+        if (!matchDesc && !matchCat) return false;
+        if (targetAmount > 0) return Math.abs(t.amount - targetAmount) < 1;
+        return true;
+      });
+      if (!found) return `🤔 No encontré ninguna transacción de este mes que coincida con *"${action.keyword}"*${targetAmount > 0 ? ` por ${fmt(targetAmount)}` : ''}.`;
+      const newTxs = data.transactions.filter(t => t.id !== found.id);
+      await saveData(userId, { ...data, transactions: newTxs });
+      return `🗑️ Listo, eliminé *${found.description}* (${fmt(found.amount)}) del ${found.date}.`;
+    }
+
+    case 'limpiar_transacciones': {
+      const scope = action.scope || 'mes';
+      const { month: cm, year: cy } = currentMonth();
+      const count = scope === 'todo'
+        ? data.transactions.length
+        : data.transactions.filter(t => { const p = parseDateParts(t.date); return p.month === cm && p.year === cy; }).length;
+      if (count === 0) return `📭 No hay transacciones${scope === 'mes' ? ' este mes' : ''} para borrar.`;
+      // Guardar pending para confirmar
+      await savePendingSuggestion(phone, JSON.stringify({ type: 'confirm_limpiar', scope }));
+      const scopeLabel = scope === 'todo' ? 'de todos los meses' : 'de este mes';
+      return `⚠️ Estás por borrar *${count} transacciones* ${scopeLabel}. Esta acción no se puede deshacer.\n\nRespondé *CONFIRMAR* para proceder, o cualquier otra cosa para cancelar.`;
+    }
+
     case 'actualizar_presupuesto': {
       const budgets = data.budgets.map(b =>
         b.cat.toLowerCase() === action.category.toLowerCase()
@@ -565,6 +607,18 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       const upcoming = (data.events || []).filter(ev => ev.day >= todayDay).sort((a, b) => a.day - b.day).slice(0, 10);
       if (!upcoming.length) return `✅ No hay vencimientos próximos este mes${name ? ', ' + name : ''}. ¡Todo tranquilo!`;
       return `⚠️ *Vencimientos del mes*\n\n${upcoming.map(ev => { const d = ev.day - todayDay; return `${d === 0 ? '🔴 HOY' : d <= 3 ? `🟡 en ${d} días` : `📅 día ${ev.day}`} — ${ev.title}`; }).join('\n')}`;
+    }
+
+    case 'consultar_eventos': {
+      const evs = data.events || [];
+      if (!evs.length) return `📅 No tenés eventos registrados${name ? ', ' + name : ''}.`;
+      const todayDay = arDay();
+      const sorted = [...evs].sort((a, b) => a.day - b.day);
+      return `📅 *Tus eventos*\n\n${sorted.map(ev => {
+        const d = ev.day - todayDay;
+        const tag = d < 0 ? `día ${ev.day}` : d === 0 ? '🔴 HOY' : d <= 3 ? `🟡 en ${d} días` : `📅 día ${ev.day}`;
+        return `${tag} — ${ev.title}`;
+      }).join('\n')}`;
     }
 
     case 'agregar_evento': {
@@ -1101,6 +1155,16 @@ Sin listas. Máximo 8 líneas. Tono cálido, directo y que inspire confianza en 
 // ── Saludo matutino ────────────────────────────────────────
 async function sendMorningGreeting() {
   try {
+    // Distributed lock: si otra instancia ya corrió hoy, salteamos
+    const lockPhone = `_scheduler_morning_${today()}`;
+    const { error: lockErr } = await supabase
+      .from('pending_suggestions')
+      .insert({ phone: lockPhone, original_message: 'lock' });
+    if (lockErr) {
+      console.log('⏭️ Morning greeting ya ejecutado por otra instancia, salteando.');
+      return;
+    }
+
     const { data: users } = await supabase.from('whatsapp_users').select('phone, user_id, user_name');
     if (!users || !users.length) return;
     const { month, year } = currentMonth();
@@ -1150,6 +1214,16 @@ Tu tarea: escribí el mensaje de buenos días. Antes de escribir, pensá: ¿qué
 // ── Check-in nocturno (~21hs) ──────────────────────────────
 async function sendEveningCheckin() {
   try {
+    // Distributed lock: si otra instancia ya corrió hoy, salteamos
+    const lockPhone = `_scheduler_evening_${today()}`;
+    const { error: lockErr } = await supabase
+      .from('pending_suggestions')
+      .insert({ phone: lockPhone, original_message: 'lock' });
+    if (lockErr) {
+      console.log('⏭️ Evening check-in ya ejecutado por otra instancia, salteando.');
+      return;
+    }
+
     const { data: users } = await supabase.from('whatsapp_users').select('phone, user_id, user_name');
     if (!users || !users.length) return;
     const { month, year } = currentMonth();
@@ -1372,6 +1446,7 @@ app.post('/webhook', async (req, res) => {
     let pendingVocabConfirm = null;
     let pendingVocabClarify = null;
     let pendingGastosFijos = null;
+    let pendingLimpiar = null;
     if (pendingRaw) {
       try {
         const parsed = JSON.parse(pendingRaw);
@@ -1379,6 +1454,7 @@ app.post('/webhook', async (req, res) => {
         else if (parsed.type === 'vocab_confirm') pendingVocabConfirm = parsed;
         else if (parsed.type === 'vocab_clarify') pendingVocabClarify = parsed;
         else if (parsed.type === 'confirm_gastos_fijos') pendingGastosFijos = parsed;
+        else if (parsed.type === 'confirm_limpiar') pendingLimpiar = parsed;
       } catch {}
     }
 
@@ -1440,6 +1516,28 @@ app.post('/webhook', async (req, res) => {
 
       await saveHistory(from, [...history, { role: 'user', content: incomingMsg }, { role: 'assistant', content: confirmMsg }]);
       await sendWhatsAppMessage(from, confirmMsg);
+      return;
+    }
+
+    // ── Flujo de confirmación de limpiar transacciones ─────
+    if (pendingLimpiar) {
+      await clearPendingSuggestion(from);
+      const confirmado = /^confirmar$/i.test(incomingMsg.trim());
+      if (!confirmado) {
+        const msg = `Ok, cancelado. Tus transacciones siguen intactas 👍`;
+        await saveHistory(from, [...history, { role: 'user', content: incomingMsg }, { role: 'assistant', content: msg }]);
+        await sendWhatsAppMessage(from, msg);
+        return;
+      }
+      const { month: cm, year: cy } = currentMonth();
+      const scope = pendingLimpiar.scope || 'mes';
+      const newTxs = scope === 'todo'
+        ? []
+        : data.transactions.filter(t => { const p = parseDateParts(t.date); return !(p.month === cm && p.year === cy); });
+      await saveData(userId, { ...data, transactions: newTxs });
+      const msg = `🗑️ Listo, borré todas las transacciones ${scope === 'todo' ? 'de todos los meses' : 'de este mes'}. Empezamos de cero 🌱`;
+      await saveHistory(from, [...history, { role: 'user', content: incomingMsg }, { role: 'assistant', content: msg }]);
+      await sendWhatsAppMessage(from, msg);
       return;
     }
 
@@ -1610,6 +1708,8 @@ app.post('/webhook', async (req, res) => {
       }
     } else if (/cotizacion|cotización|blue|a cu[aá]nto.*dol|precio.*dol|valor.*dol/i.test(incomingMsg) && !/gast[eé]|pagu[eé]|compr[eé]|us[eé]|sal[ií]/i.test(incomingMsg)) {
       action = { type: 'consultar_dolar' };
+    } else if (/tengo.*eventos|mis eventos|qué.*eventos|cuáles.*eventos|que.*eventos|cuales.*eventos/i.test(incomingMsg)) {
+      action = { type: 'consultar_eventos' };
     } else if (/venc[ei]|vence|vencimiento|qué.*pagar|que.*pagar/i.test(incomingMsg)) {
       action = { type: 'consultar_vencimientos' };
     } else if (/balance|saldo|cuánto.*tengo|cuanto.*tengo/i.test(incomingMsg)) {
