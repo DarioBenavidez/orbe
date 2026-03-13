@@ -1440,21 +1440,34 @@ app.post('/webhook', async (req, res) => {
           if (parsed.type === 'awaiting_email') {
             // El usuario respondió con su email
             const email = incomingMsg.trim().toLowerCase();
-            const { data: { users }, error: authErr } = await supabaseAdmin.auth.admin.listUsers();
-            if (!authErr && users) {
-              const found = users.find(u => u.email?.toLowerCase() === email);
-              if (found) {
-                const userName = found.user_metadata?.full_name || found.user_metadata?.nombre || found.email.split('@')[0];
-                await linkPhoneToUser(from, found.id, userName);
-                await clearPendingSuggestion(from);
-                const greeting = getGreeting();
-                const firstName = userName.split(' ')[0];
-                await sendWhatsAppMessage(from, `✅ *¡${greeting}, ${firstName}! Soy Orbe* 🌟\n\nYa estamos conectados. Podés registrar gastos, consultar tu balance y mucho más por acá.\n\nProbá con:\n• *"hola"*\n• *"balance"*\n• *"gasté $500 en café"*`);
-                return;
-              }
+            // Validar que parezca un email antes de buscar
+            if (!email.includes('@')) {
+              await savePendingSuggestion(from, JSON.stringify({ type: 'awaiting_email' }));
+              await sendWhatsAppMessage(from, `Eso no parece un email. Escribime el email con el que te registraste en Orbe (ej: *nombre@gmail.com*).`);
+              return;
             }
-            await clearPendingSuggestion(from);
-            await sendWhatsAppMessage(from, `🤔 No encontré ninguna cuenta con el email *${email}*.\n\nSi todavía no te registraste, descargá la app de Orbe, creá tu cuenta y después volvé por acá para conectar WhatsApp. 📱\n\nSi ya tenés cuenta, asegurate de escribir el mismo email con el que te registraste.`);
+            try {
+              const { data: listData, error: authErr } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+              const users = listData?.users || [];
+              if (!authErr) {
+                const found = users.find(u => u.email?.toLowerCase() === email);
+                if (found) {
+                  const userName = found.user_metadata?.full_name || found.user_metadata?.nombre || found.email.split('@')[0];
+                  await linkPhoneToUser(from, found.id, userName);
+                  await clearPendingSuggestion(from);
+                  const greeting = getGreeting();
+                  const firstName = userName.split(' ')[0];
+                  await sendWhatsAppMessage(from, `✅ *¡${greeting}, ${firstName}! Soy Orbe* 🌟\n\nYa estamos conectados. Podés registrar gastos, consultar tu balance y mucho más por acá.\n\nProbá con:\n• *"hola"*\n• *"balance"*\n• *"gasté $500 en café"*`);
+                  return;
+                }
+              }
+              await clearPendingSuggestion(from);
+              await sendWhatsAppMessage(from, `🤔 No encontré ninguna cuenta con el email *${email}*.\n\nSi todavía no te registraste, descargá la app de Orbe, creá tu cuenta y después volvé por acá. 📱\n\nSi ya tenés cuenta, asegurate de escribir el mismo email con el que te registraste.`);
+            } catch (err) {
+              console.error('❌ Error buscando usuario por email:', err.message);
+              await clearPendingSuggestion(from);
+              await sendWhatsAppMessage(from, `😓 Hubo un error buscando tu cuenta. Intentá de nuevo en un momento.`);
+            }
             return;
           }
         } catch {}
