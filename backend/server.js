@@ -79,6 +79,13 @@ function defaultData() {
     balanceAlert: 0,
     reminders: [],
     selectedMonth: new Date().getMonth(), selectedYear: new Date().getFullYear(),
+    silencedUntil: null,
+    savingsMode: 0,
+    plazosFijos: [],
+    paymentMethods: {},
+    orbeName: 'Orbe',
+    suscripciones: [],
+    onboardingDone: false,
   };
 }
 async function loadData(uid) {
@@ -90,6 +97,13 @@ async function loadData(uid) {
     ...d,
     reminders: Array.isArray(d.reminders) ? d.reminders : [],
     balanceAlert: typeof d.balanceAlert === 'number' ? d.balanceAlert : 0,
+    silencedUntil: d.silencedUntil || null,
+    savingsMode: typeof d.savingsMode === 'number' ? d.savingsMode : 0,
+    plazosFijos: Array.isArray(d.plazosFijos) ? d.plazosFijos : [],
+    paymentMethods: d.paymentMethods && typeof d.paymentMethods === 'object' ? d.paymentMethods : {},
+    orbeName: typeof d.orbeName === 'string' ? d.orbeName : 'Orbe',
+    suscripciones: Array.isArray(d.suscripciones) ? d.suscripciones : [],
+    onboardingDone: typeof d.onboardingDone === 'boolean' ? d.onboardingDone : false,
   };
 }
 async function saveData(uid, payload) {
@@ -202,7 +216,7 @@ async function interpretMessage(userMessage, data, history, userName) {
   const todayDay = arDay();
   const proxVenc = (data.events || []).filter(ev => ev.day >= todayDay && ev.day <= todayDay + 7);
 
-  const systemPrompt = `Sos Orbe, la asistente financiera personal de ${name || 'tu usuario'}. Sos su mano derecha para las finanzas: cercana, confiable y genuinamente interesada en su bienestar. No sos un bot ni una app — sos una persona de confianza con quien ${name || 'el usuario'} puede hablar de plata sin vergüenza.
+  const systemPrompt = `Sos ${data.orbeName || 'Orbe'}, la asistente financiera personal de ${name || 'tu usuario'}. Sos su mano derecha para las finanzas: cercana, confiable y genuinamente interesada en su bienestar. No sos un bot ni una app — sos una persona de confianza con quien ${name || 'el usuario'} puede hablar de plata sin vergüenza.
 
 QUIÉN SOS:
 Hablás en español rioplatense informal, como hablaría una amiga argentina: usás "vos", "dale", "re", "laburo", "un toque", etc. Tenés memoria de la conversación y hacés referencias naturales a lo que se habló antes. Notás si el usuario está estresado o preocupado y lo contenés antes de tirar números. Cuando va bien, lo felicitás con entusiasmo genuino. Tenés humor suave — cuando la situación lo permite, tirás algún comentario gracioso sin forzarlo.
@@ -268,6 +282,26 @@ ACCIONES DISPONIBLES:
 {"type":"confirmar_vocabulario","expresion":"gym","interpretacion":"Gimnasio","categoria":"Salud","tx":{"txType":"gasto","description":"Gimnasio","amount":5000,"category":"Salud","date":"YYYY-MM-DD"}}
 {"type":"editar_transaccion","keyword":"sueldo","newAmount":1600000,"newDescription":"","newCategory":""}
 {"type":"limpiar_transacciones","scope":"mes"}
+{"type":"presupuesto_diario"}
+{"type":"modo_ahorro","porcentaje":20}
+{"type":"simular_prestamo","amount":500000,"cuotas":12,"tna":60}
+{"type":"estrategia_deudas"}
+{"type":"agregar_plazo_fijo","amount":100000,"tna":95,"dias":30,"banco":"Galicia"}
+{"type":"consultar_plazo_fijo"}
+{"type":"gastos_hormiga"}
+{"type":"regla_50_30_20"}
+{"type":"ratio_ahorro"}
+{"type":"dias_cubre_ahorro"}
+{"type":"top_categorias_ahorro"}
+{"type":"agregar_suscripcion","name":"Netflix","amount":3500,"day":15,"category":"Entretenimiento"}
+{"type":"consultar_suscripciones"}
+{"type":"cancelar_suscripcion","keyword":"netflix"}
+{"type":"silenciar","dias":3}
+{"type":"reanudar"}
+{"type":"calcular_impuesto_pais","amountUSD":100}
+{"type":"equivalencia_canasta","amount":50000}
+{"type":"cambiar_nombre","nombre":"Fiona"}
+{"type":"onboarding"}
 {"type":"proyectar_fin_de_mes"}
 {"type":"resumen_mes","month":3,"year":2026}
 {"type":"comparar_meses","month1":2,"year1":2026,"month2":3,"year2":2026}
@@ -317,6 +351,26 @@ REGLAS DE INTERPRETACIÓN:
 - "recordame el [fecha] que [descripción]", "poné un recordatorio para el [fecha]" → agregar_recordatorio (date: fecha resuelta YYYY-MM-DD)
 - "dividí con X el gasto de Y", "gasté Z con mi pareja/amigo/familiar en X", "gasto compartido" → gasto_compartido (amount: monto TOTAL, la mitad se registra automáticamente)
 - "qué me recomendás", "conviene que...", "qué hago con...", "es buen momento para..." → conversacion (Claude responde con consejo financiero personalizado usando el contexto disponible)
+- "cuánto tengo por día", "presupuesto diario", "cuánto puedo gastar por día" → presupuesto_diario
+- "modo ahorro X%", "reducí los presupuestos X%", "quiero ahorrar más este mes" → modo_ahorro (porcentaje: número entre 1-50)
+- "si pido X en Y cuotas", "simulá un préstamo de X", "cuánto pago si saco X" → simular_prestamo (amount, cuotas, tna si la menciona sino 0)
+- "qué deuda pago primero", "estrategia para mis deudas", "cómo salgo de las deudas" → estrategia_deudas
+- "puse X en plazo fijo", "hice un plazo fijo de X", "coloqué X en el banco" → agregar_plazo_fijo (amount, tna si menciona, dias si menciona, banco si menciona)
+- "cómo está mi plazo fijo", "cuándo vence el plazo fijo", "mis plazos fijos" → consultar_plazo_fijo
+- "gastos hormiga", "en qué estoy tirando plata sin darme cuenta", "gastos chicos que se acumulan" → gastos_hormiga
+- "regla 50/30/20", "cómo estoy distribuyendo mi plata", "análisis de mi distribución" → regla_50_30_20
+- "cuánto estoy ahorrando", "cuál es mi tasa de ahorro", "porcentaje de ahorro" → ratio_ahorro
+- "cuánto tiempo me dura el ahorro", "para cuántos meses me alcanza lo que tengo" → dias_cubre_ahorro
+- "en qué puedo ahorrar más", "dónde puedo recortar", "qué categoría me come más plata" → top_categorias_ahorro
+- "tengo una suscripción de X", "pago X por mes por Y", "suscripción mensual a X" → agregar_suscripcion
+- "qué suscripciones tengo", "mis suscripciones", "cuánto pago en suscripciones" → consultar_suscripciones
+- "cancelá la suscripción de X", "eliminá X de mis suscripciones" → cancelar_suscripcion
+- "no me molestes por X días", "silenciá las notificaciones", "estoy de vacaciones X días" → silenciar (dias: número)
+- "volvé a escribirme", "reanudar notificaciones", "ya volví" → reanudar
+- "cuánto es con impuesto país", "cuánto me sale en pesos con recargo", "precio dólar con impuesto" → calcular_impuesto_pais (amountUSD si lo menciona, sino 1)
+- "a cuántas canastas básicas equivale X", "qué tan caro es X en canastas", "equivalencia en canasta" → equivalencia_canasta
+- "llamate X", "cambiá tu nombre a X", "de ahora en adelante sos X" → cambiar_nombre (nombre: el nuevo nombre)
+- "onboarding", "configuración inicial", "ayudame a configurar todo" → onboarding
 
 CÓMO RAZONÁS (lo más importante):
 Pensás antes de responder. No das respuestas automáticas. Te hacés preguntas: ¿qué está necesitando realmente esta persona? ¿hay algo en los números que debería mencionar aunque no me lo pidió? ¿el contexto financiero cambia lo que voy a decir?
@@ -597,6 +651,234 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       const newTxs = data.transactions.filter(t => t.id !== found.id);
       await saveData(userId, { ...data, transactions: newTxs });
       return `🗑️ Listo, eliminé *${found.description}* (${fmt(found.amount)}) del ${found.date}.`;
+    }
+
+    case 'presupuesto_diario': {
+      const { month: cm, year: cy } = currentMonth();
+      const daysInMonth = new Date(cy, cm + 1, 0).getDate();
+      const dayOfMonth = arDay();
+      const daysLeft = daysInMonth - dayOfMonth;
+      const txsMes = data.transactions.filter(t => { const p = parseDateParts(t.date); return p.month === cm && p.year === cy; });
+      const ingresos = txsMes.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((s, t) => s + t.amount, 0);
+      const gastos = txsMes.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
+      const balance = ingresos - gastos;
+      const gastosFijosRest = (data.recurringExpenses || []).filter(g => g.active && g.day > dayOfMonth).reduce((s, g) => s + g.amount, 0);
+      const disponible = balance - gastosFijosRest;
+      const porDia = daysLeft > 0 ? Math.round(disponible / daysLeft) : disponible;
+      const emoji = porDia > 0 ? '🟢' : '🔴';
+      return `${emoji} *Presupuesto diario*\n\n💰 Balance actual: ${fmt(balance)}\n🔧 Gastos fijos que restan: ${fmt(gastosFijosRest)}\n💡 Disponible real: ${fmt(disponible)}\n📅 Días restantes: ${daysLeft}\n\n💸 *Podés gastar: ${fmt(Math.max(0, porDia))} por día*`;
+    }
+
+    case 'modo_ahorro': {
+      const pct = Math.min(Math.max(parseFloat(action.porcentaje) || 10, 1), 50);
+      const newBudgets = (data.budgets || []).map(b => ({
+        ...b,
+        limitOriginal: b.limitOriginal || b.limit,
+        limit: b.limit > 0 ? Math.round(b.limit * (1 - pct / 100)) : 0,
+      }));
+      await saveData(userId, { ...data, budgets: newBudgets, savingsMode: pct });
+      return `🐷 *Modo ahorro activado al ${pct}%*\n\nReduje todos tus presupuestos ${pct}%. Para volver a los valores originales decime "desactivar modo ahorro".`;
+    }
+
+    case 'simular_prestamo': {
+      const capital = parseFloat(action.amount) || 0;
+      const cuotas = parseInt(action.cuotas) || 12;
+      const tna = parseFloat(action.tna) || 60;
+      if (capital <= 0) return `🤔 Decime el monto del préstamo para simularlo.`;
+      const tem = Math.pow(1 + tna / 100, 1 / 12) - 1;
+      const cuota = tem > 0 ? capital * tem / (1 - Math.pow(1 + tem, -cuotas)) : capital / cuotas;
+      const totalPagar = cuota * cuotas;
+      const totalIntereses = totalPagar - capital;
+      const cft = Math.pow(totalPagar / capital, 12 / cuotas) - 1;
+      return `🏦 *Simulación de préstamo*\n\n💵 Capital: ${fmt(capital)}\n📅 Cuotas: ${cuotas}\n📈 TNA: ${tna}%\n\n💸 Cuota mensual: *${fmt(Math.round(cuota))}*\n💰 Total a pagar: ${fmt(Math.round(totalPagar))}\n🔴 Intereses totales: ${fmt(Math.round(totalIntereses))} (${Math.round(totalIntereses/capital*100)}% extra)`;
+    }
+
+    case 'estrategia_deudas': {
+      const deudas = (data.debts || []).filter(d => d.remaining > 0);
+      if (!deudas.length) return `✅ No tenés deudas activas. ¡Excelente posición!`;
+      const avalancha = [...deudas].sort((a, b) => (b.interest || 0) - (a.interest || 0));
+      const bolaNieve = [...deudas].sort((a, b) => a.remaining - b.remaining);
+      const totalDeuda = deudas.reduce((s, d) => s + d.remaining, 0);
+      const totalCuotas = deudas.reduce((s, d) => s + (d.installment || 0), 0);
+      return `💳 *Estrategia para tus deudas*\n\n📊 Total adeudado: ${fmt(totalDeuda)}\n💸 Cuotas mensuales: ${fmt(totalCuotas)}\n\n🎯 *Avalancha* (ahorra más intereses):\nPagá primero → ${avalancha[0].name} (${fmt(avalancha[0].remaining)})\n\n⛄ *Bola de nieve* (más motivador):\nPagá primero → ${bolaNieve[0].name} (${fmt(bolaNieve[0].remaining)})\n\n_Recomendación: si podés pagar extra este mes, priorizá ${avalancha[0].name}._`;
+    }
+
+    case 'agregar_plazo_fijo': {
+      const pf = {
+        id: Date.now().toString(),
+        amount: parseFloat(action.amount) || 0,
+        tna: parseFloat(action.tna) || 0,
+        dias: parseInt(action.dias) || 30,
+        banco: action.banco || 'Banco',
+        fechaInicio: today(),
+        fechaVencimiento: (() => { const d = new Date(today()); d.setDate(d.getDate() + (parseInt(action.dias) || 30)); return d.toISOString().slice(0, 10); })(),
+        ganancia: action.tna ? Math.round(parseFloat(action.amount) * (parseFloat(action.tna)/100) * ((parseInt(action.dias)||30)/365)) : 0,
+      };
+      const plazosFijos = [...(data.plazosFijos || []), pf];
+      await saveData(userId, { ...data, plazosFijos });
+      return `🏦 *Plazo fijo registrado*\n\n💵 Capital: ${fmt(pf.amount)}\n🏛️ Banco: ${pf.banco}\n📅 Vencimiento: ${pf.fechaVencimiento}${pf.tna > 0 ? `\n📈 TNA: ${pf.tna}%\n💰 Ganancia estimada: ${fmt(pf.ganancia)}` : ''}\n\nTe aviso cuando venza.`;
+    }
+
+    case 'consultar_plazo_fijo': {
+      const pfs = data.plazosFijos || [];
+      if (!pfs.length) return `📭 No tenés plazos fijos registrados.`;
+      const total = pfs.reduce((s, p) => s + p.amount, 0);
+      const totalGanancia = pfs.reduce((s, p) => s + (p.ganancia || 0), 0);
+      const todayStr = today();
+      const lineas = pfs.map(p => {
+        const vencido = p.fechaVencimiento < todayStr;
+        return `${vencido ? '✅' : '⏳'} *${p.banco}*: ${fmt(p.amount)}${p.tna ? ` al ${p.tna}% TNA` : ''} — vence ${p.fechaVencimiento}${p.ganancia ? ` (+${fmt(p.ganancia)})` : ''}`;
+      }).join('\n');
+      return `🏦 *Tus plazos fijos*\n\n${lineas}\n\n💰 Total invertido: ${fmt(total)}${totalGanancia > 0 ? `\n📈 Ganancia estimada: ${fmt(totalGanancia)}` : ''}`;
+    }
+
+    case 'gastos_hormiga': {
+      const { month: cm, year: cy } = currentMonth();
+      const txsMes = data.transactions.filter(t => { const p = parseDateParts(t.date); return p.month === cm && p.year === cy && t.type === 'gasto'; });
+      const UMBRAL = 5000;
+      const hormiga = txsMes.filter(t => t.amount <= UMBRAL);
+      if (!hormiga.length) return `✅ No detecté gastos hormiga este mes.`;
+      const totalHormiga = hormiga.reduce((s, t) => s + t.amount, 0);
+      const totalGastos = txsMes.reduce((s, t) => s + t.amount, 0);
+      const porCat = {};
+      hormiga.forEach(t => { porCat[t.description] = (porCat[t.description] || 0) + t.amount; });
+      const top = Object.entries(porCat).sort((a, b) => b[1] - a[1]).slice(0, 5);
+      return `🐜 *Gastos hormiga este mes*\n\n${hormiga.length} transacciones de menos de ${fmt(UMBRAL)}\n💸 Suman en total: *${fmt(totalHormiga)}* (${Math.round(totalHormiga/totalGastos*100)}% de tus gastos)\n\n*Los más frecuentes:*\n${top.map(([d, v]) => `• ${d}: ${fmt(v)}`).join('\n')}`;
+    }
+
+    case 'regla_50_30_20': {
+      const { month: cm, year: cy } = currentMonth();
+      const txsMes = data.transactions.filter(t => { const p = parseDateParts(t.date); return p.month === cm && p.year === cy; });
+      const ingresos = txsMes.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((s, t) => s + t.amount, 0);
+      if (!ingresos) return `📭 Todavía no registraste ingresos este mes. Registrá tu sueldo primero.`;
+      const gastos = txsMes.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
+      const ahorros = (data.savings || []).reduce((s, sv) => s + (sv.current || 0), 0);
+      const NECESIDADES_CATS = ['Vivienda', 'Alimentación', 'Transporte', 'Salud', 'Servicios'];
+      const necesidades = txsMes.filter(t => t.type === 'gasto' && NECESIDADES_CATS.includes(t.category)).reduce((s, t) => s + t.amount, 0);
+      const deseos = gastos - necesidades;
+      const ideal50 = ingresos * 0.5;
+      const ideal30 = ingresos * 0.3;
+      const ideal20 = ingresos * 0.2;
+      const pct = (v, t) => Math.round(v / t * 100);
+      const status = (real, ideal) => real <= ideal ? '✅' : '⚠️';
+      return `📊 *Regla 50/30/20*\n\n💰 Ingresos: ${fmt(ingresos)}\n\n${status(necesidades,ideal50)} *Necesidades* (ideal 50%): ${fmt(necesidades)} (${pct(necesidades,ingresos)}%)\n   Ideal: ${fmt(Math.round(ideal50))}\n\n${status(deseos,ideal30)} *Deseos* (ideal 30%): ${fmt(deseos)} (${pct(deseos,ingresos)}%)\n   Ideal: ${fmt(Math.round(ideal30))}\n\n${status(ahorros,ideal20)} *Ahorro* (ideal 20%): ${fmt(ahorros)} (${pct(ahorros,ingresos)}%)\n   Ideal: ${fmt(Math.round(ideal20))}`;
+    }
+
+    case 'ratio_ahorro': {
+      const { month: cm, year: cy } = currentMonth();
+      const txsMes = data.transactions.filter(t => { const p = parseDateParts(t.date); return p.month === cm && p.year === cy; });
+      const ingresos = txsMes.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((s, t) => s + t.amount, 0);
+      const gastos = txsMes.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
+      if (!ingresos) return `📭 No hay ingresos registrados este mes todavía.`;
+      const ahorro = ingresos - gastos;
+      const ratio = Math.round(ahorro / ingresos * 100);
+      const emoji = ratio >= 20 ? '🟢' : ratio >= 10 ? '🟡' : ratio >= 0 ? '🟠' : '🔴';
+      const label = ratio >= 20 ? 'Excelente' : ratio >= 10 ? 'Aceptable' : ratio >= 0 ? 'Bajo' : 'Negativo';
+      return `${emoji} *Tasa de ahorro — ${label}*\n\n💰 Ingresos: ${fmt(ingresos)}\n💸 Gastos: ${fmt(gastos)}\n🐷 Ahorro neto: ${fmt(ahorro)}\n\n📊 Ratio: *${ratio}%*\n_Referencia: 20%+ excelente, 10-20% bueno, <10% a mejorar_`;
+    }
+
+    case 'dias_cubre_ahorro': {
+      const totalAhorros = (data.savings || []).reduce((s, sv) => s + (sv.current || 0), 0);
+      if (!totalAhorros) return `📭 No tenés ahorros registrados todavía.`;
+      const { month: cm, year: cy } = currentMonth();
+      let totalGastos = 0, meses = 0;
+      for (let i = 0; i < 3; i++) {
+        const mm = ((cm - i) + 12) % 12;
+        const yy = cm - i < 0 ? cy - 1 : cy;
+        const g = data.transactions.filter(t => { const p = parseDateParts(t.date); return p.month === mm && p.year === yy && t.type === 'gasto'; }).reduce((s, t) => s + t.amount, 0);
+        if (g > 0) { totalGastos += g; meses++; }
+      }
+      const avgMensual = meses > 0 ? totalGastos / meses : 0;
+      if (!avgMensual) return `📭 No hay suficiente historial para calcular.`;
+      const mesesCubre = totalAhorros / avgMensual;
+      const diasCubre = Math.round(mesesCubre * 30);
+      const emoji = mesesCubre >= 6 ? '🟢' : mesesCubre >= 3 ? '🟡' : '🔴';
+      return `${emoji} *Cobertura de ahorros*\n\n🐷 Ahorros totales: ${fmt(totalAhorros)}\n📊 Gasto mensual promedio: ${fmt(Math.round(avgMensual))}\n\n⏳ Tus ahorros cubren *${diasCubre} días* (${mesesCubre.toFixed(1)} meses)\n_Recomendación: tener al menos 3-6 meses de gastos._`;
+    }
+
+    case 'top_categorias_ahorro': {
+      const { month: cm, year: cy } = currentMonth();
+      const txsMes = data.transactions.filter(t => { const p = parseDateParts(t.date); return p.month === cm && p.year === cy && t.type === 'gasto'; });
+      if (!txsMes.length) return `📭 No hay gastos registrados este mes.`;
+      const porCat = {};
+      txsMes.forEach(t => { porCat[t.category] = (porCat[t.category] || 0) + t.amount; });
+      const top = Object.entries(porCat).sort((a, b) => b[1] - a[1]).slice(0, 5);
+      const total = txsMes.reduce((s, t) => s + t.amount, 0);
+      return `💡 *Dónde podés recortar*\n\n${top.map(([cat, val], i) => `${i+1}. *${cat}*: ${fmt(val)} (${Math.round(val/total*100)}%)\n   Si reducís 20% → ahorrás ${fmt(Math.round(val*0.2))}/mes`).join('\n\n')}`;
+    }
+
+    case 'agregar_suscripcion': {
+      const sub = {
+        id: Date.now().toString(),
+        name: action.name || 'Suscripción',
+        amount: parseFloat(action.amount) || 0,
+        day: parseInt(action.day) || 1,
+        category: action.category || 'Entretenimiento',
+        active: true,
+      };
+      const suscripciones = [...(data.suscripciones || []), sub];
+      await saveData(userId, { ...data, suscripciones });
+      return `✅ Suscripción *${sub.name}* registrada — ${fmt(sub.amount)}/mes (día ${sub.day}).`;
+    }
+
+    case 'consultar_suscripciones': {
+      const subs = (data.suscripciones || []).filter(s => s.active);
+      if (!subs.length) return `📭 No tenés suscripciones registradas.`;
+      const total = subs.reduce((s, sub) => s + sub.amount, 0);
+      const anual = total * 12;
+      return `📱 *Tus suscripciones*\n\n${subs.map(s => `• *${s.name}*: ${fmt(s.amount)}/mes (día ${s.day})`).join('\n')}\n\n💸 Total mensual: ${fmt(total)}\n📅 Total anual: ${fmt(anual)}`;
+    }
+
+    case 'cancelar_suscripcion': {
+      const keyword = (action.keyword || '').toLowerCase();
+      const suscripciones = (data.suscripciones || []).map(s =>
+        s.name.toLowerCase().includes(keyword) ? { ...s, active: false } : s
+      );
+      const cancelada = (data.suscripciones || []).find(s => s.name.toLowerCase().includes(keyword) && s.active);
+      if (!cancelada) return `🤔 No encontré ninguna suscripción con ese nombre.`;
+      await saveData(userId, { ...data, suscripciones });
+      return `🗑️ Suscripción *${cancelada.name}* (${fmt(cancelada.amount)}/mes) cancelada. Te ahorrás ${fmt(cancelada.amount * 12)} por año.`;
+    }
+
+    case 'silenciar': {
+      const dias = parseInt(action.dias) || 1;
+      const hasta = (() => { const d = new Date(today()); d.setDate(d.getDate() + dias); return d.toISOString().slice(0, 10); })();
+      await saveData(userId, { ...data, silencedUntil: hasta });
+      return `🔕 Listo, no te molesto hasta el *${hasta}*. Cuando quieras que retome escribime "volvé" o "reanudar".`;
+    }
+
+    case 'reanudar': {
+      await saveData(userId, { ...data, silencedUntil: null });
+      return `🔔 ¡Bienvenido/a de vuelta! Las notificaciones y check-ins están activos de nuevo.`;
+    }
+
+    case 'calcular_impuesto_pais': {
+      const dolar = await getDolarPrice();
+      const amountUSD = parseFloat(action.amountUSD) || 1;
+      if (!dolar) return `😓 No pude obtener la cotización del dólar ahora.`;
+      const oficial = dolar.oficial;
+      const conImpuesto = oficial * 1.6; // 60% impuesto PAIS + percepción
+      const totalARS = amountUSD * conImpuesto;
+      return `🧾 *Precio con Impuesto PAIS*\n\n💵 USD ${amountUSD}\n🏦 Dólar oficial: ${fmt(oficial)}\n📋 Con impuesto PAIS (60%): ${fmt(Math.round(conImpuesto))}\n\n💸 Total en pesos: *${fmt(Math.round(totalARS))}*`;
+    }
+
+    case 'equivalencia_canasta': {
+      const CANASTA_BASICA = 280000;
+      const amount = parseFloat(action.amount) || 0;
+      if (!amount) return `🤔 Decime el monto para calcular la equivalencia.`;
+      const canastas = amount / CANASTA_BASICA;
+      return `🛒 *${fmt(amount)}* equivale a *${canastas.toFixed(2)} canastas básicas*\n_(Canasta básica referencia: ${fmt(CANASTA_BASICA)})_`;
+    }
+
+    case 'cambiar_nombre': {
+      const nuevoNombre = action.nombre || 'Orbe';
+      await saveData(userId, { ...data, orbeName: nuevoNombre });
+      return `✅ ¡Perfecto! De ahora en adelante me podés llamar *${nuevoNombre}*. ¿En qué te puedo ayudar?`;
+    }
+
+    case 'onboarding': {
+      await saveData(userId, { ...data, onboardingDone: true });
+      return `👋 *¡Configuremos todo juntos!*\n\nTe hago 5 preguntas para dejarte todo listo:\n\n*1.* ¿Cuánto ganás por mes (sueldo aproximado)?\n\nRespondé con el monto y seguimos con el resto 🚀`;
     }
 
     case 'limpiar_transacciones': {
@@ -1380,6 +1662,7 @@ async function sendMorningGreeting() {
     for (const user of users) {
       const data = await loadData(user.user_id);
       if (!data) continue;
+      if (data.silencedUntil && data.silencedUntil >= today()) continue;
 
       const txsMes = data.transactions.filter(t => {
         const p = parseDateParts(t.date);
@@ -1453,6 +1736,7 @@ async function sendEveningCheckin() {
     for (const user of users) {
       const data = await loadData(user.user_id);
       if (!data) continue;
+      if (data.silencedUntil && data.silencedUntil >= today()) continue;
 
       const txsHoy = data.transactions.filter(t => t.date === todayStr);
       const gastosHoy = txsHoy.filter(t => t.type === 'gasto').reduce((a, t) => a + t.amount, 0);
@@ -1508,6 +1792,20 @@ async function checkAndSendNotifications() {
               : `📅 En ${daysUntil} días vence *${ev.title}*. Te aviso con tiempo para que lo tengas listo.`;
             await sendWhatsAppMessage(user.phone, msg);
           }
+        }
+      }
+      // Plazos fijos que vencen en los próximos 2 días
+      const pfs = data.plazosFijos || [];
+      for (const pf of pfs) {
+        if (!pf.fechaVencimiento) continue;
+        const pfDate = new Date(pf.fechaVencimiento);
+        const nowDate = new Date(today());
+        const diffDays = Math.round((pfDate - nowDate) / (1000 * 60 * 60 * 24));
+        if (diffDays === 1 || diffDays === 0) {
+          const msg = diffDays === 0
+            ? `🏦 Hoy vence tu plazo fijo en *${pf.banco}* por ${fmt(pf.amount)}${pf.ganancia ? `. Ganancia: ${fmt(pf.ganancia)}` : ''}. ¿Lo renovás?`
+            : `🏦 Mañana vence tu plazo fijo en *${pf.banco}* por ${fmt(pf.amount)}. Te aviso con tiempo.`;
+          await sendWhatsAppMessage(user.phone, msg);
         }
       }
     }
@@ -1636,6 +1934,37 @@ async function sendMonthlySuggestionReport() {
   }
 }
 
+// ── Reporte semanal (lunes) ─────────────────────────────────
+async function sendWeeklyReport() {
+  try {
+    const { data: users } = await supabase.from('whatsapp_users').select('phone, user_id, user_name');
+    if (!users || !users.length) return;
+    const todayStr = today();
+    const weekAgo = (() => { const d = new Date(todayStr); d.setDate(d.getDate() - 7); return d.toISOString().slice(0, 10); })();
+
+    for (const user of users) {
+      const data = await loadData(user.user_id);
+      if (!data) continue;
+      if (data.silencedUntil && data.silencedUntil >= todayStr) continue;
+
+      const txsSemana = data.transactions.filter(t => t.date >= weekAgo && t.date <= todayStr);
+      if (!txsSemana.length) continue;
+
+      const ingresos = txsSemana.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((s, t) => s + t.amount, 0);
+      const gastos = txsSemana.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
+      const porCat = {};
+      txsSemana.filter(t => t.type === 'gasto').forEach(t => { porCat[t.category] = (porCat[t.category] || 0) + t.amount; });
+      const topCat = Object.entries(porCat).sort((a, b) => b[1] - a[1])[0];
+      const name = user.user_name ? user.user_name.split(' ')[0] : '';
+
+      const msg = `📊 *Resumen de la semana${name ? ', ' + name : ''}*\n\n💰 Ingresos: ${fmt(ingresos)}\n💸 Gastos: ${fmt(gastos)}\n✅ Balance: ${fmt(ingresos - gastos)}${topCat ? `\n\n🏆 Mayor gasto: *${topCat[0]}* (${fmt(topCat[1])})` : ''}\n\n¿Cómo arrancamos la semana? 💪`;
+      await sendWhatsAppMessage(user.phone, msg);
+    }
+  } catch (err) {
+    console.error('❌ Error reporte semanal:', err.message);
+  }
+}
+
 // ── Scheduler diario (Argentina) ───────────────────────────
 function scheduleAt(hour, minute, fn, label) {
   const now = arNow();
@@ -1660,6 +1989,11 @@ function scheduleDaily() {
     }
   }, 'Saludo matutino');
   scheduleAt(21, 0, () => sendEveningCheckin().catch(e => console.error('❌ sendEveningCheckin:', e.message)), 'Check-in nocturno');
+  // Reporte semanal los lunes a las 9am
+  scheduleAt(9, 0, () => {
+    const dayOfWeek = arNow().getDay(); // 1 = Monday
+    if (dayOfWeek === 1) sendWeeklyReport().catch(e => console.error('❌ sendWeeklyReport:', e.message));
+  }, 'Reporte semanal');
 }
 if (process.env.NODE_ENV !== 'test') scheduleDaily();
 
