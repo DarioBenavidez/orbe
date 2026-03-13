@@ -76,13 +76,21 @@ function defaultData() {
   return {
     transactions: [], budgets: [], categories: {}, savings: [], debts: [], events: [],
     vocabulario: [], recurringIncomes: [],
+    balanceAlert: 0,
+    reminders: [],
     selectedMonth: new Date().getMonth(), selectedYear: new Date().getFullYear(),
   };
 }
 async function loadData(uid) {
   const { data, error } = await supabase.from('finanzas').select('data').eq('id', uid).single();
   if (error || !data || !data.data) return defaultData();
-  return data.data;
+  const d = data.data;
+  return {
+    ...defaultData(),
+    ...d,
+    reminders: Array.isArray(d.reminders) ? d.reminders : [],
+    balanceAlert: typeof d.balanceAlert === 'number' ? d.balanceAlert : 0,
+  };
 }
 async function saveData(uid, payload) {
   await supabase.from('finanzas').upsert({ id: uid, data: payload, updated_at: new Date().toISOString() });
@@ -215,6 +223,8 @@ CONTEXTO ACTUAL:
 - Ingresos fijos esperados (${(data.recurringIncomes || []).filter(r => r.active).length}): ${(data.recurringIncomes || []).filter(r => r.active).length > 0 ? (data.recurringIncomes || []).filter(r => r.active).map(r => `${r.name} ${fmt(r.amount)}/mes día ${r.day}${r.reason ? ' por ' + r.reason : ''}`).join(', ') : 'ninguno'}
 - Mes anterior (${MONTH_NAMES[prevMonth]}): ingresos ${fmt(ingresosPrev)}, gastos ${fmt(gastosPrev)}${gastosPrev > 0 && gastos > gastosPrev ? ' ← este mes está gastando más que el anterior' : gastosPrev > 0 && gastos < gastosPrev * 0.8 ? ' ← este mes está gastando menos, buen dato' : ''}
 ${proxVenc.length > 0 ? `- Vencimientos próximos (7 días): ${proxVenc.map(ev => ev.title).join(', ')} ← mencionálos si viene al caso` : ''}
+${data.balanceAlert > 0 ? `- Alerta de balance configurada: avisa cuando baje de ${fmt(data.balanceAlert)}` : ''}
+${(data.reminders || []).filter(r => !r.notified).length > 0 ? `- Recordatorios pendientes: ${(data.reminders || []).filter(r => !r.notified).map(r => `"${r.description}" el ${r.date}`).join(', ')}` : ''}
 
 TU TAREA:
 Interpretá el mensaje y devolvé SOLO un JSON con la acción a realizar.
@@ -258,6 +268,14 @@ ACCIONES DISPONIBLES:
 {"type":"confirmar_vocabulario","expresion":"gym","interpretacion":"Gimnasio","categoria":"Salud","tx":{"txType":"gasto","description":"Gimnasio","amount":5000,"category":"Salud","date":"YYYY-MM-DD"}}
 {"type":"editar_transaccion","keyword":"sueldo","newAmount":1600000,"newDescription":"","newCategory":""}
 {"type":"limpiar_transacciones","scope":"mes"}
+{"type":"proyectar_fin_de_mes"}
+{"type":"resumen_mes","month":3,"year":2026}
+{"type":"comparar_meses","month1":2,"year1":2026,"month2":3,"year2":2026}
+{"type":"analisis_historico"}
+{"type":"configurar_alerta_balance","amount":50000}
+{"type":"agregar_categoria","name":"Mascotas","icon":"🐾"}
+{"type":"agregar_recordatorio","description":"Pagar seguro","date":"YYYY-MM-DD"}
+{"type":"gasto_compartido","description":"Alquiler","amount":200000,"category":"Vivienda","sharedWith":"pareja","date":"YYYY-MM-DD"}
 {"type":"conversacion","respuesta":"..."}
 {"type":"unknown"}
 
@@ -290,6 +308,15 @@ REGLAS DE INTERPRETACIÓN:
 - "cuando diga/digo X es/significa/quiero decir Y", "aprendé que X es Y", "guardá que X es Y", "X = Y" (enseñanza explícita de vocabulario) → guardar_vocabulario (categoria: inferila del contexto o usá "Otros")
 - Hay palabras genéricas que son SIEMPRE ambiguas porque pueden referirse a muchas cosas distintas: "cuota", "pago", "factura", "el pago", "la cuenta", "el servicio", "la mensualidad". Si el usuario las usa SIN especificar de qué (ej: "pagué la cuota", "aboné la factura"), NO asumas ni uses confirmar_vocabulario — usá conversacion para preguntar "¿cuota de qué?" o "¿factura de qué servicio?". Si el usuario YA especificó (ej: "pagué la cuota del auto", "cuota del colegio"), procesá normalmente.
 - Si el mensaje incluye una expresión coloquial, abreviación o apodo propio del usuario (ej: "gym", "el super", "el kiosco", "el chino") que NO está en el vocabulario aprendido y cuyo significado podría ser ambiguo, devolvé "confirmar_vocabulario" con tu mejor interpretación como sugerencia. Si la expresión YA está en el vocabulario aprendido, usala directamente sin preguntar. Si la expresión es completamente obvia y universal (ej: "supermercado", "restaurante", "taxi", "comida", "farmacia"), NO preguntes — usá agregar_transaccion directamente.
+- "cómo voy a terminar el mes", "me alcanza para fin de mes", "cuánto me queda para gastar" → proyectar_fin_de_mes
+- "cómo me fue en enero/febrero/etc", "resumen de [mes]", "qué pasó en [mes]" → resumen_mes (month: número 1-12, year: año)
+- "compará enero con febrero", "cómo estuvo X vs Y", "diferencia entre mes X e Y" → comparar_meses
+- "en qué mes gasté más", "cuál fue mi peor mes", "análisis de todo el año", "historial completo" → analisis_historico
+- "avisame si mi balance baja de X", "alerta si tengo menos de X", "recordame cuando tenga menos de X" → configurar_alerta_balance
+- "creá la categoría X", "agregá categoría X con emoji Y", "nueva categoría X" → agregar_categoria
+- "recordame el [fecha] que [descripción]", "poné un recordatorio para el [fecha]" → agregar_recordatorio (date: fecha resuelta YYYY-MM-DD)
+- "dividí con X el gasto de Y", "gasté Z con mi pareja/amigo/familiar en X", "gasto compartido" → gasto_compartido (amount: monto TOTAL, la mitad se registra automáticamente)
+- "qué me recomendás", "conviene que...", "qué hago con...", "es buen momento para..." → conversacion (Claude responde con consejo financiero personalizado usando el contexto disponible)
 
 CÓMO RAZONÁS (lo más importante):
 Pensás antes de responder. No das respuestas automáticas. Te hacés preguntas: ¿qué está necesitando realmente esta persona? ¿hay algo en los números que debería mencionar aunque no me lo pidió? ¿el contexto financiero cambia lo que voy a decir?
@@ -438,6 +465,7 @@ Tu tarea: escribí un saludo natural, breve y conversacional. Pensá qué es lo 
         category: action.category || 'Otros',
         date: action.date || today(),
         savingsId: '',
+        note: action.note || '',
       };
       const allTxs = [...data.transactions, tx];
       await saveData(userId, { ...data, transactions: allTxs });
@@ -494,6 +522,16 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
           respuesta += `\n\n⚠️ Con esto el mes quedó en rojo: ${fmtSigned(balanceNuevo)}.`;
         } else if (balanceNuevo < tx.amount * 2) {
           respuesta += `\n\nTe quedan ${fmt(balanceNuevo)} para lo que resta del mes.`;
+        }
+
+        // Alerta de balance bajo
+        if (data.balanceAlert > 0) {
+          const newIngresos = allTxs.filter(t => { const p = parseDateParts(t.date); return p.month === month && p.year === year && (t.type === 'ingreso' || t.type === 'sueldo'); }).reduce((s, t) => s + t.amount, 0);
+          const newGastos = allTxs.filter(t => { const p = parseDateParts(t.date); return p.month === month && p.year === year && t.type === 'gasto'; }).reduce((s, t) => s + t.amount, 0);
+          const newBalance = newIngresos - newGastos;
+          if (newBalance < data.balanceAlert) {
+            respuesta += `\n\n⚠️ *Alerta:* tu balance bajó a ${fmt(newBalance)}, por debajo del límite que configuraste (${fmt(data.balanceAlert)}).`;
+          }
         }
       }
 
@@ -574,6 +612,125 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       return `⚠️ Estás por borrar *${count} transacciones* ${scopeLabel}. Esta acción no se puede deshacer.\n\nRespondé *CONFIRMAR* para proceder, o cualquier otra cosa para cancelar.`;
     }
 
+    case 'proyectar_fin_de_mes': {
+      const { month: cm, year: cy } = currentMonth();
+      const daysInMonth = new Date(cy, cm + 1, 0).getDate();
+      const dayOfMonth = arDay();
+      const daysLeft = daysInMonth - dayOfMonth;
+      const txsMes = data.transactions.filter(t => {
+        const p = parseDateParts(t.date);
+        return p.month === cm && p.year === cy;
+      });
+      const ingresos = txsMes.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((s, t) => s + t.amount, 0);
+      const gastos = txsMes.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
+      const balance = ingresos - gastos;
+      const avgDailySpend = dayOfMonth > 0 ? gastos / dayOfMonth : 0;
+      const proyectedGastos = gastos + (avgDailySpend * daysLeft);
+      const proyectedBalance = ingresos - proyectedGastos;
+      const gastosFijosRestantes = (data.recurringExpenses || []).filter(g => g.active && g.day > dayOfMonth).reduce((s, g) => s + g.amount, 0);
+      const balanceRealProyectado = balance - gastosFijosRestantes;
+      const emoji = balanceRealProyectado >= 0 ? '🟢' : '🔴';
+      return `${emoji} *Proyección de fin de mes*\n\n📅 Quedan ${daysLeft} días del mes\n💸 Promedio diario de gasto: ${fmt(Math.round(avgDailySpend))}\n📈 Gastos proyectados al ${daysInMonth}: ${fmt(Math.round(proyectedGastos))}\n\n💰 Balance actual: ${fmt(balance)}\n🔧 Gastos fijos que restan: ${fmt(gastosFijosRestantes)}\n${emoji} Balance proyectado: ${fmt(Math.round(balanceRealProyectado))}`;
+    }
+
+    case 'resumen_mes': {
+      const targetMonth = (parseInt(action.month) - 1 + 12) % 12;
+      const targetYear = parseInt(action.year) || currentMonth().year;
+      const txs = data.transactions.filter(t => {
+        const p = parseDateParts(t.date);
+        return p.month === targetMonth && p.year === targetYear;
+      });
+      if (!txs.length) return `📭 No hay transacciones registradas en ${MONTH_NAMES[targetMonth]} ${targetYear}.`;
+      const ingresos = txs.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((s, t) => s + t.amount, 0);
+      const gastos = txs.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
+      const balance = ingresos - gastos;
+      const porCat = {};
+      txs.filter(t => t.type === 'gasto').forEach(t => { porCat[t.category] = (porCat[t.category] || 0) + t.amount; });
+      const topCats = Object.entries(porCat).sort((a, b) => b[1] - a[1]).slice(0, 4);
+      const emoji = balance >= 0 ? '✅' : '🔴';
+      return `📅 *${MONTH_NAMES[targetMonth]} ${targetYear}*\n\n💰 Ingresos: ${fmt(ingresos)}\n💸 Gastos: ${fmt(gastos)}\n${emoji} Balance: ${fmt(balance)}\n\n📊 *Top categorías:*\n${topCats.map(([c, v]) => `• ${c}: ${fmt(v)} (${Math.round(v/gastos*100)}%)`).join('\n')}`;
+    }
+
+    case 'comparar_meses': {
+      const m1 = (parseInt(action.month1) - 1 + 12) % 12;
+      const y1 = parseInt(action.year1) || currentMonth().year;
+      const m2 = (parseInt(action.month2) - 1 + 12) % 12;
+      const y2 = parseInt(action.year2) || currentMonth().year;
+      const txs1 = data.transactions.filter(t => { const p = parseDateParts(t.date); return p.month === m1 && p.year === y1; });
+      const txs2 = data.transactions.filter(t => { const p = parseDateParts(t.date); return p.month === m2 && p.year === y2; });
+      const ing1 = txs1.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((s, t) => s + t.amount, 0);
+      const gst1 = txs1.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
+      const ing2 = txs2.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((s, t) => s + t.amount, 0);
+      const gst2 = txs2.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
+      const diffGst = gst2 - gst1;
+      const diffIng = ing2 - ing1;
+      const arrow = (n) => n > 0 ? `↑ ${fmt(Math.abs(n))} más` : n < 0 ? `↓ ${fmt(Math.abs(n))} menos` : 'igual';
+      return `📊 *${MONTH_NAMES[m1]} vs ${MONTH_NAMES[m2]}*\n\n💰 Ingresos: ${fmt(ing1)} → ${fmt(ing2)} (${arrow(diffIng)})\n💸 Gastos: ${fmt(gst1)} → ${fmt(gst2)} (${arrow(diffGst)})\n✅ Balance: ${fmt(ing1-gst1)} → ${fmt(ing2-gst2)}`;
+    }
+
+    case 'analisis_historico': {
+      const porMes = {};
+      data.transactions.forEach(t => {
+        const p = parseDateParts(t.date);
+        const key = `${p.year}-${String(p.month+1).padStart(2,'0')}`;
+        if (!porMes[key]) porMes[key] = { ingresos: 0, gastos: 0, month: p.month, year: p.year };
+        if (t.type === 'gasto') porMes[key].gastos += t.amount;
+        else porMes[key].ingresos += t.amount;
+      });
+      const meses = Object.entries(porMes).sort((a, b) => a[0].localeCompare(b[0]));
+      if (!meses.length) return `📭 No hay historial de transacciones todavía.`;
+      const peorMes = meses.reduce((max, m) => m[1].gastos > max[1].gastos ? m : max, meses[0]);
+      const mejorMes = meses.reduce((min, m) => (m[1].ingresos - m[1].gastos) > (min[1].ingresos - min[1].gastos) ? m : min, meses[0]);
+      const resumen = meses.slice(-6).map(([, v]) => `${MONTH_NAMES[v.month]} ${v.year}: ${fmt(v.ingresos - v.gastos)}`).join('\n');
+      return `📈 *Análisis histórico*\n\n📅 Meses con datos: ${meses.length}\n💸 Mes con más gastos: *${MONTH_NAMES[peorMes[1].month]} ${peorMes[1].year}* (${fmt(peorMes[1].gastos)})\n🏆 Mejor balance: *${MONTH_NAMES[mejorMes[1].month]} ${mejorMes[1].year}* (${fmt(mejorMes[1].ingresos - mejorMes[1].gastos)})\n\n*Últimos 6 meses:*\n${resumen}`;
+    }
+
+    case 'configurar_alerta_balance': {
+      const amount = parseFloat(action.amount) || 0;
+      await saveData(userId, { ...data, balanceAlert: amount });
+      if (amount === 0) return `🔕 Alerta de balance desactivada.`;
+      return `🔔 Listo! Te aviso cuando tu balance baje de *${fmt(amount)}*.`;
+    }
+
+    case 'agregar_categoria': {
+      const catName = action.name || '';
+      const catIcon = action.icon || '📦';
+      if (!catName) return `🤔 ¿Cómo querés llamar a la categoría?`;
+      const cats = { ...(data.categories || {}), [catName]: catIcon };
+      const budgets = [...(data.budgets || [])];
+      if (!budgets.find(b => b.cat === catName)) budgets.push({ cat: catName, limit: 0 });
+      await saveData(userId, { ...data, categories: cats, budgets });
+      return `✅ Categoría *${catIcon} ${catName}* agregada. Ya podés usarla al registrar gastos.`;
+    }
+
+    case 'agregar_recordatorio': {
+      const reminder = {
+        id: Date.now().toString(),
+        description: action.description || 'Recordatorio',
+        date: action.date || today(),
+        notified: false,
+      };
+      const reminders = [...(data.reminders || []), reminder];
+      await saveData(userId, { ...data, reminders });
+      return `🔔 Recordatorio guardado: *"${reminder.description}"* para el *${reminder.date}*. Te aviso ese día a la mañana.`;
+    }
+
+    case 'gasto_compartido': {
+      const mitad = parseFloat(action.amount) / 2;
+      const tx = {
+        id: Date.now().toString(),
+        type: 'gasto',
+        description: `${action.description || 'Gasto'} (compartido con ${action.sharedWith || 'otra persona'})`,
+        amount: mitad,
+        category: action.category || 'Otros',
+        date: action.date || today(),
+        savingsId: '',
+        note: `Gasto total: ${fmt(parseFloat(action.amount))}. Tu parte: ${fmt(mitad)}.`,
+      };
+      await saveData(userId, { ...data, transactions: [...data.transactions, tx] });
+      return `💸 *Gasto compartido registrado*\n\n📝 ${action.description}\n👥 Total: ${fmt(parseFloat(action.amount))} — tu parte: *${fmt(mitad)}*\n📂 ${tx.category}`;
+    }
+
     case 'actualizar_presupuesto': {
       const budgets = data.budgets.map(b =>
         b.cat.toLowerCase() === action.category.toLowerCase()
@@ -609,6 +766,8 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       }, 0);
       const balance = ingresos - gastos;
       const proyectado = balance - gastosFijos + ingFijosNoRecibidos;
+      const pctGastado = ingresos > 0 ? (gastos / ingresos) * 100 : 0;
+      const tempEmoji = pctGastado < 60 ? '🟢 Excelente' : pctGastado < 80 ? '🟡 Cuidado' : pctGastado < 100 ? '🟠 En riesgo' : '🔴 En rojo';
       const balanceMsg = balance >= 0
         ? ['Vas muy bien por ahora!', 'Todo en orden por el momento.', 'Buen ritmo este mes!'][Math.floor(Math.random() * 3)]
         : ['Estás un poco ajustado este mes, ojo.', 'El mes está apretado, pero se puede revertir.', 'Cuidado con los gastos, el balance está en rojo.'][Math.floor(Math.random() * 3)];
@@ -616,6 +775,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       if (gastosFijos > 0) resp += `\n🔄 Gastos fijos pendientes: ${fmt(gastosFijos)}`;
       if (ingFijosNoRecibidos > 0) resp += `\n💵 Ingresos esperados: ${fmt(ingFijosNoRecibidos)}`;
       if (gastosFijos > 0 || ingFijosNoRecibidos > 0) resp += `\n📅 Estimado fin de mes: ${fmtSigned(proyectado)}`;
+      resp += `\n🌡️ Temperatura: ${tempEmoji}`;
       resp += `\n\n${balanceMsg}`;
       return resp;
     }
@@ -1252,6 +1412,19 @@ Tu tarea: escribí el mensaje de buenos días. Antes de escribir, pensá: ¿qué
         // fallback si Claude falla
         const fallback = `☀️ Buenos días${name ? ', ' + name : ''}! ¿Cómo arrancaste?\n\n📊 ${MONTH_NAMES[month]}: ${fmt(ingresos)} ingresos, ${fmt(gastos)} gastos. Disponible: ${fmt(balance)}.${proxVenc.length > 0 ? `\n\n⚠️ Vencimientos próximos: ${proxVenc.map(ev => ev.title).join(', ')}` : ''}\n\n¿Tenés algo para registrar? Avisame 💚`;
         await sendWhatsAppMessage(user.phone, fallback);
+      }
+
+      // Verificar recordatorios del día
+      const todayStr = today();
+      const todayReminders = (data.reminders || []).filter(r => r.date === todayStr && !r.notified);
+      if (todayReminders.length > 0) {
+        for (const reminder of todayReminders) {
+          await sendWhatsAppMessage(user.phone, `🔔 *Recordatorio:* ${reminder.description}`);
+        }
+        const updatedReminders = (data.reminders || []).map(r =>
+          todayReminders.find(tr => tr.id === r.id) ? { ...r, notified: true } : r
+        );
+        await saveData(user.user_id, { ...data, reminders: updatedReminders });
       }
     }
   } catch (err) {
