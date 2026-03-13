@@ -161,7 +161,9 @@ async function callClaude(systemPrompt, history, userMessage) {
     system: systemPrompt,
     messages,
   });
-  return response.content[0].text.trim();
+  const text = response.content?.[0]?.text;
+  if (!text) throw new Error('Claude devolvió respuesta vacía');
+  return text.trim();
 }
 
 // ── Interpretar mensaje con Claude ────────────────────────
@@ -1378,11 +1380,11 @@ function scheduleAt(hour, minute, fn, label) {
 
 function scheduleDaily() {
   scheduleAt(8, 30, () => {
-    sendMorningGreeting();
-    checkAndSendNotifications();
-    if (arDay() === 1) sendMonthlySuggestionReport();
+    sendMorningGreeting().catch(e => console.error('❌ sendMorningGreeting:', e.message));
+    checkAndSendNotifications().catch(e => console.error('❌ checkAndSendNotifications:', e.message));
+    if (arDay() === 1) sendMonthlySuggestionReport().catch(e => console.error('❌ sendMonthlySuggestionReport:', e.message));
   }, 'Saludo matutino');
-  scheduleAt(21, 0, sendEveningCheckin, 'Check-in nocturno');
+  scheduleAt(21, 0, () => sendEveningCheckin().catch(e => console.error('❌ sendEveningCheckin:', e.message)), 'Check-in nocturno');
 }
 if (process.env.NODE_ENV !== 'test') scheduleDaily();
 
@@ -1452,7 +1454,7 @@ app.post('/webhook', async (req, res) => {
               if (!authErr) {
                 const found = users.find(u => u.email?.toLowerCase() === email);
                 if (found) {
-                  const userName = found.user_metadata?.full_name || found.user_metadata?.nombre || found.email.split('@')[0];
+                  const userName = found.user_metadata?.full_name || found.user_metadata?.nombre || (found.email || email).split('@')[0];
                   await linkPhoneToUser(from, found.id, userName);
                   await clearPendingSuggestion(from);
                   const greeting = getGreeting();
