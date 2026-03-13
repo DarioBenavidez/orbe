@@ -221,6 +221,8 @@ Interpretá el mensaje y devolvé SOLO un JSON con la acción a realizar.
 
 ACCIONES DISPONIBLES:
 {"type":"agregar_transaccion","txType":"gasto|ingreso|sueldo","description":"...","amount":1234,"category":"...","date":"YYYY-MM-DD"}
+{"type":"agregar_multiples_transacciones","transacciones":[{"txType":"gasto","description":"Pan","amount":500,"category":"Alimentación","date":"YYYY-MM-DD"},{"txType":"gasto","description":"Nafta","amount":1500,"category":"Transporte","date":"YYYY-MM-DD"}]}
+{"type":"buscar_transacciones","keyword":"","category":"","dateFrom":"","dateTo":"","txType":""}
 {"type":"borrar_transaccion","keyword":"...","amount":0}
 {"type":"consultar_balance"}
 {"type":"ultimas_transacciones"}
@@ -260,6 +262,9 @@ ACCIONES DISPONIBLES:
 {"type":"unknown"}
 
 REGLAS DE INTERPRETACIÓN:
+- FECHAS RELATIVAS: siempre resolvé las fechas relativas usando la fecha actual (${today()}). "ayer" = ${(()=>{const d=new Date(today());d.setDate(d.getDate()-1);return d.toISOString().slice(0,10)})()}, "anteayer" = ${(()=>{const d=new Date(today());d.setDate(d.getDate()-2);return d.toISOString().slice(0,10)})()}, "el lunes/martes/etc" = el día más reciente con ese nombre. Siempre incluí el campo "date" con la fecha resuelta en formato YYYY-MM-DD.
+- MÚLTIPLES GASTOS en un solo mensaje ("hoy gasté X en A, Y en B y Z en C", "compré pan 500, leche 300, nafta 1500") → SIEMPRE agregar_multiples_transacciones con array de transacciones. NUNCA agregar_transaccion repetido.
+- "cuánto gasté en X", "buscar gastos de X", "mostrar todos los gastos de X", "cuándo fue la última vez que pagué X", "gastos del mes pasado" → buscar_transacciones (keyword: término a buscar, category: categoría si menciona, dateFrom/dateTo: rango YYYY-MM-DD si aplica, txType: "gasto" o "ingreso" si especifica)
 - "gasté/pagué/compré/salí" → txType "gasto"
 - "cobré/sueldo/me depositaron/me pagaron/entró plata" → txType "sueldo" o "ingreso"
 - "me debe/le presté/le fié/fiado" → agregar_prestamo
@@ -493,6 +498,46 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       }
 
       return respuesta;
+    }
+
+    case 'agregar_multiples_transacciones': {
+      const items = Array.isArray(action.transacciones) ? action.transacciones : [];
+      if (!items.length) return `🤔 No encontré transacciones para registrar.`;
+      const nuevas = items.map(t => ({
+        id: Date.now().toString() + Math.random().toString(36).slice(2),
+        type: t.txType || 'gasto',
+        description: t.description || 'Sin descripción',
+        amount: parseFloat(t.amount) || 0,
+        category: t.category || 'Otros',
+        date: t.date || today(),
+        savingsId: '',
+      }));
+      await saveData(userId, { ...data, transactions: [...data.transactions, ...nuevas] });
+      const totalGastos = nuevas.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
+      const lineas = nuevas.map(t => `${t.type === 'gasto' ? '💸' : '💰'} ${t.description}: ${fmt(t.amount)}`).join('\n');
+      return `✅ *${nuevas.length} transacciones registradas*\n\n${lineas}\n\n📊 Total: ${fmt(totalGastos)}`;
+    }
+
+    case 'buscar_transacciones': {
+      const keyword = (action.keyword || '').toLowerCase();
+      const cat = (action.category || '').toLowerCase();
+      const txType = action.txType || '';
+      const dateFrom = action.dateFrom || '';
+      const dateTo = action.dateTo || '';
+
+      const results = data.transactions.filter(t => {
+        if (keyword && !t.description?.toLowerCase().includes(keyword) && !t.category?.toLowerCase().includes(keyword)) return false;
+        if (cat && !t.category?.toLowerCase().includes(cat)) return false;
+        if (txType && t.type !== txType) return false;
+        if (dateFrom && t.date < dateFrom) return false;
+        if (dateTo && t.date > dateTo) return false;
+        return true;
+      }).slice().reverse().slice(0, 15);
+
+      if (!results.length) return `🔍 No encontré transacciones que coincidan con tu búsqueda.`;
+      const total = results.reduce((s, t) => s + (t.type === 'gasto' ? t.amount : -t.amount), 0);
+      const lineas = results.map(t => `${t.type === 'gasto' ? '💸' : '💰'} ${t.description} — ${fmt(t.amount)} (${t.date})`).join('\n');
+      return `🔍 *${results.length} resultado${results.length > 1 ? 's' : ''}*\n\n${lineas}\n\n📊 Total: ${fmt(Math.abs(total))}`;
     }
 
     case 'borrar_transaccion': {
@@ -1298,6 +1343,60 @@ async function checkAndSendNotifications() {
   }
 }
 
+// ── Reporte financiero mensual a cada usuario ───────────────
+async function sendMonthlyFinancialReport() {
+  try {
+    const { data: users } = await supabase.from('whatsapp_users').select('phone, user_id, user_name');
+    if (!users || !users.length) return;
+
+    const { month, year } = currentMonth();
+    const prevMonth = month === 0 ? 11 : month - 1;
+    const prevYear  = month === 0 ? year - 1 : year;
+
+    for (const user of users) {
+      const data = await loadData(user.user_id);
+      if (!data) continue;
+
+      const txsPrev = data.transactions.filter(t => {
+        const p = parseDateParts(t.date);
+        return p.month === prevMonth && p.year === prevYear;
+      });
+      if (!txsPrev.length) continue;
+
+      const ingresos = txsPrev.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((s, t) => s + t.amount, 0);
+      const gastos   = txsPrev.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
+      const balance  = ingresos - gastos;
+
+      // Gastos por categoría
+      const porCat = {};
+      txsPrev.filter(t => t.type === 'gasto').forEach(t => {
+        porCat[t.category] = (porCat[t.category] || 0) + t.amount;
+      });
+      const topCats = Object.entries(porCat).sort((a, b) => b[1] - a[1]).slice(0, 5);
+
+      const name = user.user_name ? user.user_name.split(' ')[0] : '';
+      const reportPrompt = `Sos Orbe, asistente financiera de ${name || 'tu usuario'}. Es el 1° del mes y mandás el resumen financiero de ${MONTH_NAMES[prevMonth]}. Tono: cálido, directo, rioplatense. Sin listas con asteriscos — usá emojis. Máximo 6 líneas.
+Datos de ${MONTH_NAMES[prevMonth]} ${prevYear}:
+- Ingresos: ${fmt(ingresos)}
+- Gastos totales: ${fmt(gastos)}
+- Balance: ${fmt(balance)}${balance < 0 ? ' (NEGATIVO)' : ''}
+- Top categorías de gasto: ${topCats.map(([c, v]) => `${c} ${fmt(v)}`).join(', ')}
+${data.savings?.length ? `- Ahorros acumulados: ${fmt(data.savings.reduce((s, sv) => s + (sv.current || 0), 0))}` : ''}
+Mencioná 1 cosa destacada del mes (positiva o a mejorar) y un breve aliento para el mes nuevo. Sin "¡Perfecto!" ni rellenos.`;
+
+      try {
+        const msg = await callClaude(reportPrompt, [], 'reporte mensual');
+        await sendWhatsAppMessage(user.phone, `📅 *Resumen de ${MONTH_NAMES[prevMonth]} ${prevYear}*\n\n${msg}`);
+      } catch {
+        const balanceMsg = balance >= 0 ? `Cerraste con ${fmt(balance)} a favor 💚` : `El mes cerró en rojo: ${fmt(balance)} 😬`;
+        await sendWhatsAppMessage(user.phone, `📅 *Resumen de ${MONTH_NAMES[prevMonth]} ${prevYear}*\n\n💰 Ingresos: ${fmt(ingresos)}\n💸 Gastos: ${fmt(gastos)}\n${balanceMsg}`);
+      }
+    }
+  } catch (err) {
+    console.error('❌ Error reporte financiero mensual:', err.message);
+  }
+}
+
 // ── Reporte mensual de sugerencias ─────────────────────────
 async function sendMonthlySuggestionReport() {
   try {
@@ -1382,7 +1481,10 @@ function scheduleDaily() {
   scheduleAt(8, 30, () => {
     sendMorningGreeting().catch(e => console.error('❌ sendMorningGreeting:', e.message));
     checkAndSendNotifications().catch(e => console.error('❌ checkAndSendNotifications:', e.message));
-    if (arDay() === 1) sendMonthlySuggestionReport().catch(e => console.error('❌ sendMonthlySuggestionReport:', e.message));
+    if (arDay() === 1) {
+      sendMonthlySuggestionReport().catch(e => console.error('❌ sendMonthlySuggestionReport:', e.message));
+      sendMonthlyFinancialReport().catch(e => console.error('❌ sendMonthlyFinancialReport:', e.message));
+    }
   }, 'Saludo matutino');
   scheduleAt(21, 0, () => sendEveningCheckin().catch(e => console.error('❌ sendEveningCheckin:', e.message)), 'Check-in nocturno');
 }
