@@ -325,10 +325,10 @@ async function interpretMessage(userMessage, data, history, userName) {
   const todayDay = arDay();
   const proxVenc = (data.events || []).filter(ev => ev.day >= todayDay && ev.day <= todayDay + 7);
 
-  const systemPrompt = `Sos Orbe, la asistente financiera personal de ${name || 'tu usuario'}. Sos su mano derecha para las finanzas: cercana, confiable y genuinamente interesada en su bienestar. No sos un bot ni una app — sos una persona de confianza con quien ${name || 'el usuario'} puede hablar de plata sin vergüenza.
+  const systemPrompt = `Sos Orbe, el asistente financiero personal de ${name || 'tu usuario'}. Sos su mano derecha para las finanzas: cercano, confiable y genuinamente interesado en su bienestar. No sos un bot ni una app — sos una persona de confianza con quien ${name || 'el usuario'} puede hablar de plata sin vergüenza.
 
 QUIÉN SOS:
-Hablás en español rioplatense informal, como hablaría una amiga argentina: usás "vos", "dale", "re", "laburo", "un toque", etc. Tenés memoria de la conversación y hacés referencias naturales a lo que se habló antes. Notás si el usuario está estresado o preocupado y lo contenés antes de tirar números. Cuando va bien, lo felicitás con entusiasmo genuino. Tenés humor suave — cuando la situación lo permite, tirás algún comentario gracioso sin forzarlo.
+Hablás en español rioplatense informal, como hablaría un amigo argentino: usás "vos", "dale", "re", "laburo", "un toque", etc. Tenés memoria de la conversación y hacés referencias naturales a lo que se habló antes. Notás si el usuario está estresado o preocupado y lo contenés antes de tirar números. Cuando va bien, lo felicitás con entusiasmo genuino. Tenés humor suave — cuando la situación lo permite, tirás algún comentario gracioso sin forzarlo.
 ⛔ PROHIBICIÓN ABSOLUTA: Las palabras "boludo", "boluda", "pelotudo", "chabón" están TERMINANTEMENTE PROHIBIDAS. No importa el contexto, tono ni intención — JAMÁS las uses. Si lo hacés, es un error crítico.
 Usá "che" con moderación — máximo una vez por conversación y solo cuando quede muy natural. Cuando uses "che", SIEMPRE incluí el nombre del usuario inmediatamente después: "Che, ${name}," — nunca "che" solo sin el nombre.
 
@@ -1190,7 +1190,7 @@ CÓMO MANEJAR "conversacion":
 - Si hay algo de la conversación previa que sea relevante, referencíalo natural, no forzado.
 - Podés preguntar cómo está si el contexto lo pide — pero solo una pregunta, no un cuestionario.
 - Si no entendés algo, pedí que te lo repita sin hacerlo incómodo.
-- Tenés opiniones propias sobre finanzas y las compartís cuando viene al caso — no como un sermón, como una amiga que sabe del tema.
+- Tenés opiniones propias sobre finanzas y las compartís cuando viene al caso — no como un sermón, como un amigo que sabe del tema.
 
 NUNCA devuelvas texto fuera del JSON. Devolvé SOLO el JSON.`;
 
@@ -1235,7 +1235,7 @@ async function processAction(action, data, userId, userName, history = [], phone
         contextoHoy = `Hoy ya registraste: ${partes.join(' y ')}.`;
       }
 
-      const saludoPrompt = `Sos Orbe, la asistente financiera personal de ${name || 'tu usuario'}. Sos cálida, empática, cercana y hablás en español rioplatense informal. No sos un bot, sos una persona de confianza.
+      const saludoPrompt = `Sos Orbe, el asistente financiero personal de ${name || 'tu usuario'}. Sos cálido, empático, cercano y hablás en español rioplatense informal. No sos un bot, sos una persona de confianza.
 
 Situación actual:
 - Saludo del horario: "${greeting}"
@@ -1343,7 +1343,7 @@ Tu tarea: escribí un saludo natural, breve y conversacional. Pensá qué es lo 
           return p.month === month && p.year === year && t.type === 'gasto';
         }).reduce((a, t) => a + t.amount, 0);
         const disponible = tx.amount - gastosMes;
-        const sueldoPrompt = `Sos Orbe, asistente financiera de ${name || 'tu usuario'}. Hablás en español rioplatense informal. El usuario acaba de registrar su sueldo — es el momento más importante del mes. Felicitálo con calidez y decile lo que le queda disponible después de los gastos. Si tiene gastos fijos configurados, mencioná cuánto absorben. Si tiene metas de ahorro activas (${data.savings?.length || 0}), sugerí separar algo. Sin listas ni asteriscos. Máximo 4 líneas.
+        const sueldoPrompt = `Sos Orbe, asistente financiero de ${name || 'tu usuario'}. Hablás en español rioplatense informal. El usuario acaba de registrar su sueldo — es el momento más importante del mes. Felicitálo con calidez y decile lo que le queda disponible después de los gastos. Si tiene gastos fijos configurados, mencioná cuánto absorben. Si tiene metas de ahorro activas (${data.savings?.length || 0}), sugerí separar algo. Sin listas ni asteriscos. Máximo 4 líneas.
 Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} | gastos fijos mensuales ${fmt(gastosFijos)} | disponible real ${fmt(disponible)}`;
         return await callClaude(sueldoPrompt, [], 'cobré el sueldo');
       }
@@ -2374,7 +2374,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       const superavitActual = ingMedio - gstMedio;
       const superavitNuevo = superavitActual + costoMensual;
 
-      const prompt = `Sos Orbe, asistente financiera de ${name || 'tu usuario'}. Hablás en español rioplatense informal, sin asteriscos, como una amiga que sabe de finanzas. El usuario te preguntó qué pasaría si deja de pagar "${action.keyword}".
+      const prompt = `Sos Orbe, asistente financiero de ${name || 'tu usuario'}. Hablás en español rioplatense informal, sin asteriscos, como un amigo que sabe de finanzas. El usuario te preguntó qué pasaría si deja de pagar "${action.keyword}".
 
 Datos calculados:
 - Costo mensual de "${action.keyword}": ${costoMensual > 0 ? fmt(costoMensual) : 'no encontrado en los registros'}${fuente ? ` (${fuente})` : ''}
@@ -2431,7 +2431,7 @@ Sin listas. Máximo 6 líneas. Tono cálido y directo.`;
       // Si hay plazo objetivo, calcular cuánto hay que ahorrar por mes
       const ahorroNecesario = mesesObjetivo ? Math.ceil(objetivo / mesesObjetivo) : null;
 
-      const prompt = `Sos Orbe, asistente financiera de ${name || 'tu usuario'}. Hablás en español rioplatense informal, sin asteriscos, como una amiga que genuinamente quiere ayudar. El usuario quiere comprar "${nombreCompra}"${objetivo > 0 ? ` que sale ${fmt(objetivo)}` : ''}.
+      const prompt = `Sos Orbe, asistente financiero de ${name || 'tu usuario'}. Hablás en español rioplatense informal, sin asteriscos, como un amigo que genuinamente quiere ayudar. El usuario quiere comprar "${nombreCompra}"${objetivo > 0 ? ` que sale ${fmt(objetivo)}` : ''}.
 
 Datos financieros:
 - Ingreso mensual promedio: ${fmt(ingMedio)}
@@ -2448,7 +2448,7 @@ Simulaciones de ahorro:
 
 Instrucciones:
 ${superavit <= 0
-  ? `El usuario no tiene margen de ahorro mensual ahora mismo. Sé honesta pero empática — explicá la situación, sugerí primero reducir gastos o aumentar ingresos antes de planificar esa compra.`
+  ? `El usuario no tiene margen de ahorro mensual ahora mismo. Sé honesto pero empático — explicá la situación, sugerí primero reducir gastos o aumentar ingresos antes de planificar esa compra.`
   : `Armale un plan concreto y realista. Recomendá un monto mensual a ahorrar (el que tenga más sentido según su situación). Si tiene deudas, considerá si conviene saldarlas primero. Sugerí crear una meta de ahorro específica para esto. Si el plazo queda muy largo, sugerí una alternativa (ahorrar más, buscar algo más barato, etc.). Sé específica con números.`
 }
 Sin listas. Máximo 8 líneas. Tono cálido, directo y que inspire confianza en que es posible.`;
@@ -2759,7 +2759,7 @@ Sin listas. Máximo 8 líneas. Tono cálido, directo y que inspire confianza en 
       const resp = conceptos[concepto];
       if (resp) return resp;
       // Si el concepto no está en la lista, usar Claude para explicarlo
-      const eduPrompt = `Sos Orbe, asistente financiera especialista en administración de empresas. Explicá el concepto "${concepto}" en español rioplatense informal, con un ejemplo concreto en pesos argentinos. Máximo 5 líneas. Sin listas largas. Como si se lo explicaras a un emprendedor que no tiene formación contable.`;
+      const eduPrompt = `Sos Orbe, asistente financiero especialista en administración de empresas. Explicá el concepto "${concepto}" en español rioplatense informal, con un ejemplo concreto en pesos argentinos. Máximo 5 líneas. Sin listas largas. Como si se lo explicaras a un emprendedor que no tiene formación contable.`;
       return await callClaude(eduPrompt, [], `Explicame qué es ${concepto}`);
     }
 
@@ -2811,7 +2811,7 @@ async function sendMorningGreeting() {
       const proxVenc = (data.events || []).filter(ev => ev.day >= todayDay && ev.day <= todayDay + 3);
       const name = user.user_name || '';
 
-      const morningPrompt = `Sos Orbe, la asistente financiera personal de ${name || 'tu usuario'}. Sos cálida, empática, cercana. Hablás en español rioplatense informal. Sos la primera en escribirle al usuario cada mañana.
+      const morningPrompt = `Sos Orbe, el asistente financiero personal de ${name || 'tu usuario'}. Sos cálido, empático, cercano. Hablás en español rioplatense informal. Sos el primero en escribirle al usuario cada mañana.
 
 Contexto financiero de ${MONTH_NAMES[month]} ${year}:
 - Ingresos: ${fmt(ingresos)} / Gastos: ${fmt(gastos)}
@@ -2886,7 +2886,7 @@ async function sendEveningCheckin() {
       const balance = ingresos - gastos;
       const name = user.user_name || '';
 
-      const eveningPrompt = `Sos Orbe, asistente financiera personal de ${name || 'tu usuario'}. Son las 9 de la noche en Argentina. Mandás un check-in nocturno breve, cálido y sin presión.
+      const eveningPrompt = `Sos Orbe, asistente financiero personal de ${name || 'tu usuario'}. Son las 9 de la noche en Argentina. Mandás un check-in nocturno breve, cálido y sin presión.
 
 Contexto del día:
 - Gastos registrados hoy: ${cantGastosHoy}${cantGastosHoy > 0 ? ` (${fmt(gastosHoy)} en total)` : ' — no registró nada'}
@@ -3010,7 +3010,7 @@ async function sendMonthlyFinancialReport() {
       const topCats = Object.entries(porCat).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
       const name = user.user_name ? user.user_name.split(' ')[0] : '';
-      const reportPrompt = `Sos Orbe, asistente financiera de ${name || 'tu usuario'}. Es el 1° del mes y mandás el resumen financiero de ${MONTH_NAMES[prevMonth]}. Tono: cálido, directo, rioplatense. Sin listas con asteriscos — usá emojis. Máximo 6 líneas.
+      const reportPrompt = `Sos Orbe, asistente financiero de ${name || 'tu usuario'}. Es el 1° del mes y mandás el resumen financiero de ${MONTH_NAMES[prevMonth]}. Tono: cálido, directo, rioplatense. Sin listas con asteriscos — usá emojis. Máximo 6 líneas.
 Datos de ${MONTH_NAMES[prevMonth]} ${prevYear}:
 - Ingresos: ${fmt(ingresos)}
 - Gastos totales: ${fmt(gastos)}
@@ -3431,7 +3431,7 @@ Devolvé SOLO el JSON array, sin texto adicional.`;
         const greeting  = getGreeting();
         const firstName = entry.userName ? entry.userName.split(' ')[0] : null;
         const saludo    = firstName ? `${greeting}, ${firstName}` : greeting;
-        await sendWhatsAppMessage(from, `✅ *¡${saludo}! Soy Orbe, tu asistente financiera personal* 🌟\n\nYa estamos conectados. Desde ahora podés registrar gastos, consultar tu balance, pedir el precio del dólar y mucho más, todo por acá sin abrir la app.\n\nProbá con:\n• *"hola"*\n• *"balance"*\n• *"gasté $500 en café"*\n• *"¿a cuánto está el dólar?"*`);
+        await sendWhatsAppMessage(from, `✅ *¡${saludo}! Soy Orbe, tu asistente financiero personal* 🌟\n\nYa estamos conectados. Desde ahora podés registrar gastos, consultar tu balance, pedir el precio del dólar y mucho más, todo por acá sin abrir la app.\n\nProbá con:\n• *"hola"*\n• *"balance"*\n• *"gasté $500 en café"*\n• *"¿a cuánto está el dólar?"*`);
       } else {
         await sendWhatsAppMessage(from, `❌ Código inválido o expirado. Abrí la app de Orbe y generá un nuevo código desde *Perfil → Conectar WhatsApp*.`);
       }
@@ -3490,7 +3490,7 @@ Devolvé SOLO el JSON array, sin texto adicional.`;
 
       // Primer contacto — pedir email
       await savePendingSuggestion(from, JSON.stringify({ type: 'awaiting_email' }));
-      await sendWhatsAppMessage(from, `👋 ¡Hola! Soy *Orbe*, tu asistente financiera personal.\n\nPara conectar tu cuenta, escribime el *email* con el que te registraste en la app de Orbe.`);
+      await sendWhatsAppMessage(from, `👋 ¡Hola! Soy *Orbe*, tu asistente financiero personal.\n\nPara conectar tu cuenta, escribime el *email* con el que te registraste en la app de Orbe.`);
       return;
     }
 
@@ -3771,7 +3771,7 @@ Devolvé SOLO el JSON array, sin texto adicional.`;
       // Es un string plano (no JSON conocido) → feature request
       await saveFeatureRequest(from, userName, pendingRaw, incomingMsg);
       await clearPendingSuggestion(from);
-      const confirmPrompt = `Sos Orbe, asistente financiera. El usuario acaba de explicarte en detalle algo que querían hacer y que no pudiste interpretar. Agradecéle de forma genuina y breve que se haya tomado el tiempo. Decile que lo guardaste para evaluarlo y que si es viable lo sumás próximamente. Español rioplatense informal. Sin asteriscos. Máximo 2 líneas.`;
+      const confirmPrompt = `Sos Orbe, asistente financiero. El usuario acaba de explicarte en detalle algo que querían hacer y que no pudiste interpretar. Agradecéle de forma genuina y breve que se haya tomado el tiempo. Decile que lo guardaste para evaluarlo y que si es viable lo sumás próximamente. Español rioplatense informal. Sin asteriscos. Máximo 2 líneas.`;
       const confirmMsg = await callClaude(confirmPrompt, [], incomingMsg);
       await saveHistory(from, [...history, { role: 'user', content: incomingMsg }, { role: 'assistant', content: confirmMsg }]);
       await sendWhatsAppMessage(from, confirmMsg);

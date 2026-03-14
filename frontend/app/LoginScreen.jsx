@@ -22,7 +22,6 @@ const C = {
   text:       '#1A1A1A',
   textMuted:  '#7A7A7A',
   red:        '#E53935',
-  blue:       '#1877F2',
   cream:      '#F5F2EC',
 };
 
@@ -257,10 +256,7 @@ export default function LoginScreen({ onLogin }) {
                 <Text style={styles.dividerText}>o continuá con</Text>
                 <View style={styles.dividerLine}/>
               </View>
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                <OAuthBtn icon="G" label="Google"   color={C.red}  onPress={() => handleOAuth('google')}/>
-                <OAuthBtn icon="f" label="Facebook" color={C.blue} onPress={() => handleOAuth('facebook')}/>
-              </View>
+              <OAuthBtn icon="G" label="Continuar con Google" color={C.red} onPress={() => handleOAuth('google')}/>
             </>
           )}
 
