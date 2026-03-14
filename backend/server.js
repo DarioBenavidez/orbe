@@ -2597,54 +2597,89 @@ app.post('/webhook', async (req, res) => {
         const { base64, mimeType } = await downloadWhatsAppImage(mediaId);
         const { user_id: userId, user_name: userName } = userInfo;
         const data = await loadData(userId);
-        const name = userName ? userName.split(' ')[0] : null;
 
-        const imageSystemPrompt = `Sos Orbe, asistente financiera. Analizá esta imagen (factura, ticket, recibo o comprobante de pago).
-Extraé los datos del comprobante y respondé SOLO con un JSON en este formato exacto:
-{"descripcion":"Supermercado","monto":15000,"fecha":"2026-03-13","categoria":"Supermercado","tipo":"gasto"}
-- descripcion: nombre del comercio o descripción del gasto
-- monto: monto total en pesos (solo el número, sin $)
-- fecha: en formato YYYY-MM-DD (si no figura, usá hoy: ${today()})
-- categoria: elegí la más apropiada de: Alimentación, Transporte, Salud, Entretenimiento, Ropa, Vivienda, Educación, Supermercado, Servicios, Otros
-- tipo: "gasto" (la mayoría) o "ingreso" (si es un cobro/depósito)
-Si no podés extraer datos porque la imagen no es un comprobante, respondé: {"error":"no_comprobante"}
-Si la imagen está muy borrosa o no se puede leer, respondé: {"error":"ilegible"}`;
+        const imageSystemPrompt = `Analizá esta imagen. Puede ser un resumen bancario, estado de cuenta, comprobante único, o extracto de Mercado Pago/tarjeta.
+Extraé TODAS las transacciones que veas y respondé SOLO con un JSON array:
+[
+  {"descripcion":"Supermercado Día","monto":15000,"fecha":"${today()}","categoria":"Supermercado","tipo":"gasto"},
+  {"descripcion":"Transferencia recibida","monto":50000,"fecha":"${today()}","categoria":"Otros","tipo":"ingreso"}
+]
+Reglas:
+- descripcion: nombre del comercio o descripción tal como aparece
+- monto: número sin $ ni puntos de miles (ej: 15000, no $15.000)
+- fecha: YYYY-MM-DD (si no figura usá hoy: ${today()})
+- categoria: una de estas EXACTAS según lo que parezca: Alimentación, Transporte, Salud, Entretenimiento, Ropa, Vivienda, Educación, Supermercado, Servicios, Otros. Si no estás seguro usá "Otros".
+- tipo: "gasto" o "ingreso"
+Si no es imagen financiera: [{"error":"no_financiero"}]
+Si no se puede leer: [{"error":"ilegible"}]
+Devolvé SOLO el JSON array, sin texto adicional.`;
 
         const extractedText = await callClaudeWithImage(imageSystemPrompt, base64, mimeType,
-          caption ? `Imagen adjunta. El usuario agregó esta nota: "${caption}"` : 'Extraé los datos de este comprobante.');
+          caption ? `Imagen adjunta. Nota del usuario: "${caption}"` : 'Extraé todas las transacciones.');
 
-        let parsed;
+        let txList;
         try {
-          const jsonMatch = extractedText.match(/\{[\s\S]*\}/);
-          parsed = JSON.parse(jsonMatch?.[0] || extractedText);
+          const jsonMatch = extractedText.match(/\[[\s\S]*\]/);
+          txList = JSON.parse(jsonMatch?.[0] || extractedText);
         } catch {
-          await sendWhatsAppMessage(from, `😅 No pude leer el comprobante. ¿Podés decirme el monto, descripción y fecha manualmente?`);
+          await sendWhatsAppMessage(from, `😅 No pude leer la imagen. ¿Podés decirme los datos manualmente?`);
           return;
         }
 
-        if (parsed.error === 'no_comprobante') {
-          await sendWhatsAppMessage(from, `🤔 Eso no parece un comprobante de pago. Si querés registrar un gasto, mandame los datos: *"gasté $X en Y"*.`);
+        if (!Array.isArray(txList) || !txList.length) {
+          await sendWhatsAppMessage(from, `😅 No encontré transacciones en la imagen. ¿Es un resumen bancario o extracto?`);
           return;
         }
-        if (parsed.error === 'ilegible') {
-          await sendWhatsAppMessage(from, `😓 La imagen está borrosa o no se puede leer bien. ¿Podés pasarme los datos a mano?`);
+        if (txList[0]?.error === 'no_financiero') {
+          await sendWhatsAppMessage(from, `🤔 Eso no parece un resumen bancario. Si querés registrar un gasto, mandame los datos: *"gasté $X en Y"*.`);
+          return;
+        }
+        if (txList[0]?.error === 'ilegible') {
+          await sendWhatsAppMessage(from, `😓 La imagen está borrosa. ¿Podés mandarla más clara o pasarme los datos a mano?`);
           return;
         }
 
-        // Registrar la transacción automáticamente
-        const tx = {
-          id: Date.now().toString(),
-          type: parsed.tipo || 'gasto',
-          description: parsed.descripcion || 'Gasto por factura',
-          amount: parseFloat(parsed.monto),
-          category: parsed.categoria || 'Otros',
-          date: parsed.fecha || today(),
-          savingsId: '',
-          note: 'Registrado por foto',
-        };
-        await saveData(userId, { ...data, transactions: [...data.transactions, tx] });
-        const emoji = tx.type === 'gasto' ? '💸' : '💰';
-        await sendWhatsAppMessage(from, `${emoji} *Comprobante registrado!*\n\n📝 ${tx.description}\n💰 ${fmt(tx.amount)}\n📅 ${tx.date}\n🏷️ ${tx.category}\n\n¿Está bien? Si algo no coincide, decime qué corregir.`);
+        // Separar las que tienen categoría clara de las dudosas (Otros)
+        const claras = txList.filter(t => t.categoria && t.categoria !== 'Otros');
+        const dudosas = txList.filter(t => !t.categoria || t.categoria === 'Otros');
+
+        // Guardar estado pendiente con toda la lista para categorizar las dudosas
+        if (dudosas.length > 0) {
+          await savePendingSuggestion(from, JSON.stringify({
+            type: 'pending_bank_import',
+            txList,
+            dudosas,
+            dudosaIdx: 0,
+          }));
+
+          // Mostrar resumen de lo encontrado
+          const resumen = txList.map((t, i) => {
+            const emoji = t.tipo === 'ingreso' ? '💰' : '💸';
+            const cat = t.categoria !== 'Otros' ? ` (${t.categoria})` : ' ❓';
+            return `${i + 1}. ${emoji} ${t.descripcion} — ${fmt(t.monto)}${cat}`;
+          }).join('\n');
+
+          await sendWhatsAppMessage(from, `📊 Encontré *${txList.length} transacciones*:\n\n${resumen}\n\n✅ ${claras.length} categorizadas automáticamente.\n❓ ${dudosas.length} necesitan categoría.\n\nVoy a preguntarte de a una. Empecemos:`);
+
+          // Preguntar por la primera dudosa
+          const primera = dudosas[0];
+          await sendWhatsAppMessage(from, `❓ *"${primera.descripcion}"* — ${fmt(primera.monto)}\n\n¿En qué categoría va?\n\n1. Alimentación\n2. Transporte\n3. Salud\n4. Entretenimiento\n5. Ropa\n6. Vivienda\n7. Educación\n8. Servicios\n9. Otros\n\nRespondé con el número o el nombre. Si no sabés, decí *"no sé"* o *"otros"*.`);
+        } else {
+          // Todas categorizadas, registrar todo de una
+          const newTxs = txList.map(t => ({
+            id: Date.now().toString() + Math.random().toString(36).slice(2),
+            type: t.tipo || 'gasto',
+            description: t.descripcion,
+            amount: parseFloat(t.monto),
+            category: t.categoria || 'Otros',
+            date: t.fecha || today(),
+            savingsId: '',
+            note: 'Importado por foto',
+          }));
+          await saveData(userId, { ...data, transactions: [...data.transactions, ...newTxs] });
+          const total = newTxs.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
+          await sendWhatsAppMessage(from, `✅ *${newTxs.length} transacciones importadas!*\n\n${newTxs.map(t => `${t.type === 'gasto' ? '💸' : '💰'} ${t.description} — ${fmt(t.amount)} (${t.category})`).join('\n')}\n\n💸 Total gastos: ${fmt(total)}`);
+        }
       } catch (err) {
         console.error('❌ Error procesando imagen:', err.message);
         await sendWhatsAppMessage(from, `😓 Tuve un problema procesando la imagen. ¿Podés pasarme los datos a mano?`);
@@ -2777,6 +2812,57 @@ Si la imagen está muy borrosa o no se puede leer, respondé: {"error":"ilegible
         else if (parsed.type === 'vocab_clarify') pendingVocabClarify = parsed;
         else if (parsed.type === 'confirm_gastos_fijos') pendingGastosFijos = parsed;
         else if (parsed.type === 'confirm_limpiar') pendingLimpiar = parsed;
+        else if (parsed.type === 'pending_bank_import') {
+          // ── Flujo de categorización de importación bancaria ─
+          const { txList, dudosas, dudosaIdx } = parsed;
+          const CATEGORIAS = ['Alimentación','Transporte','Salud','Entretenimiento','Ropa','Vivienda','Educación','Servicios','Otros'];
+          const msg = incomingMsg.trim().toLowerCase();
+
+          // Resolver categoría de la respuesta
+          let catElegida = 'Otros';
+          const numMatch = incomingMsg.match(/^\s*(\d)\s*$/);
+          if (numMatch) {
+            const idx = parseInt(numMatch[1]) - 1;
+            catElegida = CATEGORIAS[idx] || 'Otros';
+          } else if (msg === 'no sé' || msg === 'no se' || msg === 'otros' || msg === '9') {
+            catElegida = 'Otros';
+          } else {
+            const found = CATEGORIAS.find(c => c.toLowerCase().includes(msg) || msg.includes(c.toLowerCase()));
+            if (found) catElegida = found;
+          }
+
+          // Asignar categoría a la transacción dudosa actual
+          const dudosaActual = dudosas[dudosaIdx];
+          const txIdx = txList.findIndex(t => t.descripcion === dudosaActual.descripcion && t.monto === dudosaActual.monto);
+          if (txIdx >= 0) txList[txIdx].categoria = catElegida;
+
+          const nextIdx = dudosaIdx + 1;
+
+          if (nextIdx < dudosas.length) {
+            // Quedan más dudosas — actualizar estado y preguntar la siguiente
+            await savePendingSuggestion(from, JSON.stringify({ type: 'pending_bank_import', txList, dudosas, dudosaIdx: nextIdx }));
+            const siguiente = dudosas[nextIdx];
+            await sendWhatsAppMessage(from, `✅ *${dudosaActual.descripcion}* → ${catElegida}\n\n❓ *"${siguiente.descripcion}"* — ${fmt(siguiente.monto)}\n\n¿En qué categoría va?\n\n1. Alimentación\n2. Transporte\n3. Salud\n4. Entretenimiento\n5. Ropa\n6. Vivienda\n7. Educación\n8. Servicios\n9. Otros`);
+          } else {
+            // Terminamos — registrar todo
+            await clearPendingSuggestion(from);
+            const newTxs = txList.map(t => ({
+              id: Date.now().toString() + Math.random().toString(36).slice(2),
+              type: t.tipo || 'gasto',
+              description: t.descripcion,
+              amount: parseFloat(t.monto),
+              category: t.categoria || 'Otros',
+              date: t.fecha || today(),
+              savingsId: '',
+              note: 'Importado por foto',
+            }));
+            await saveData(userId, { ...data, transactions: [...data.transactions, ...newTxs] });
+            const totalGastos = newTxs.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
+            const totalIngresos = newTxs.filter(t => t.type !== 'gasto').reduce((s, t) => s + t.amount, 0);
+            await sendWhatsAppMessage(from, `✅ *¡Listo! ${newTxs.length} transacciones importadas.*\n\n${newTxs.map(t => `${t.type === 'gasto' ? '💸' : '💰'} ${t.description} — ${fmt(t.amount)} (${t.category})`).join('\n')}${totalGastos > 0 ? `\n\n💸 Total gastos: ${fmt(totalGastos)}` : ''}${totalIngresos > 0 ? `\n💰 Total ingresos: ${fmt(totalIngresos)}` : ''}`);
+          }
+          return;
+        }
       } catch {}
     }
 
