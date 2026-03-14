@@ -2,6 +2,7 @@ require('dotenv').config();
 const express = require('express');
 const { createClient } = require('@supabase/supabase-js');
 const Anthropic = require('@anthropic-ai/sdk');
+const Groq = require('groq-sdk');
 
 const app = express();
 app.use(express.json());
@@ -9,6 +10,7 @@ app.use(express.json());
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
 const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 const PHONE_NUMBER_ID = process.env.PHONE_NUMBER_ID;
 const WHATSAPP_TOKEN = process.env.WHATSAPP_TOKEN;
@@ -86,6 +88,7 @@ function defaultData() {
     orbeName: 'Orbe',
     suscripciones: [],
     onboardingDone: false,
+    credits: {},
   };
 }
 async function loadData(uid) {
@@ -104,6 +107,7 @@ async function loadData(uid) {
     orbeName: typeof d.orbeName === 'string' ? d.orbeName : 'Orbe',
     suscripciones: Array.isArray(d.suscripciones) ? d.suscripciones : [],
     onboardingDone: typeof d.onboardingDone === 'boolean' ? d.onboardingDone : false,
+    credits: d.credits && typeof d.credits === 'object' && !Array.isArray(d.credits) ? d.credits : {},
   };
 }
 async function saveData(uid, payload) {
@@ -164,6 +168,73 @@ async function getDolarPrice() {
   } catch {
     return null;
   }
+}
+
+// ── Transcribir audio de WhatsApp con Groq Whisper ────────
+async function transcribeWhatsAppAudio(mediaId, mimeType) {
+  // 1. Obtener URL del media
+  const metaRes = await fetch(`https://graph.facebook.com/v22.0/${mediaId}`, {
+    headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` },
+  });
+  if (!metaRes.ok) throw new Error(`Error obteniendo media URL: ${metaRes.status}`);
+  const { url } = await metaRes.json();
+
+  // 2. Descargar el audio
+  const audioRes = await fetch(url, {
+    headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` },
+  });
+  if (!audioRes.ok) throw new Error(`Error descargando audio: ${audioRes.status}`);
+  const buffer = Buffer.from(await audioRes.arrayBuffer());
+
+  // 3. Transcribir con Groq Whisper
+  // Groq necesita un File/Blob con nombre y tipo
+  const ext = mimeType?.includes('ogg') ? 'ogg' : mimeType?.includes('mp4') ? 'mp4' : 'ogg';
+  const file = new File([buffer], `audio.${ext}`, { type: mimeType || 'audio/ogg' });
+  const transcription = await groq.audio.transcriptions.create({
+    file,
+    model: 'whisper-large-v3-turbo',
+    language: 'es',
+    response_format: 'text',
+  });
+  return typeof transcription === 'string' ? transcription.trim() : transcription?.text?.trim() || '';
+}
+
+// ── Descargar imagen de WhatsApp ──────────────────────────
+async function downloadWhatsAppImage(mediaId) {
+  // 1. Obtener URL del media
+  const metaRes = await fetch(`https://graph.facebook.com/v22.0/${mediaId}`, {
+    headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` },
+  });
+  if (!metaRes.ok) throw new Error(`Error obteniendo media URL: ${metaRes.status}`);
+  const { url, mime_type } = await metaRes.json();
+
+  // 2. Descargar la imagen
+  const imgRes = await fetch(url, {
+    headers: { Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}` },
+  });
+  if (!imgRes.ok) throw new Error(`Error descargando imagen: ${imgRes.status}`);
+  const buffer = await imgRes.arrayBuffer();
+  const base64 = Buffer.from(buffer).toString('base64');
+  return { base64, mimeType: mime_type || 'image/jpeg' };
+}
+
+// ── Claude Haiku con imagen ───────────────────────────────
+async function callClaudeWithImage(systemPrompt, base64Image, mimeType, textPrompt) {
+  const response = await anthropic.messages.create({
+    model: process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5',
+    max_tokens: 800,
+    system: systemPrompt,
+    messages: [{
+      role: 'user',
+      content: [
+        { type: 'image', source: { type: 'base64', media_type: mimeType, data: base64Image } },
+        { type: 'text', text: textPrompt },
+      ],
+    }],
+  });
+  const text = response.content?.[0]?.text;
+  if (!text) throw new Error('Claude devolvió respuesta vacía');
+  return text.trim();
 }
 
 // ── Claude Haiku ──────────────────────────────────────────
@@ -330,6 +401,9 @@ REGLAS DE INTERPRETACIÓN:
 - "quiero ahorrar X para Y / quiero juntar X para Y / estoy ahorrando para Y" → SIEMPRE agregar_ahorro (target=X, name=Y). NUNCA agregar_evento.
 - "agregá X al ahorro de Y / depositá X en Y / sumá X para Y / puse X en el ahorro" → SIEMPRE depositar_ahorro (keyword=Y, amount=X). NUNCA agregar_transaccion.
 - "unir los préstamos de X / consolidar / juntá todo de X" → consolidar_prestamos
+- "quiénes me deben / quiénes tienen deuda / listá los préstamos / mostrá todos los que me deben" → SIEMPRE consultar_todos_prestamos (NUNCA conversacion, NUNCA consultar_prestamo con nombre específico)
+- "cuánto me debe X / qué debe X / el préstamo de X" → consultar_prestamo (con el nombre de la persona)
+- Si alguien pagó de más y tiene saldo a favor (credits en el sistema), mencionálo cuando sea relevante. Si vuelven a pedir fiado, Orbe debe informar que tiene crédito y usarlo primero.
 - "nueva deuda/debo/tengo una deuda/saqué una tarjeta/cuota" → agregar_deuda
 - "pagué la deuda/pagué la cuota/aboné la tarjeta" → pagar_deuda
 - "qué pasaría si dejo de pagar/si cancelo/si me doy de baja/si elimino X" → simular_sin_gasto (si el usuario menciona un monto explícito, usalo en amount; si no, dejá amount en 0 para que se busque en los registros)
@@ -524,6 +598,18 @@ Tu tarea: escribí un saludo natural, breve y conversacional. Pensá qué es lo 
         savingsId: '',
         note: action.note || '',
       };
+      // Deduplicación: evitar registrar dos veces el mismo ingreso/sueldo el mismo día
+      if (tx.type === 'ingreso' || tx.type === 'sueldo') {
+        const duplicate = data.transactions.find(t =>
+          Math.abs(t.amount - tx.amount) < 1 &&
+          t.date === tx.date &&
+          (t.type === 'ingreso' || t.type === 'sueldo')
+        );
+        if (duplicate) {
+          return `⚠️ Ya tenés registrado *${duplicate.description}* por ${fmt(duplicate.amount)} el ${duplicate.date}. No lo volví a agregar para evitar duplicados. Si querés modificarlo, decime qué cambiar.`;
+        }
+      }
+
       const allTxs = [...data.transactions, tx];
       await saveData(userId, { ...data, transactions: allTxs });
 
@@ -1130,9 +1216,28 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
 
     case 'agregar_prestamo': {
       const loans = data.loans || [];
-      const loan = { id: Date.now().toString(), name: action.name, reason: action.reason || '', amount: parseFloat(action.amount), remaining: parseFloat(action.amount), payments: [], createdAt: today() };
-      await saveData(userId, { ...data, loans: [...loans, loan] });
-      return `📋 *Préstamo registrado!*\n\n👤 ${action.name} te debe ${fmt(action.amount)}${action.reason ? `\n📝 Por: ${action.reason}` : ''}\n📅 ${today()}\n\nCuando pague algo, avisame y lo registro.`;
+      const credits = { ...(data.credits || {}) };
+      const personKey = action.name.toLowerCase();
+      let remaining = parseFloat(action.amount);
+      let creditNote = '';
+
+      // Descontar saldo a favor existente
+      if (credits[personKey] && credits[personKey].amount > 0) {
+        const credito = credits[personKey].amount;
+        if (credito >= remaining) {
+          credits[personKey].amount -= remaining;
+          await saveData(userId, { ...data, loans, credits });
+          return `ℹ️ *${action.name}* tiene un saldo a favor de ${fmt(credito)}. Este nuevo pedido (${fmt(remaining)}) queda cubierto. Le queda un saldo a favor de ${fmt(credito - remaining)}.`;
+        } else {
+          remaining -= credito;
+          credits[personKey].amount = 0;
+          creditNote = `\n_⚡ Se descontó un saldo a favor de ${fmt(credito)} que tenía._`;
+        }
+      }
+
+      const loan = { id: Date.now().toString(), name: action.name, reason: action.reason || '', amount: remaining, remaining, payments: [], createdAt: today() };
+      await saveData(userId, { ...data, loans: [...loans, loan], credits });
+      return `📋 *Préstamo registrado!*\n\n👤 ${action.name} te debe ${fmt(remaining)}${action.reason ? `\n📝 Por: ${action.reason}` : ''}\n📅 ${today()}${creditNote}\n\nCuando pague algo, avisame y lo registro.`;
     }
 
     case 'registrar_pago_prestamo': {
@@ -1168,8 +1273,19 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       const totalDespues = loans
         .filter(l => l.name.toLowerCase().includes(key))
         .reduce((s, l) => s + l.remaining, 0);
-      await saveData(userId, { ...data, loans });
 
+      // Si pagó de más, registrar saldo a favor
+      const credits = { ...(data.credits || {}) };
+      const personKey = action.name.toLowerCase();
+      if (restante > 0) {
+        credits[personKey] = { name: action.name, amount: (credits[personKey]?.amount || 0) + restante };
+      }
+
+      await saveData(userId, { ...data, loans, credits });
+
+      if (totalDespues === 0 && restante > 0) {
+        return `🎉 *${action.name} saldó todo!*\n\nPagó ${fmt(parseFloat(action.amount))}, quedó en cero y tiene un *saldo a favor de ${fmt(restante)}*. Si te hace otro pedido, podés descontarlo de ese saldo.`;
+      }
       if (totalDespues === 0) {
         return `🎉 *${action.name} saldó todo!*\n\nPagó ${fmt(parseFloat(action.amount))} y quedó en cero. ¡Cerramos esa deuda!`;
       }
@@ -1220,14 +1336,21 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       }
 
       const activos = Object.values(porPersona);
-      if (!activos.length) return `📭 No tenés préstamos pendientes${name ? ', ' + name : ''}. ¡Todo al día!`;
+      const creditEntries = Object.values(data.credits || {}).filter(c => c.amount > 0);
+      if (!activos.length && !creditEntries.length) return `📭 No tenés préstamos pendientes${name ? ', ' + name : ''}. ¡Todo al día!`;
 
       const totalGlobal = activos.reduce((s, p) => s + p.total, 0);
       const lineas = activos.map(p => {
         const detalle = p.items.length > 0 ? ` (${p.items.join(', ')})` : '';
         return `👤 *${p.name}*: ${fmt(p.total)}${detalle}`;
       });
-      return `📋 *Préstamos pendientes*\n\n${lineas.join('\n')}\n\n💰 Total que te deben: ${fmt(totalGlobal)}`;
+      let resp = `📋 *Préstamos pendientes*\n\n`;
+      if (activos.length) resp += lineas.join('\n') + `\n\n💰 Total que te deben: ${fmt(totalGlobal)}`;
+      if (creditEntries.length) {
+        resp += `\n\n💳 *Saldos a favor (ellos pagaron de más):*\n`;
+        resp += creditEntries.map(c => `👤 *${c.name}*: ${fmt(c.amount)} a favor`).join('\n');
+      }
+      return resp;
     }
 
     case 'consolidar_prestamos': {
@@ -2021,9 +2144,117 @@ app.post('/webhook', async (req, res) => {
     const change = entry?.changes?.[0];
     const message = change?.value?.messages?.[0];
 
-    if (!message || message.type !== 'text') return;
+    if (!message || !['text', 'image', 'audio'].includes(message.type)) return;
 
     const from = message.from;
+
+    // ── Manejo de imagen (factura/recibo) ──────────────────
+    if (message.type === 'image') {
+      const userInfo = await getUserIdByPhone(from);
+      if (!userInfo) {
+        await sendWhatsAppMessage(from, `Para procesar tu imagen primero tenés que vincular tu cuenta. Escribime tu email de Orbe.`);
+        return;
+      }
+      const mediaId = message.image?.id;
+      const caption = message.image?.caption?.trim() || '';
+      if (!mediaId) return;
+
+      try {
+        await sendWhatsAppMessage(from, `📸 Recibí la imagen, analizando...`);
+        const { base64, mimeType } = await downloadWhatsAppImage(mediaId);
+        const { user_id: userId, user_name: userName } = userInfo;
+        const data = await loadData(userId);
+        const name = userName ? userName.split(' ')[0] : null;
+
+        const imageSystemPrompt = `Sos Orbe, asistente financiera. Analizá esta imagen (factura, ticket, recibo o comprobante de pago).
+Extraé los datos del comprobante y respondé SOLO con un JSON en este formato exacto:
+{"descripcion":"Supermercado","monto":15000,"fecha":"2026-03-13","categoria":"Supermercado","tipo":"gasto"}
+- descripcion: nombre del comercio o descripción del gasto
+- monto: monto total en pesos (solo el número, sin $)
+- fecha: en formato YYYY-MM-DD (si no figura, usá hoy: ${today()})
+- categoria: elegí la más apropiada de: Alimentación, Transporte, Salud, Entretenimiento, Ropa, Vivienda, Educación, Supermercado, Servicios, Otros
+- tipo: "gasto" (la mayoría) o "ingreso" (si es un cobro/depósito)
+Si no podés extraer datos porque la imagen no es un comprobante, respondé: {"error":"no_comprobante"}
+Si la imagen está muy borrosa o no se puede leer, respondé: {"error":"ilegible"}`;
+
+        const extractedText = await callClaudeWithImage(imageSystemPrompt, base64, mimeType,
+          caption ? `Imagen adjunta. El usuario agregó esta nota: "${caption}"` : 'Extraé los datos de este comprobante.');
+
+        let parsed;
+        try {
+          const jsonMatch = extractedText.match(/\{[\s\S]*\}/);
+          parsed = JSON.parse(jsonMatch?.[0] || extractedText);
+        } catch {
+          await sendWhatsAppMessage(from, `😅 No pude leer el comprobante. ¿Podés decirme el monto, descripción y fecha manualmente?`);
+          return;
+        }
+
+        if (parsed.error === 'no_comprobante') {
+          await sendWhatsAppMessage(from, `🤔 Eso no parece un comprobante de pago. Si querés registrar un gasto, mandame los datos: *"gasté $X en Y"*.`);
+          return;
+        }
+        if (parsed.error === 'ilegible') {
+          await sendWhatsAppMessage(from, `😓 La imagen está borrosa o no se puede leer bien. ¿Podés pasarme los datos a mano?`);
+          return;
+        }
+
+        // Registrar la transacción automáticamente
+        const tx = {
+          id: Date.now().toString(),
+          type: parsed.tipo || 'gasto',
+          description: parsed.descripcion || 'Gasto por factura',
+          amount: parseFloat(parsed.monto),
+          category: parsed.categoria || 'Otros',
+          date: parsed.fecha || today(),
+          savingsId: '',
+          note: 'Registrado por foto',
+        };
+        await saveData(userId, { ...data, transactions: [...data.transactions, tx] });
+        const emoji = tx.type === 'gasto' ? '💸' : '💰';
+        await sendWhatsAppMessage(from, `${emoji} *Comprobante registrado!*\n\n📝 ${tx.description}\n💰 ${fmt(tx.amount)}\n📅 ${tx.date}\n🏷️ ${tx.category}\n\n¿Está bien? Si algo no coincide, decime qué corregir.`);
+      } catch (err) {
+        console.error('❌ Error procesando imagen:', err.message);
+        await sendWhatsAppMessage(from, `😓 Tuve un problema procesando la imagen. ¿Podés pasarme los datos a mano?`);
+      }
+      return;
+    }
+
+    // ── Manejo de audio (nota de voz) ──────────────────────
+    if (message.type === 'audio') {
+      const userInfo = await getUserIdByPhone(from);
+      if (!userInfo) {
+        await sendWhatsAppMessage(from, `Para procesar tu audio primero tenés que vincular tu cuenta. Escribime tu email de Orbe.`);
+        return;
+      }
+      const mediaId = message.audio?.id;
+      const mimeType = message.audio?.mime_type;
+      if (!mediaId) return;
+
+      if (!process.env.GROQ_API_KEY) {
+        await sendWhatsAppMessage(from, `🎙️ Los audios aún no están configurados. Por ahora escribime el gasto en texto.`);
+        return;
+      }
+
+      try {
+        await sendWhatsAppMessage(from, `🎙️ Escuchando...`);
+        const transcripcion = await transcribeWhatsAppAudio(mediaId, mimeType);
+        if (!transcripcion) {
+          await sendWhatsAppMessage(from, `😓 No pude entender el audio. ¿Podés repetirlo o escribirme?`);
+          return;
+        }
+        console.log(`🎙️ Transcripción (${from}): ${transcripcion}`);
+        // Procesar la transcripción como si fuera un mensaje de texto normal
+        // Redirigir al flujo principal reemplazando el mensaje
+        message.type = 'text';
+        message.text = { body: transcripcion };
+        await sendWhatsAppMessage(from, `_🎙️ Escuché: "${transcripcion}"_`);
+      } catch (err) {
+        console.error('❌ Error procesando audio:', err.message);
+        await sendWhatsAppMessage(from, `😓 Tuve un problema con el audio. ¿Podés escribirme?`);
+        return;
+      }
+    }
+
     const incomingMsg = message.text?.body?.trim();
     if (!incomingMsg) return;
 

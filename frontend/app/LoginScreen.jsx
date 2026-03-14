@@ -6,13 +6,13 @@ import {
 import { supabase } from '../constants/supabase';
 
 const C = {
-  bg: '#f0f4f1',
+  bg: '#f8f6f3',
   surface: '#ffffff',
-  border: '#dde8e2',
-  accent: '#2e7d5a',
-  accentLight: '#e8f5ee',
-  text: '#1a2e22',
-  textMuted: '#607a6c',
+  border: '#e8e0d4',
+  accent: '#4aba82',
+  accentLight: '#e3f8ef',
+  text: '#1c1410',
+  textMuted: '#7a6a58',
   red: '#c0392b',
 };
 
@@ -20,6 +20,8 @@ export default function LoginScreen({ onLogin }) {
   const [mode, setMode] = useState('login'); // login | register | reset
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [nombre, setNombre] = useState('');
+  const [apellido, setApellido] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
@@ -28,7 +30,12 @@ export default function LoginScreen({ onLogin }) {
     setError(''); setSuccess(''); setLoading(true);
     try {
       if (mode === 'register') {
-        const { error } = await supabase.auth.signUp({ email, password });
+        if (!nombre.trim() || !apellido.trim()) throw new Error('Ingresá tu nombre y apellido');
+        const fullName = `${nombre.trim()} ${apellido.trim()}`;
+        const { error } = await supabase.auth.signUp({
+          email, password,
+          options: { data: { nombre: nombre.trim(), apellido: apellido.trim(), full_name: fullName } },
+        });
         if (error) throw error;
         setSuccess('¡Cuenta creada! Ahora podés iniciar sesión.');
         setMode('login');
@@ -64,10 +71,10 @@ export default function LoginScreen({ onLogin }) {
         {/* Logo */}
         <View style={styles.logoContainer}>
           <View style={styles.logoBox}>
-            <Text style={styles.logoEmoji}>💰</Text>
+            <Text style={styles.logoEmoji}>◎</Text>
           </View>
-          <Text style={styles.title}>Mis Finanzas</Text>
-          <Text style={styles.subtitle}>Tu gestor financiero personal</Text>
+          <Text style={styles.title}>Orbe</Text>
+          <Text style={styles.subtitle}>Tu asistente financiera personal</Text>
         </View>
 
         {/* Card */}
@@ -86,6 +93,34 @@ export default function LoginScreen({ onLogin }) {
               </TouchableOpacity>
             ))}
           </View>
+
+          {/* Nombre y Apellido (solo registro) */}
+          {mode === 'register' && (
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Nombre</Text>
+                <TextInput
+                  style={styles.input}
+                  value={nombre}
+                  onChangeText={setNombre}
+                  placeholder="Ej: Lucas"
+                  placeholderTextColor={C.textMuted}
+                  autoCapitalize="words"
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Apellido</Text>
+                <TextInput
+                  style={styles.input}
+                  value={apellido}
+                  onChangeText={setApellido}
+                  placeholder="Ej: García"
+                  placeholderTextColor={C.textMuted}
+                  autoCapitalize="words"
+                />
+              </View>
+            </View>
+          )}
 
           {/* Email */}
           <Text style={styles.label}>Email</Text>

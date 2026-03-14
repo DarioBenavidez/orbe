@@ -6,7 +6,7 @@ import LoginScreen from './LoginScreen';
 import MainApp from './MainApp';
 
 const C = {
-  bg: '#f0f4f1', accent: '#2e7d5a', text: '#1a2e22', textMuted: '#607a6c',
+  bg: '#f4fbf8', accent: '#4aba82', text: '#1c1410', textMuted: '#7a6a58',
 };
 
 export default function Index() {
@@ -47,7 +47,7 @@ export default function Index() {
   const authenticate = async () => {
     try {
       const result = await LocalAuthentication.authenticateAsync({
-        promptMessage: 'Desbloqueá Mis Finanzas',
+        promptMessage: 'Desbloqueá Orbe',
         fallbackLabel: 'Usar contraseña',
         cancelLabel: 'Cancelar',
         disableDeviceFallback: false,
@@ -79,7 +79,7 @@ export default function Index() {
     <View style={s.center}>
       <View style={s.lockBox}>
         <Text style={{ fontSize: 56, marginBottom: 24 }}>🔒</Text>
-        <Text style={s.lockTitle}>Mis Finanzas</Text>
+        <Text style={s.lockTitle}>Orbe</Text>
         <Text style={s.lockSub}>Verificá tu identidad para continuar</Text>
 
         {bioAvailable ? (
