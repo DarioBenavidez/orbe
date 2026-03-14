@@ -303,8 +303,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   logo: {
-    width: 200,
-    height: 80,
+    width: 260,
+    height: 110,
     marginBottom: 12,
   },
   tagline: {
