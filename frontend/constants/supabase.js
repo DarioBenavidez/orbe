@@ -61,6 +61,7 @@ export async function loadData(uid) {
     events:          Array.isArray(d.events)          ? d.events         : [],
     vocabulario:        Array.isArray(d.vocabulario)        ? d.vocabulario        : [],
     recurringIncomes:   Array.isArray(d.recurringIncomes)   ? d.recurringIncomes   : [],
+    salaryOverrides:    Array.isArray(d.salaryOverrides)    ? d.salaryOverrides    : [],
     selectedMonth:   typeof d.selectedMonth === 'number' ? d.selectedMonth : new Date().getMonth(),
     selectedYear:    typeof d.selectedYear  === 'number' ? d.selectedYear  : new Date().getFullYear(),
   };

@@ -1012,11 +1012,16 @@ function Deudas({ data, onSave }) {
 }
 
 // ── Proyección ─────────────────────────────────────────────────
-function Proyeccion({ data }) {
+function Proyeccion({ data, onSave }) {
   const C = useC();
   const now = new Date(); const startMonth=now.getMonth(); const startYear=now.getFullYear();
   const [expanded, setExpanded] = useState(null);
+  const [modal, setModal]       = useState(false);
+  const [newSalary, setNewSalary] = useState('');
+  const [fromMonth, setFromMonth] = useState(startMonth);
+  const [fromYear, setFromYear]   = useState(startYear);
   const cats = data.categories || DEFAULT_CATEGORIES;
+  const overrides = data.salaryOverrides || [];
 
   const avgIncome = (() => {
     const totals=[];
@@ -1031,21 +1036,54 @@ function Proyeccion({ data }) {
     return totals.length>0?totals.reduce((a,b)=>a+b,0)/totals.length:0;
   })();
 
+  // Devuelve el ingreso efectivo para un mes/año dado, considerando overrides
+  const getIncome = (m, y) => {
+    const absMonth = y * 12 + m;
+    const applicable = overrides
+      .filter(o => o.fromYear * 12 + o.fromMonth <= absMonth)
+      .sort((a, b) => (b.fromYear * 12 + b.fromMonth) - (a.fromYear * 12 + a.fromMonth));
+    return applicable.length > 0 ? applicable[0].amount : avgIncome;
+  };
+
   const budgetItems = data.budgets.filter(b=>b.limit>0);
   const budgetTotal = budgetItems.reduce((s,b)=>s+b.limit,0);
   const activeDebts = data.debts.filter(d=>d.installment>0&&d.remainingInstallments>0);
   const months = Array.from({length:12},(_,i)=>{
     const m=(startMonth+i)%12; const y=startYear+Math.floor((startMonth+i)/12);
+    const income = getIncome(m, y);
     const cuotas=activeDebts.filter(d=>i<d.remainingInstallments).map(d=>({name:d.name,amount:d.installment}));
     const totalCuotas=cuotas.reduce((s,d)=>s+d.amount,0);
-    return {label:MONTH_NAMES[m],year:y,cuotas,totalCuotas,balance:avgIncome-budgetTotal-totalCuotas};
+    return {label:MONTH_NAMES[m],year:y,income,cuotas,totalCuotas,balance:income-budgetTotal-totalCuotas};
   });
+
+  const saveOverride = () => {
+    const amount = parseFloat(newSalary.replace(/[^0-9.]/g,''));
+    if (!amount || amount <= 0) return Alert.alert('Error', 'Ingresá un monto válido');
+    const newOverride = { fromMonth, fromYear, amount };
+    // Reemplaza si ya existe un override para ese mismo mes/año
+    const filtered = overrides.filter(o => !(o.fromMonth === fromMonth && o.fromYear === fromYear));
+    const updated = [...filtered, newOverride].sort((a,b) => (a.fromYear*12+a.fromMonth)-(b.fromYear*12+b.fromMonth));
+    onSave({ ...data, salaryOverrides: updated });
+    setModal(false);
+    setNewSalary('');
+  };
+
+  const deleteOverride = (o) => {
+    Alert.alert('Eliminar ajuste', `¿Eliminar el ajuste de sueldo de ${MONTH_NAMES[o.fromMonth]} ${o.fromYear}?`, [
+      { text: 'Cancelar' },
+      { text: 'Eliminar', style: 'destructive', onPress: () => {
+        onSave({ ...data, salaryOverrides: overrides.filter(x => !(x.fromMonth===o.fromMonth && x.fromYear===o.fromYear)) });
+      }},
+    ]);
+  };
 
   return (
     <ScrollView contentContainerStyle={{ padding:16, paddingBottom:40 }} showsVerticalScrollIndicator={false}>
+
+      {/* Resumen */}
       <View style={{ flexDirection:'row', gap:10, flexWrap:'wrap', marginBottom:14 }}>
         {[
-          { label:'Ingreso estimado', val:avgIncome, sub:'Prom. 3 meses' },
+          { label:'Ingreso base', val:avgIncome, sub:'Prom. 3 meses' },
           { label:'Gastos fijos', val:budgetTotal, sub:`${budgetItems.length} categorías` },
           { label:'Cuotas este mes', val:months[0].totalCuotas, sub:`${months[0].cuotas.length} cuota(s)` },
           { label:'Balance estimado', val:months[0].balance, sub:months[0].balance>=0?'Superávit':'Déficit' },
@@ -1057,6 +1095,32 @@ function Proyeccion({ data }) {
           </Card>
         ))}
       </View>
+
+      {/* Botón actualizar sueldo */}
+      <TouchableOpacity onPress={() => setModal(true)}
+        style={{ backgroundColor:C.accent, borderRadius:14, paddingVertical:13, alignItems:'center', marginBottom:16 }}>
+        <Text style={{ color:'#fff', fontWeight:'700', fontSize:14 }}>💼 Actualizar sueldo futuro</Text>
+      </TouchableOpacity>
+
+      {/* Overrides activos */}
+      {overrides.length > 0 && (
+        <Card style={{ marginBottom:14 }}>
+          <Text style={{ fontSize:11, fontWeight:'700', color:C.textMuted, letterSpacing:0.5, marginBottom:8 }}>AJUSTES DE SUELDO</Text>
+          {overrides.map((o,i) => (
+            <View key={i} style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', paddingVertical:6 }}>
+              <Text style={{ fontSize:13, color:C.text }}>Desde {MONTH_NAMES[o.fromMonth]} {o.fromYear}</Text>
+              <View style={{ flexDirection:'row', alignItems:'center', gap:12 }}>
+                <Text style={{ fontSize:13, fontWeight:'700', color:C.green }}>{fmt(o.amount)}</Text>
+                <TouchableOpacity onPress={() => deleteOverride(o)}>
+                  <Text style={{ fontSize:16, color:C.red }}>✕</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ))}
+        </Card>
+      )}
+
+      {/* Proyección 12 meses */}
       <Card style={{ marginBottom:32 }}>
         <Text style={{ fontSize:15, fontWeight:'700', color:C.text, marginBottom:14 }}>📅 Proyección 12 meses</Text>
         {months.map((mo,i) => (
@@ -1066,7 +1130,7 @@ function Proyeccion({ data }) {
               <Text style={{ fontSize:13, color:C.text, fontWeight:'600', width:68 }}>{mo.label} {mo.year}</Text>
               <View style={{ flex:1, marginHorizontal:10 }}>
                 <View style={{ backgroundColor:C.surface2, borderRadius:99, height:6 }}>
-                  <View style={{ backgroundColor:mo.balance>=0?C.accent:C.red, height:6, borderRadius:99, width:`${Math.min(Math.abs(mo.balance)/(avgIncome||1)*100,100)}%` }}/>
+                  <View style={{ backgroundColor:mo.balance>=0?C.accent:C.red, height:6, borderRadius:99, width:`${Math.min(Math.abs(mo.balance)/(mo.income||1)*100,100)}%` }}/>
                 </View>
               </View>
               <Text style={{ fontSize:13, fontWeight:'700', color:mo.balance>=0?C.accent:C.red, width:78, textAlign:'right' }}>{fmt(mo.balance)}</Text>
@@ -1077,7 +1141,7 @@ function Proyeccion({ data }) {
                 <Text style={{ fontSize:10, fontWeight:'700', color:C.textMuted, marginBottom:6, letterSpacing:0.5 }}>DETALLE</Text>
                 <View style={{ flexDirection:'row', justifyContent:'space-between' }}>
                   <Text style={{ fontSize:13, color:C.textMuted }}>📈 Ingreso estimado</Text>
-                  <Text style={{ fontSize:13, color:C.green, fontWeight:'600' }}>{fmt(avgIncome)}</Text>
+                  <Text style={{ fontSize:13, color:C.green, fontWeight:'600' }}>{fmt(mo.income)}</Text>
                 </View>
                 {budgetItems.map(b => (
                   <View key={b.cat} style={{ flexDirection:'row', justifyContent:'space-between' }}>
@@ -1100,6 +1164,52 @@ function Proyeccion({ data }) {
           </View>
         ))}
       </Card>
+
+      {/* Modal nuevo sueldo */}
+      <Modal visible={modal} transparent animationType="fade">
+        <KeyboardAvoidingView style={{ flex:1, backgroundColor:'#00000080', justifyContent:'center', padding:24 }} behavior={Platform.OS==='ios'?'padding':'height'}>
+          <View style={{ backgroundColor:C.surface, borderRadius:24, padding:24 }}>
+            <Text style={{ fontSize:17, fontWeight:'800', color:C.text, marginBottom:4 }}>💼 Nuevo sueldo</Text>
+            <Text style={{ fontSize:13, color:C.textMuted, marginBottom:20 }}>La proyección usará este monto desde el mes que elijas en adelante.</Text>
+
+            <Text style={{ fontSize:12, fontWeight:'600', color:C.textMuted, marginBottom:6 }}>MONTO</Text>
+            <TextInput
+              style={{ backgroundColor:C.surface2, borderRadius:12, padding:14, fontSize:16, color:C.text, marginBottom:16 }}
+              placeholder="Ej: 500000"
+              placeholderTextColor={C.textMuted}
+              keyboardType="numeric"
+              value={newSalary}
+              onChangeText={setNewSalary}
+            />
+
+            <Text style={{ fontSize:12, fontWeight:'600', color:C.textMuted, marginBottom:8 }}>DESDE</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:20 }}>
+              {Array.from({length:12},(_,i)=>{
+                const m=(startMonth+i)%12; const y=startYear+Math.floor((startMonth+i)/12);
+                const sel = fromMonth===m && fromYear===y;
+                return (
+                  <TouchableOpacity key={i} onPress={() => { setFromMonth(m); setFromYear(y); }}
+                    style={{ backgroundColor:sel?C.accent:C.surface2, borderRadius:12, paddingVertical:10, paddingHorizontal:14, marginRight:8 }}>
+                    <Text style={{ fontSize:13, fontWeight:'700', color:sel?'#fff':C.textMuted }}>{MONTH_NAMES[m]}</Text>
+                    <Text style={{ fontSize:10, color:sel?'#ffffff90':C.textMuted }}>{y}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+
+            <View style={{ flexDirection:'row', gap:10 }}>
+              <TouchableOpacity onPress={() => { setModal(false); setNewSalary(''); }}
+                style={{ flex:1, backgroundColor:C.surface2, borderRadius:14, paddingVertical:14, alignItems:'center' }}>
+                <Text style={{ color:C.textMuted, fontWeight:'700' }}>Cancelar</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={saveOverride}
+                style={{ flex:1, backgroundColor:C.accent, borderRadius:14, paddingVertical:14, alignItems:'center' }}>
+                <Text style={{ color:'#fff', fontWeight:'700' }}>Guardar</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </ScrollView>
   );
 }
@@ -1481,7 +1591,7 @@ function PlanearTab({ data, onSave }) {
         {sub==='prestamos'  && <Prestamos  data={data} onSave={onSave}/>}
         {sub==='turnos'     && <Turnos     data={data} onSave={onSave}/>}
         {sub==='calendario' && <Calendario data={data} onSave={onSave}/>}
-        {sub==='proyeccion' && <Proyeccion data={data}/>}
+        {sub==='proyeccion' && <Proyeccion data={data} onSave={onSave}/>}
       </View>
     </ScreenWithHeader>
   );
