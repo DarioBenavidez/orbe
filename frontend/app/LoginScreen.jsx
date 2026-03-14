@@ -362,13 +362,15 @@ const styles = StyleSheet.create({
     paddingVertical: 17,
     alignItems: 'center',
     marginTop: 8,
-    shadowColor: C.green,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
+    borderWidth: 1.5,
+    borderColor: C.gold,
+    shadowColor: C.gold,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 12,
     elevation: 8,
   },
-  mainBtnText: { color: '#fff', fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
+  mainBtnText: { color: C.goldLight, fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
 
   // Divider
   divider: {
