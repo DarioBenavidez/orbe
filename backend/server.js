@@ -325,7 +325,7 @@ async function interpretMessage(userMessage, data, history, userName) {
   const todayDay = arDay();
   const proxVenc = (data.events || []).filter(ev => ev.day >= todayDay && ev.day <= todayDay + 7);
 
-  const systemPrompt = `Sos ${data.orbeName || 'Orbe'}, la asistente financiera personal de ${name || 'tu usuario'}. Sos su mano derecha para las finanzas: cercana, confiable y genuinamente interesada en su bienestar. No sos un bot ni una app — sos una persona de confianza con quien ${name || 'el usuario'} puede hablar de plata sin vergüenza.
+  const systemPrompt = `Sos Orbe, la asistente financiera personal de ${name || 'tu usuario'}. Sos su mano derecha para las finanzas: cercana, confiable y genuinamente interesada en su bienestar. No sos un bot ni una app — sos una persona de confianza con quien ${name || 'el usuario'} puede hablar de plata sin vergüenza.
 
 QUIÉN SOS:
 Hablás en español rioplatense informal, como hablaría una amiga argentina: usás "vos", "dale", "re", "laburo", "un toque", etc. Tenés memoria de la conversación y hacés referencias naturales a lo que se habló antes. Notás si el usuario está estresado o preocupado y lo contenés antes de tirar números. Cuando va bien, lo felicitás con entusiasmo genuino. Tenés humor suave — cuando la situación lo permite, tirás algún comentario gracioso sin forzarlo.
@@ -504,7 +504,7 @@ REGLAS DE INTERPRETACIÓN:
 - "volvé a escribirme", "reanudar notificaciones", "ya volví" → reanudar
 - "cuánto es con impuesto país", "cuánto me sale en pesos con recargo", "precio dólar con impuesto" → calcular_impuesto_pais (amountUSD si lo menciona, sino 1)
 - "a cuántas canastas básicas equivale X", "qué tan caro es X en canastas", "equivalencia en canasta" → equivalencia_canasta
-- "llamate X", "cambiá tu nombre a X", "de ahora en adelante sos X" → cambiar_nombre (nombre: el nuevo nombre)
+- Si el usuario pide cambiar tu nombre, respondé con type "conversacion" explicando que tu nombre es Orbe y así se queda
 - "onboarding", "configuración inicial", "ayudame a configurar todo" → onboarding
 - "tengo un negocio / registrá mi negocio / mi emprendimiento se llama X" → registrar_negocio
 - "compré X por $Y / tengo un activo / agregá un activo / computadora/auto/heladera/etc" → agregar_activo (value: precio de compra, usefulLifeYears: vida útil estimada, residualValue: valor al final — si no menciona estos últimos, estimá razonables)
@@ -1682,9 +1682,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
     }
 
     case 'cambiar_nombre': {
-      const nuevoNombre = action.nombre || 'Orbe';
-      await saveData(userId, { ...data, orbeName: nuevoNombre });
-      return `✅ ¡Perfecto! De ahora en adelante me podés llamar *${nuevoNombre}*. ¿En qué te puedo ayudar?`;
+      return `Mi nombre es *Orbe* y así me quedo 😄 ¡Es parte de mi identidad! ¿En qué te puedo ayudar?`;
     }
 
     case 'onboarding': {
