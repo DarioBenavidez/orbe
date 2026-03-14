@@ -342,6 +342,7 @@ ACCIONES DISPONIBLES:
 {"type":"actualizar_gasto_fijo","keyword":"internet","day":5,"amount":0,"description":""}
 {"type":"eliminar_gasto_fijo","keyword":"gimnasio"}
 {"type":"consolidar_prestamos","name":"Samy"}
+{"type":"renombrar_prestamo","oldName":"Lina","newName":"Delina"}
 {"type":"agregar_ahorro","name":"Vacaciones","target":50000,"current":0}
 {"type":"depositar_ahorro","keyword":"vacaciones","amount":5000}
 {"type":"agregar_deuda","name":"Tarjeta Visa","remaining":30000,"installment":5000}
@@ -401,6 +402,7 @@ REGLAS DE INTERPRETACIÓN:
 - "quiero ahorrar X para Y / quiero juntar X para Y / estoy ahorrando para Y" → SIEMPRE agregar_ahorro (target=X, name=Y). NUNCA agregar_evento.
 - "agregá X al ahorro de Y / depositá X en Y / sumá X para Y / puse X en el ahorro" → SIEMPRE depositar_ahorro (keyword=Y, amount=X). NUNCA agregar_transaccion.
 - "unir los préstamos de X / consolidar / juntá todo de X" → consolidar_prestamos
+- "cambiá el nombre de X a Y / el préstamo de X se llama Y / guardá como Y en vez de X" → renombrar_prestamo (oldName=X, newName=Y)
 - "quiénes me deben / quiénes tienen deuda / listá los préstamos / mostrá todos los que me deben" → SIEMPRE consultar_todos_prestamos (NUNCA conversacion, NUNCA consultar_prestamo con nombre específico)
 - "cuánto me debe X / qué debe X / el préstamo de X" → consultar_prestamo (con el nombre de la persona)
 - Si alguien pagó de más y tiene saldo a favor (credits en el sistema), mencionálo cuando sea relevante. Si vuelven a pedir fiado, Orbe debe informar que tiene crédito y usarlo primero.
@@ -1351,6 +1353,23 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
         resp += creditEntries.map(c => `👤 *${c.name}*: ${fmt(c.amount)} a favor`).join('\n');
       }
       return resp;
+    }
+
+    case 'renombrar_prestamo': {
+      const loans = [...(data.loans || [])];
+      const keyword = (action.oldName || '').toLowerCase();
+      const matching = loans.filter(l => l.name.toLowerCase().includes(keyword));
+      if (!matching.length) return `🤔 No encontré ningún préstamo con el nombre *${action.oldName}*. ¿Cómo se llama exactamente?`;
+      const newName = action.newName;
+      const updated = loans.map(l => l.name.toLowerCase().includes(keyword) ? { ...l, name: newName } : l);
+      // También actualizar credits si existe
+      const credits = { ...(data.credits || {}) };
+      if (credits[keyword]) {
+        credits[newName.toLowerCase()] = { ...credits[keyword], name: newName };
+        delete credits[keyword];
+      }
+      await saveData(userId, { ...data, loans: updated, credits });
+      return `✅ Listo, cambié el nombre de *${matching[0].name}* a *${newName}* en todos los préstamos.`;
     }
 
     case 'consolidar_prestamos': {
