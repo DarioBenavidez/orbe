@@ -17,22 +17,22 @@ const ThemeCtx = createContext(null);
 const useC = () => useContext(ThemeCtx);
 
 const mkTheme = (dark) => ({
-  bg:          dark ? '#0e1621' : '#f4fbf8',
-  surface:     dark ? '#18253a' : '#ffffff',
-  surface2:    dark ? '#1e2f44' : '#edf8f3',
-  border:      dark ? '#28394f' : '#cce9d9',
-  accent:      '#4aba82',
-  accentLight: dark ? '#0d2318' : '#e3f8ef',
-  gold:        dark ? '#72d4a8' : '#2e9960',
-  text:        dark ? '#eee8e0' : '#1c1410',
-  textMuted:   dark ? '#7a8fa0' : '#7a6a58',
-  textDim:     dark ? '#384a5c' : '#c0a890',
-  red:         dark ? '#ff6060' : '#e53935',
-  redLight:    dark ? '#2a1010' : '#fff5f5',
-  blue:        dark ? '#4a8cff' : '#2563eb',
-  green:       dark ? '#00e0a0' : '#4aba82',
-  header:      dark ? '#18253a' : '#4aba82',
-  tab:         dark ? '#18253a' : '#ffffff',
+  bg:          dark ? '#080C18' : '#F5F6FF',
+  surface:     dark ? '#10152A' : '#FFFFFF',
+  surface2:    dark ? '#181E35' : '#ECEEFF',
+  border:      dark ? '#222840' : '#DDE0F5',
+  accent:      '#6366F1',
+  accentLight: dark ? '#161B38' : '#EEEEFF',
+  gold:        dark ? '#A5B4FC' : '#4338CA',
+  text:        dark ? '#EEF0FF' : '#12123A',
+  textMuted:   dark ? '#636B85' : '#6B6F8E',
+  textDim:     dark ? '#252C45' : '#C4C8E0',
+  red:         dark ? '#F87171' : '#F43F5E',
+  redLight:    dark ? '#1F1020' : '#FFF1F6',
+  blue:        dark ? '#60A5FA' : '#3B82F6',
+  green:       dark ? '#34D399' : '#10B981',
+  header:      dark ? '#10152A' : '#6366F1',
+  tab:         dark ? '#10152A' : '#FFFFFF',
   dark,
 });
 
@@ -109,10 +109,11 @@ function Card({ children, style }) {
   const C = useC();
   return (
     <View style={[{
-      backgroundColor: C.surface, borderRadius: 22, padding: 18,
-      shadowColor: '#000', shadowOffset: { width:0, height:2 },
-      shadowOpacity: C.dark ? 0.3 : 0.07, shadowRadius: 10,
-      elevation: 3, borderWidth: 1, borderColor: C.border,
+      backgroundColor: C.surface, borderRadius: 20, padding: 18,
+      shadowColor: C.dark ? '#000' : '#6366F1',
+      shadowOffset: { width:0, height:4 },
+      shadowOpacity: C.dark ? 0.35 : 0.06, shadowRadius: 16,
+      elevation: 4, borderWidth: 1, borderColor: C.border,
     }, style]}>
       {children}
     </View>
@@ -125,11 +126,11 @@ function Btn({ label, onPress, variant = 'primary', style, disabled }) {
   const color = variant==='primary' ? '#fff'   : variant==='danger' ? C.red      : C.textMuted;
   return (
     <TouchableOpacity onPress={onPress} disabled={disabled}
-      style={[{ borderRadius:14, padding:14, alignItems:'center', backgroundColor:bg,
+      style={[{ borderRadius:16, padding:15, alignItems:'center', backgroundColor:bg,
         opacity: disabled ? 0.5 : 1,
         borderWidth: variant==='primary' ? 0 : 1, borderColor: C.border,
       }, style]}>
-      <Text style={{ fontSize:14, fontWeight:'700', color }}>{label}</Text>
+      <Text style={{ fontSize:14, fontWeight:'700', color, letterSpacing:0.2 }}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -138,14 +139,14 @@ function Input({ label, value, onChangeText, placeholder, keyboardType, prefix, 
   const C = useC();
   return (
     <View style={{ marginBottom:14 }}>
-      {label ? <Text style={{ fontSize:10, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:0.5, marginBottom:6 }}>{label}</Text> : null}
+      {label ? <Text style={{ fontSize:10, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:1, marginBottom:6 }}>{label}</Text> : null}
       <View style={{ flexDirection:'row', alignItems:'center' }}>
-        {prefix ? <Text style={{ position:'absolute', left:13, color:C.textMuted, zIndex:1 }}>{prefix}</Text> : null}
+        {prefix ? <Text style={{ position:'absolute', left:14, color:C.textMuted, zIndex:1, fontSize:15 }}>{prefix}</Text> : null}
         <TextInput
           style={{
             flex:1, backgroundColor:C.surface2, borderWidth:1, borderColor:C.border,
-            borderRadius:14, padding:13, fontSize:14, color:C.text,
-            paddingLeft: prefix ? 26 : 13,
+            borderRadius:16, padding:14, fontSize:14, color:C.text,
+            paddingLeft: prefix ? 28 : 14,
             ...(multiline ? { minHeight:80, textAlignVertical:'top' } : {}),
           }}
           value={value} onChangeText={onChangeText}
@@ -162,11 +163,11 @@ function Chip({ label, active, onPress, style }) {
   const C = useC();
   return (
     <TouchableOpacity onPress={onPress} style={[{
-      paddingHorizontal:14, paddingVertical:8, borderRadius:20,
+      paddingHorizontal:15, paddingVertical:8, borderRadius:99,
       backgroundColor: active ? C.accent : C.surface2,
       borderWidth:1, borderColor: active ? C.accent : C.border,
     }, style]}>
-      <Text style={{ fontSize:12, fontWeight:'600', color: active ? '#fff' : C.textMuted }}>{label}</Text>
+      <Text style={{ fontSize:12, fontWeight:'700', color: active ? '#fff' : C.textMuted, letterSpacing:0.1 }}>{label}</Text>
     </TouchableOpacity>
   );
 }
@@ -182,16 +183,14 @@ function IconCircle({ icon, bg, size = 46 }) {
 function SubTabs({ tabs, active, onChange }) {
   const C = useC();
   return (
-    <View style={{ flexDirection:'row', backgroundColor:C.surface2, borderRadius:14, padding:4 }}>
+    <View style={{ flexDirection:'row', backgroundColor:C.surface2, borderRadius:16, padding:4 }}>
       {tabs.map(t => (
         <TouchableOpacity key={t.key} onPress={() => onChange(t.key)}
           style={{
-            flex:1, paddingVertical:9, borderRadius:10, alignItems:'center',
-            backgroundColor: active===t.key ? C.surface : 'transparent',
-            shadowColor: active===t.key ? '#000' : 'transparent',
-            shadowOffset:{width:0,height:1}, shadowOpacity:0.08, shadowRadius:4, elevation: active===t.key ? 2 : 0,
+            flex:1, paddingVertical:10, borderRadius:12, alignItems:'center',
+            backgroundColor: active===t.key ? C.accent : 'transparent',
           }}>
-          <Text style={{ fontSize:12, fontWeight:'600', color: active===t.key ? C.accent : C.textMuted }}>{t.label}</Text>
+          <Text style={{ fontSize:12, fontWeight:'700', color: active===t.key ? '#fff' : C.textMuted }}>{t.label}</Text>
         </TouchableOpacity>
       ))}
     </View>
@@ -203,13 +202,14 @@ function ModalSheet({ visible, onClose, title, children }) {
   return (
     <Modal visible={visible} animationType="slide" transparent>
       <KeyboardAvoidingView behavior={Platform.OS==='ios'?'padding':'height'} style={{ flex:1 }}>
-        <View style={{ flex:1, backgroundColor:'#00000055', justifyContent:'flex-end' }}>
+        <View style={{ flex:1, backgroundColor:'#00000066', justifyContent:'flex-end' }}>
           <View style={{
-            backgroundColor:C.surface, borderTopLeftRadius:28, borderTopRightRadius:28,
+            backgroundColor:C.surface, borderTopLeftRadius:32, borderTopRightRadius:32,
             padding:24, paddingBottom:40, maxHeight:'90%',
+            borderTopWidth:1, borderColor:C.border,
           }}>
-            <View style={{ width:40, height:4, backgroundColor:C.border, borderRadius:2, alignSelf:'center', marginBottom:18 }}/>
-            {title && <Text style={{ fontSize:18, fontWeight:'800', color:C.text, marginBottom:20 }}>{title}</Text>}
+            <View style={{ width:36, height:4, backgroundColor:C.border, borderRadius:2, alignSelf:'center', marginBottom:20 }}/>
+            {title && <Text style={{ fontSize:19, fontWeight:'800', color:C.text, marginBottom:20, letterSpacing:-0.3 }}>{title}</Text>}
             {children}
           </View>
         </View>
@@ -222,11 +222,11 @@ function FAB({ onPress }) {
   const C = useC();
   return (
     <TouchableOpacity onPress={onPress} style={{
-      position:'absolute', bottom:24, right:24, width:56, height:56, borderRadius:28,
+      position:'absolute', bottom:28, right:20, width:56, height:56, borderRadius:28,
       backgroundColor:C.accent, alignItems:'center', justifyContent:'center',
-      shadowColor:C.accent, shadowOffset:{width:0,height:8}, shadowOpacity:0.4, shadowRadius:16, elevation:8,
+      shadowColor:'#6366F1', shadowOffset:{width:0,height:8}, shadowOpacity:0.5, shadowRadius:18, elevation:10,
     }}>
-      <Text style={{ color:'#fff', fontSize:26, lineHeight:30 }}>+</Text>
+      <Text style={{ color:'#fff', fontSize:28, lineHeight:32, fontWeight:'300' }}>+</Text>
     </TouchableOpacity>
   );
 }
@@ -237,28 +237,28 @@ function TxRow({ tx, cats, onDelete, onEdit }) {
   const isGasto  = tx.type === 'gasto';
   const isIncome = tx.type === 'ingreso' || tx.type === 'sueldo';
   const icon     = tx.type==='sueldo' ? '💼' : tx.type==='ahorro_meta' ? '🐷' : (cats[tx.category]||'📦');
-  const iconBg   = isGasto ? C.red+'22' : isIncome ? C.green+'22' : C.accent+'22';
+  const iconBg   = isGasto ? C.red+'18' : isIncome ? C.green+'18' : C.accent+'18';
   const catLabel = tx.type==='sueldo' ? 'Sueldo' : tx.type==='ahorro_meta' ? 'Ahorro' : tx.category;
   return (
-    <View style={{ flexDirection:'row', alignItems:'center', paddingVertical:12, borderBottomWidth:1, borderBottomColor:C.border }}>
-      <IconCircle icon={icon} bg={iconBg} size={44}/>
-      <View style={{ flex:1, marginLeft:12 }}>
-        <Text style={{ fontSize:14, fontWeight:'600', color:C.text }}>{tx.description}</Text>
+    <View style={{ flexDirection:'row', alignItems:'center', paddingVertical:13, borderBottomWidth:1, borderBottomColor:C.border }}>
+      <IconCircle icon={icon} bg={iconBg} size={42}/>
+      <View style={{ flex:1, marginLeft:13 }}>
+        <Text style={{ fontSize:14, fontWeight:'600', color:C.text, letterSpacing:-0.2 }}>{tx.description}</Text>
         <Text style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>{catLabel} · {tx.date}</Text>
       </View>
       <View style={{ alignItems:'flex-end' }}>
-        <Text style={{ fontSize:14, fontWeight:'700', color: isGasto ? C.red : C.green }}>
+        <Text style={{ fontSize:15, fontWeight:'700', color: isGasto ? C.red : C.green, letterSpacing:-0.3 }}>
           {isGasto ? '-' : '+'}{fmt(tx.amount)}
         </Text>
-        <View style={{ flexDirection:'row', gap:10, marginTop:2 }}>
+        <View style={{ flexDirection:'row', gap:12, marginTop:3 }}>
           {onEdit && (
             <TouchableOpacity onPress={() => onEdit(tx)}>
-              <Text style={{ fontSize:10, color:C.accent }}>Editar</Text>
+              <Text style={{ fontSize:10, color:C.accent, fontWeight:'600' }}>Editar</Text>
             </TouchableOpacity>
           )}
           {onDelete && (
             <TouchableOpacity onPress={() => onDelete(tx.id)}>
-              <Text style={{ fontSize:10, color:C.textDim }}>Eliminar</Text>
+              <Text style={{ fontSize:10, color:C.textMuted }}>Eliminar</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -278,8 +278,8 @@ function BarChart({ data }) {
       {data.map((d, i) => (
         <View key={i} style={{ flex:1, alignItems:'center' }}>
           <View style={{ flexDirection:'row', alignItems:'flex-end', gap:2, height:BAR_H }}>
-            <View style={{ flex:1, backgroundColor:C.green, borderRadius:4, height: Math.max(4, (d.income/maxVal)*BAR_H), opacity:0.85 }}/>
-            <View style={{ flex:1, backgroundColor:C.accent, borderRadius:4, height: Math.max(4, (d.expense/maxVal)*BAR_H), opacity:0.85 }}/>
+            <View style={{ flex:1, backgroundColor:C.green, borderRadius:6, height: Math.max(4, (d.income/maxVal)*BAR_H), opacity:0.9 }}/>
+            <View style={{ flex:1, backgroundColor:C.red, borderRadius:6, height: Math.max(4, (d.expense/maxVal)*BAR_H), opacity:0.8 }}/>
           </View>
           <Text style={{ fontSize:9, color:C.textMuted, marginTop:4 }}>{d.label}</Text>
         </View>
@@ -293,10 +293,10 @@ function ScreenWithHeader({ header, children }) {
   const C = useC();
   return (
     <View style={{ flex:1, backgroundColor:C.header }}>
-      <View style={{ paddingTop:52, paddingHorizontal:20, paddingBottom:28 }}>
+      <View style={{ paddingTop:56, paddingHorizontal:22, paddingBottom:30 }}>
         {header}
       </View>
-      <View style={{ flex:1, backgroundColor:C.bg, borderTopLeftRadius:28, borderTopRightRadius:28, overflow:'hidden' }}>
+      <View style={{ flex:1, backgroundColor:C.bg, borderTopLeftRadius:32, borderTopRightRadius:32, overflow:'hidden' }}>
         {children}
       </View>
     </View>
@@ -325,62 +325,92 @@ function InicioTab({ data, onSave, onMonthPress }) {
   const totalDebt    = data.debts.reduce((a,d) => a+(d.remaining||0), 0);
   const greeting     = () => { const h = new Date().getHours(); return h<12?'Buenos días ☀️':h<18?'Buenas tardes 🌤️':'Buenas noches 🌙'; };
 
+  const turnos = (data.turnos || []);
+  const today2 = new Date();
+  const todayStr = today2.toISOString().split('T')[0];
+  const upcomingTurnos = turnos
+    .filter(t => t.date >= todayStr && !t.cancelled)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .slice(0, 3);
+
   return (
     <ScreenWithHeader header={
       <>
-        <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'flex-start', marginBottom:20 }}>
+        <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:22 }}>
           <View>
-            <Text style={{ fontSize:22, fontWeight:'800', color:'#fff', letterSpacing:-0.5 }}>Hola de nuevo</Text>
-            <Text style={{ fontSize:13, color:'#ffffff80', marginTop:3 }}>{greeting()}</Text>
+            <Text style={{ fontSize:13, color:'#ffffff70', fontWeight:'600', letterSpacing:0.3 }}>{greeting()}</Text>
+            <Text style={{ fontSize:24, fontWeight:'800', color:'#fff', letterSpacing:-0.7, marginTop:2 }}>Tu resumen</Text>
           </View>
           <TouchableOpacity onPress={onMonthPress}
-            style={{ backgroundColor:'#ffffff20', borderRadius:12, paddingHorizontal:12, paddingVertical:8, borderWidth:1, borderColor:'#ffffff30' }}>
-            <Text style={{ color:'#fff', fontSize:12, fontWeight:'700' }}>{MONTH_NAMES[data.selectedMonth]} {data.selectedYear} ▾</Text>
+            style={{ backgroundColor:'#ffffff15', borderRadius:20, paddingHorizontal:14, paddingVertical:8, borderWidth:1, borderColor:'#ffffff25' }}>
+            <Text style={{ color:'#ffffffcc', fontSize:13, fontWeight:'700' }}>{MONTH_NAMES[data.selectedMonth]} {data.selectedYear} ▾</Text>
           </TouchableOpacity>
         </View>
-        <View style={{ flexDirection:'row', justifyContent:'space-between', marginBottom:16 }}>
-          <View>
-            <Text style={{ fontSize:11, color:'#ffffff70', fontWeight:'600', textTransform:'uppercase', letterSpacing:0.5 }}>Balance del mes</Text>
-            <Text style={{ fontSize:34, fontWeight:'800', color:'#fff', marginTop:2, letterSpacing:-1 }}>{fmt(balance)}</Text>
-          </View>
-          <View style={{ alignItems:'flex-end' }}>
-            <Text style={{ fontSize:11, color:'#ffffff70', fontWeight:'600', textTransform:'uppercase', letterSpacing:0.5 }}>Gastos</Text>
-            <Text style={{ fontSize:34, fontWeight:'800', color: totalExpense>totalBudget&&totalBudget>0 ? '#ffb3b3' : '#fff', marginTop:2, letterSpacing:-1 }}>{fmt(totalExpense)}</Text>
+        <View style={{ marginBottom:6 }}>
+          <Text style={{ fontSize:12, color:'#ffffff60', fontWeight:'600', textTransform:'uppercase', letterSpacing:1, marginBottom:4 }}>Balance disponible</Text>
+          <Text style={{ fontSize:42, fontWeight:'800', color:'#fff', letterSpacing:-1.5, marginBottom:10 }}>{fmt(balance)}</Text>
+          <View style={{ flexDirection:'row', gap:18 }}>
+            <View style={{ flexDirection:'row', alignItems:'center', gap:6 }}>
+              <View style={{ width:8, height:8, borderRadius:4, backgroundColor:'#34D399' }}/>
+              <Text style={{ fontSize:13, color:'#ffffffbb', fontWeight:'600' }}>Ingresos {fmt(totalIncome)}</Text>
+            </View>
+            <View style={{ flexDirection:'row', alignItems:'center', gap:6 }}>
+              <View style={{ width:8, height:8, borderRadius:4, backgroundColor:'#F87171' }}/>
+              <Text style={{ fontSize:13, color: totalExpense>totalBudget&&totalBudget>0 ? '#ffa0a0' : '#ffffffbb', fontWeight:'600' }}>Gastos {fmt(totalExpense)}</Text>
+            </View>
           </View>
         </View>
         {totalBudget > 0 && (
-          <View>
-            <View style={{ backgroundColor:'#ffffff25', borderRadius:8, height:8, overflow:'hidden', marginBottom:6 }}>
-              <View style={{ width:`${pct}%`, backgroundColor: pct>80 ? '#ff9090' : '#ffffffcc', borderRadius:8 }}/>
+          <View style={{ marginTop:14 }}>
+            <View style={{ backgroundColor:'#ffffff20', borderRadius:99, height:6, overflow:'hidden', marginBottom:6 }}>
+              <View style={{ width:`${pct}%`, backgroundColor: pct>80 ? '#F87171' : '#ffffff99', borderRadius:99, height:6 }}/>
             </View>
-            <Text style={{ fontSize:12, color:'#ffffffaa' }}>
-              {pct>=100 ? '⚠️ Presupuesto superado' : pct>=80 ? `⚠️ ${pct.toFixed(0)}% del presupuesto` : `✅ ${pct.toFixed(0)}% del presupuesto`}
+            <Text style={{ fontSize:11, color:'#ffffff80' }}>
+              {pct>=100 ? '⚠️ Presupuesto superado' : pct>=80 ? `⚠️ ${pct.toFixed(0)}% del presupuesto` : `${pct.toFixed(0)}% del presupuesto usado`}
             </Text>
           </View>
         )}
       </>
     }>
-      <ScrollView contentContainerStyle={{ padding:16 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding:16, paddingTop:20 }} showsVerticalScrollIndicator={false}>
         {/* Quick stats */}
-        <View style={{ flexDirection:'row', gap:10, marginBottom:14 }}>
+        <View style={{ flexDirection:'row', gap:10, marginBottom:16 }}>
           {[
-            { label:'Ingresos', val:totalIncome, color:C.green },
-            { label:'Ahorros', val:totalSavings, color:C.accent },
-            { label:'Deudas', val:totalDebt, color:C.red },
+            { label:'Ahorros', val:totalSavings, color:C.accent, icon:'🐷' },
+            { label:'Deudas', val:totalDebt, color:C.red, icon:'💳' },
           ].map(k => (
-            <Card key={k.label} style={{ flex:1, padding:14 }}>
-              <Text style={{ fontSize:9, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:0.5 }}>{k.label}</Text>
-              <Text style={{ fontSize:15, fontWeight:'800', color:k.color, marginTop:4, letterSpacing:-0.5 }}>{fmt(k.val)}</Text>
+            <Card key={k.label} style={{ flex:1, padding:16 }}>
+              <Text style={{ fontSize:20, marginBottom:6 }}>{k.icon}</Text>
+              <Text style={{ fontSize:9, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:1 }}>{k.label}</Text>
+              <Text style={{ fontSize:18, fontWeight:'800', color:k.color, marginTop:4, letterSpacing:-0.5 }}>{fmt(k.val)}</Text>
             </Card>
           ))}
         </View>
+
+        {upcomingTurnos.length > 0 && (
+          <Card style={{ marginBottom:14, borderLeftWidth:3, borderLeftColor:C.accent }}>
+            <Text style={{ fontSize:14, fontWeight:'700', color:C.text, marginBottom:12 }}>📅 Próximos turnos</Text>
+            {upcomingTurnos.map(t => (
+              <View key={t.id} style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', paddingVertical:8, borderBottomWidth:1, borderBottomColor:C.border }}>
+                <View>
+                  <Text style={{ fontSize:13, color:C.text, fontWeight:'600' }}>{t.description}</Text>
+                  {t.location ? <Text style={{ fontSize:11, color:C.textMuted, marginTop:1 }}>📍 {t.location}</Text> : null}
+                </View>
+                <View style={{ alignItems:'flex-end' }}>
+                  <Text style={{ fontSize:12, color:C.accent, fontWeight:'700' }}>{t.date}</Text>
+                  {t.time ? <Text style={{ fontSize:11, color:C.textMuted }}>{t.time}</Text> : null}
+                </View>
+              </View>
+            ))}
+          </Card>
+        )}
 
         {upcoming.length > 0 && (
           <Card style={{ marginBottom:14, borderLeftWidth:3, borderLeftColor:C.red }}>
             <Text style={{ fontSize:14, fontWeight:'700', color:C.text, marginBottom:12 }}>⚠️ Próximos vencimientos</Text>
             {upcoming.map(ev => (
-              <View key={ev.id} style={{ flexDirection:'row', justifyContent:'space-between', paddingVertical:7, borderBottomWidth:1, borderBottomColor:C.border }}>
-                <Text style={{ fontSize:13, color:C.text }}>{ev.title}</Text>
+              <View key={ev.id} style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', paddingVertical:8, borderBottomWidth:1, borderBottomColor:C.border }}>
+                <Text style={{ fontSize:13, color:C.text, fontWeight:'500' }}>{ev.title}</Text>
                 <Text style={{ fontSize:13, color:C.red, fontWeight:'700' }}>Día {ev.day}</Text>
               </View>
             ))}
@@ -388,9 +418,10 @@ function InicioTab({ data, onSave, onMonthPress }) {
         )}
 
         <Card style={{ marginBottom:32 }}>
-          <Text style={{ fontSize:15, fontWeight:'700', color:C.text, marginBottom:14 }}>Últimas transacciones</Text>
+          <Text style={{ fontSize:15, fontWeight:'700', color:C.text, marginBottom:4, letterSpacing:-0.3 }}>Últimas transacciones</Text>
+          <Text style={{ fontSize:11, color:C.textMuted, marginBottom:14 }}>{MONTH_FULL[data.selectedMonth]} {data.selectedYear}</Text>
           {txs.length === 0
-            ? <Text style={{ color:C.textDim, fontSize:13, textAlign:'center', paddingVertical:20 }}>Sin transacciones este mes</Text>
+            ? <Text style={{ color:C.textDim, fontSize:13, textAlign:'center', paddingVertical:24 }}>Sin transacciones este mes</Text>
             : txs.slice().reverse().slice(0,10).map(t => <TxRow key={t.id} tx={t} cats={cats} onDelete={id => Alert.alert('Eliminar','¿Eliminar esta transacción?',[{text:'Cancelar'},{text:'Eliminar',style:'destructive',onPress:()=>onSave({...data,transactions:data.transactions.filter(t=>t.id!==id)})}])}/>)
           }
         </Card>
@@ -465,16 +496,16 @@ function AnalisisTab({ data, onSave }) {
   return (
     <ScreenWithHeader header={
       <>
-        <Text style={{ fontSize:22, fontWeight:'800', color:'#fff', marginBottom:16, letterSpacing:-0.5 }}>Análisis</Text>
-        <View style={{ flexDirection:'row', gap:24 }}>
-          <View>
-            <Text style={{ fontSize:11, color:'#ffffff70', fontWeight:'600', textTransform:'uppercase', letterSpacing:0.5 }}>Ingresos</Text>
-            <Text style={{ fontSize:26, fontWeight:'800', color: C.dark ? C.green : '#e0ffe8', marginTop:2, letterSpacing:-0.5 }}>{fmt(totalIncome)}</Text>
+        <Text style={{ fontSize:13, color:'#ffffff70', fontWeight:'600', letterSpacing:0.3, marginBottom:2 }}>Estadísticas</Text>
+        <Text style={{ fontSize:24, fontWeight:'800', color:'#fff', letterSpacing:-0.7, marginBottom:18 }}>Análisis</Text>
+        <View style={{ flexDirection:'row', gap:20 }}>
+          <View style={{ flex:1, backgroundColor:'#ffffff10', borderRadius:16, padding:14 }}>
+            <Text style={{ fontSize:10, color:'#ffffff60', fontWeight:'700', textTransform:'uppercase', letterSpacing:1 }}>Ingresos</Text>
+            <Text style={{ fontSize:22, fontWeight:'800', color:'#34D399', marginTop:4, letterSpacing:-0.5 }}>{fmt(totalIncome)}</Text>
           </View>
-          <View style={{ width:1, backgroundColor:'#ffffff20', marginVertical:4 }}/>
-          <View>
-            <Text style={{ fontSize:11, color:'#ffffff70', fontWeight:'600', textTransform:'uppercase', letterSpacing:0.5 }}>Gastos</Text>
-            <Text style={{ fontSize:26, fontWeight:'800', color:'#ffb3b3', marginTop:2, letterSpacing:-0.5 }}>{fmt(totalExpense)}</Text>
+          <View style={{ flex:1, backgroundColor:'#ffffff10', borderRadius:16, padding:14 }}>
+            <Text style={{ fontSize:10, color:'#ffffff60', fontWeight:'700', textTransform:'uppercase', letterSpacing:1 }}>Gastos</Text>
+            <Text style={{ fontSize:22, fontWeight:'800', color:'#F87171', marginTop:4, letterSpacing:-0.5 }}>{fmt(totalExpense)}</Text>
           </View>
         </View>
       </>
@@ -485,7 +516,7 @@ function AnalisisTab({ data, onSave }) {
           <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:12 }}>
             <Text style={{ fontSize:15, fontWeight:'700', color:C.text }}>Ingresos y Gastos</Text>
             <View style={{ flexDirection:'row', gap:12 }}>
-              {[{ label:'Ingreso', color:C.green }, { label:'Gasto', color:C.accent }].map(l => (
+              {[{ label:'Ingreso', color:C.green }, { label:'Gasto', color:C.red }].map(l => (
                 <View key={l.label} style={{ flexDirection:'row', alignItems:'center', gap:4 }}>
                   <View style={{ width:10, height:10, borderRadius:5, backgroundColor:l.color }}/>
                   <Text style={{ fontSize:10, color:C.textMuted }}>{l.label}</Text>
@@ -627,8 +658,8 @@ function TransaccionesTab({ data, onSave, onAdd }) {
   return (
     <ScreenWithHeader header={
       <>
-        <Text style={{ fontSize:22, fontWeight:'800', color:'#fff', letterSpacing:-0.5 }}>Transacciones</Text>
-        <Text style={{ fontSize:13, color:'#ffffff70', marginTop:4 }}>{MONTH_FULL[data.selectedMonth]} {data.selectedYear}</Text>
+        <Text style={{ fontSize:13, color:'#ffffff70', fontWeight:'600', letterSpacing:0.3, marginBottom:2 }}>{MONTH_FULL[data.selectedMonth]} {data.selectedYear}</Text>
+        <Text style={{ fontSize:24, fontWeight:'800', color:'#fff', letterSpacing:-0.7 }}>Transacciones</Text>
       </>
     }>
       <View style={{ flex:1 }}>
@@ -1229,7 +1260,10 @@ function PlanearTab({ data, onSave }) {
   ];
   return (
     <ScreenWithHeader header={
-      <Text style={{ fontSize:22, fontWeight:'800', color:'#fff', letterSpacing:-0.5 }}>Planear</Text>
+      <>
+        <Text style={{ fontSize:13, color:'#ffffff70', fontWeight:'600', letterSpacing:0.3, marginBottom:2 }}>Organización</Text>
+        <Text style={{ fontSize:24, fontWeight:'800', color:'#fff', letterSpacing:-0.7 }}>Planear</Text>
+      </>
     }>
       <View style={{ flex:1 }}>
         <View style={{ paddingHorizontal:16, paddingTop:16, marginBottom:4 }}>
@@ -1256,17 +1290,16 @@ function PerfilTab({ user, onLogout, connectWhatsApp, dark, setDark }) {
   return (
     <View style={{ flex:1, backgroundColor:C.header }}>
       {/* Header with avatar */}
-      <View style={{ paddingTop:52, paddingBottom:32, alignItems:'center' }}>
+      <View style={{ paddingTop:60, paddingBottom:36, alignItems:'center' }}>
         <View style={{
-          width:80, height:80, borderRadius:40, backgroundColor:C.surface,
+          width:86, height:86, borderRadius:43, backgroundColor:'#ffffff18',
           alignItems:'center', justifyContent:'center',
-          borderWidth:3, borderColor:'#ffffff35', marginBottom:14,
-          shadowColor:'#000', shadowOffset:{width:0,height:4}, shadowOpacity:0.2, shadowRadius:8, elevation:8,
+          borderWidth:2, borderColor:'#ffffff30', marginBottom:16,
         }}>
-          <Text style={{ fontSize:34, fontWeight:'800', color:C.accent }}>{initial}</Text>
+          <Text style={{ fontSize:38, fontWeight:'800', color:'#fff' }}>{initial}</Text>
         </View>
-        <Text style={{ fontSize:20, fontWeight:'800', color:'#fff', letterSpacing:-0.3 }}>{fullName}</Text>
-        <Text style={{ fontSize:13, color:'#ffffff65', marginTop:4 }}>{user?.email}</Text>
+        <Text style={{ fontSize:22, fontWeight:'800', color:'#fff', letterSpacing:-0.5 }}>{fullName}</Text>
+        <Text style={{ fontSize:13, color:'#ffffff55', marginTop:4 }}>{user?.email}</Text>
       </View>
 
       {/* Content */}
@@ -1370,7 +1403,7 @@ export default function MainApp({ user, onLogout }) {
     </View>
   );
 
-  const PICKER_YEARS = [2026, 2027, 2028, 2029, 2030];
+  const PICKER_YEARS = [2025, 2026, 2027, 2028, 2029, 2030];
 
   const handleTab = (key) => {
     if (key === '__add__') { setAddModal(true); return; }
@@ -1391,10 +1424,11 @@ export default function MainApp({ user, onLogout }) {
         {/* Bottom Tab Bar */}
         <View style={{
           flexDirection:'row', backgroundColor:C.tab,
-          paddingBottom:24, paddingTop:8,
+          paddingBottom:28, paddingTop:10,
           borderTopWidth:1, borderTopColor:C.border,
-          shadowColor:'#000', shadowOffset:{width:0,height:-3},
-          shadowOpacity:C.dark?0.4:0.07, shadowRadius:12, elevation:12,
+          shadowColor: C.dark ? '#000' : '#6366F1',
+          shadowOffset:{width:0,height:-4},
+          shadowOpacity:C.dark?0.5:0.08, shadowRadius:16, elevation:14,
         }}>
           {TABS.map(t => {
             const isActive = tab === t.key;
@@ -1404,23 +1438,21 @@ export default function MainApp({ user, onLogout }) {
                 style={{ flex:1, alignItems:'center', justifyContent:'center' }}>
                 {isAdd ? (
                   <View style={{
-                    width:54, height:54, borderRadius:27, backgroundColor:C.accent,
+                    width:52, height:52, borderRadius:26, backgroundColor:C.accent,
                     alignItems:'center', justifyContent:'center',
-                    marginTop:-22,
-                    shadowColor:C.accent, shadowOffset:{width:0,height:6},
-                    shadowOpacity:0.45, shadowRadius:12, elevation:10,
+                    marginTop:-20,
+                    shadowColor:'#6366F1', shadowOffset:{width:0,height:8},
+                    shadowOpacity:0.5, shadowRadius:16, elevation:12,
                   }}>
-                    <Text style={{ color:'#fff', fontSize:28, fontWeight:'300', lineHeight:32 }}>+</Text>
+                    <Text style={{ color:'#fff', fontSize:26, fontWeight:'300', lineHeight:30 }}>+</Text>
                   </View>
                 ) : (
                   <>
-                    <View style={{
-                      width:46, height:34, borderRadius:17, alignItems:'center', justifyContent:'center',
-                      backgroundColor: isActive ? C.accent+'20' : 'transparent',
-                    }}>
-                      <Text style={{ fontSize:21, opacity: isActive ? 1 : 0.38 }}>{t.icon}</Text>
+                    <View style={{ alignItems:'center', justifyContent:'center', height:34 }}>
+                      <Text style={{ fontSize:22, opacity: isActive ? 1 : 0.35 }}>{t.icon}</Text>
                     </View>
-                    <Text style={{ fontSize:10, fontWeight:'600', color: isActive ? C.accent : C.textDim, marginTop:1 }}>{t.label}</Text>
+                    <Text style={{ fontSize:10, fontWeight:'700', color: isActive ? C.accent : C.textMuted, marginTop:2, letterSpacing:0.2 }}>{t.label}</Text>
+                    {isActive && <View style={{ width:4, height:4, borderRadius:2, backgroundColor:C.accent, marginTop:3 }}/>}
                   </>
                 )}
               </TouchableOpacity>
