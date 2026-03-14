@@ -158,6 +158,7 @@ export default function LoginScreen({ onLogin }) {
             style={styles.logo}
             resizeMode="contain"
           />
+          <Text style={styles.tagline}>Tu asistente financiero personal</Text>
         </View>
 
         {/* ── Card blanca ── */}
