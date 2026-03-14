@@ -1,12 +1,13 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet, Alert, Image } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { supabase } from '../constants/supabase';
 import LoginScreen from './LoginScreen';
 import MainApp from './MainApp';
 
 const C = {
-  bg: '#f4fbf8', accent: '#4aba82', text: '#1c1410', textMuted: '#7a6a58',
+  green: '#005247', gold: '#C9A84C', bg: '#005247',
+  text: '#FFFFFF', textMuted: '#FFFFFF80',
 };
 
 export default function Index() {
@@ -69,7 +70,8 @@ export default function Index() {
 
   if (loading) return (
     <View style={s.center}>
-      <ActivityIndicator size="large" color={C.accent} />
+      <Image source={require('../assets/images/orbe-logo.png')} style={{ width: 180, height: 72 }} resizeMode="contain"/>
+      <ActivityIndicator size="large" color={C.gold} style={{ marginTop: 40 }}/>
     </View>
   );
 
@@ -77,26 +79,23 @@ export default function Index() {
 
   if (locked) return (
     <View style={s.center}>
-      <View style={s.lockBox}>
-        <Text style={{ fontSize: 56, marginBottom: 24 }}>🔒</Text>
-        <Text style={s.lockTitle}>Orbe</Text>
-        <Text style={s.lockSub}>Verificá tu identidad para continuar</Text>
+      <Image source={require('../assets/images/orbe-logo.png')} style={{ width: 180, height: 72, marginBottom: 48 }} resizeMode="contain"/>
+      <Text style={s.lockSub}>Verificá tu identidad para continuar</Text>
 
-        {bioAvailable ? (
-          <TouchableOpacity style={s.bioBtn} onPress={authenticate}>
-            <Text style={{ fontSize: 32 }}>👆</Text>
-            <Text style={s.bioBtnText}>Usar huella dactilar</Text>
-          </TouchableOpacity>
-        ) : (
-          <TouchableOpacity style={s.bioBtn} onPress={() => setLocked(false)}>
-            <Text style={s.bioBtnText}>Continuar</Text>
-          </TouchableOpacity>
-        )}
-
-        <TouchableOpacity onPress={logout} style={{ marginTop: 24 }}>
-          <Text style={{ color: C.textMuted, fontSize: 13 }}>Cerrar sesión</Text>
+      {bioAvailable ? (
+        <TouchableOpacity style={s.bioBtn} onPress={authenticate}>
+          <Text style={{ fontSize: 36 }}>👆</Text>
+          <Text style={s.bioBtnText}>Usar huella / Face ID</Text>
         </TouchableOpacity>
-      </View>
+      ) : (
+        <TouchableOpacity style={s.bioBtn} onPress={() => setLocked(false)}>
+          <Text style={s.bioBtnText}>Continuar</Text>
+        </TouchableOpacity>
+      )}
+
+      <TouchableOpacity onPress={logout} style={{ marginTop: 28 }}>
+        <Text style={{ color: C.textMuted, fontSize: 13 }}>Cerrar sesión</Text>
+      </TouchableOpacity>
     </View>
   );
 
@@ -104,14 +103,13 @@ export default function Index() {
 }
 
 const s = StyleSheet.create({
-  center: { flex: 1, backgroundColor: C.bg, alignItems: 'center', justifyContent: 'center' },
-  lockBox: { alignItems: 'center', padding: 32 },
-  lockTitle: { fontSize: 28, fontWeight: '800', color: C.text, marginBottom: 8 },
+  center: { flex: 1, backgroundColor: C.green, alignItems: 'center', justifyContent: 'center', padding: 32 },
   lockSub: { fontSize: 14, color: C.textMuted, marginBottom: 40, textAlign: 'center' },
   bioBtn: {
-    backgroundColor: '#fff', borderRadius: 20, padding: 24, alignItems: 'center',
-    width: 160, shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08, shadowRadius: 16, elevation: 4, gap: 8,
+    backgroundColor: '#FFFFFF15',
+    borderWidth: 1, borderColor: '#FFFFFF30',
+    borderRadius: 24, paddingVertical: 22, paddingHorizontal: 40,
+    alignItems: 'center', gap: 10,
   },
-  bioBtnText: { fontSize: 14, fontWeight: '600', color: C.accent },
+  bioBtnText: { fontSize: 15, fontWeight: '700', color: '#fff' },
 });

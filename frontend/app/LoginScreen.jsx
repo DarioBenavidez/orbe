@@ -1,50 +1,118 @@
 import { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator
+  StyleSheet, KeyboardAvoidingView, Platform,
+  ScrollView, ActivityIndicator, Image,
 } from 'react-native';
+import * as WebBrowser from 'expo-web-browser';
 import { supabase } from '../constants/supabase';
 
+WebBrowser.maybeCompleteAuthSession();
+
+// ── Brand colors ───────────────────────────────────────────────
 const C = {
-  bg: '#f8f6f3',
-  surface: '#ffffff',
-  border: '#e8e0d4',
-  accent: '#4aba82',
-  accentLight: '#e3f8ef',
-  text: '#1c1410',
-  textMuted: '#7a6a58',
-  red: '#c0392b',
+  green:      '#005247',
+  greenDark:  '#003D36',
+  greenLight: '#006B5E',
+  gold:       '#C9A84C',
+  goldLight:  '#E8C97A',
+  bg:         '#FAFAF8',
+  surface:    '#FFFFFF',
+  border:     '#E8E4DC',
+  text:       '#1A1A1A',
+  textMuted:  '#7A7A7A',
+  red:        '#E53935',
+  blue:       '#1877F2',
+  cream:      '#F5F2EC',
 };
 
+// ── Password validator ─────────────────────────────────────────
+function validatePassword(pw) {
+  const rules = [
+    { ok: pw.length >= 8,           label: '8 caracteres mínimo' },
+    { ok: /[A-Z]/.test(pw),         label: 'Una mayúscula' },
+    { ok: /[a-z]/.test(pw),         label: 'Una minúscula' },
+    { ok: /[0-9]/.test(pw),         label: 'Un número' },
+    { ok: /[^A-Za-z0-9]/.test(pw),  label: 'Un carácter especial (!@#$...)' },
+  ];
+  return rules;
+}
+
+// ── Field con ícono ────────────────────────────────────────────
+function Field({ icon, placeholder, value, onChangeText, keyboardType, secureTextEntry, autoCapitalize, showToggle, onToggle }) {
+  return (
+    <View style={styles.fieldRow}>
+      <Text style={styles.fieldIcon}>{icon}</Text>
+      <TextInput
+        style={styles.fieldInput}
+        placeholder={placeholder}
+        placeholderTextColor={C.textMuted}
+        value={value}
+        onChangeText={onChangeText}
+        keyboardType={keyboardType || 'default'}
+        secureTextEntry={secureTextEntry}
+        autoCapitalize={autoCapitalize || 'none'}
+        autoCorrect={false}
+      />
+      {showToggle && (
+        <TouchableOpacity onPress={onToggle} style={{ paddingHorizontal: 12 }}>
+          <Text style={{ fontSize: 16 }}>{secureTextEntry ? '👁' : '🙈'}</Text>
+        </TouchableOpacity>
+      )}
+    </View>
+  );
+}
+
+// ── OAuth button ───────────────────────────────────────────────
+function OAuthBtn({ icon, label, color, onPress }) {
+  return (
+    <TouchableOpacity style={[styles.oauthBtn, { backgroundColor: color }]} onPress={onPress}>
+      <Text style={styles.oauthIcon}>{icon}</Text>
+      <Text style={styles.oauthLabel}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+// ── Main ───────────────────────────────────────────────────────
 export default function LoginScreen({ onLogin }) {
-  const [mode, setMode] = useState('login'); // login | register | reset
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [nombre, setNombre] = useState('');
-  const [apellido, setApellido] = useState('');
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [mode, setMode]           = useState('login'); // login | register | reset
+  const [nombre, setNombre]       = useState('');
+  const [apellido, setApellido]   = useState('');
+  const [email, setEmail]         = useState('');
+  const [password, setPassword]   = useState('');
+  const [confirm, setConfirm]     = useState('');
+  const [showPw, setShowPw]       = useState(false);
+  const [showCf, setShowCf]       = useState(false);
+  const [error, setError]         = useState('');
+  const [success, setSuccess]     = useState('');
+  const [loading, setLoading]     = useState(false);
+  const [pwFocused, setPwFocused] = useState(false);
+
+  const pwRules    = validatePassword(password);
+  const pwValid    = pwRules.every(r => r.ok);
+  const confirmOk  = confirm === password && confirm.length > 0;
+
+  const clear = () => { setError(''); setSuccess(''); };
 
   const handleSubmit = async () => {
-    setError(''); setSuccess(''); setLoading(true);
+    clear(); setLoading(true);
     try {
       if (mode === 'register') {
         if (!nombre.trim() || !apellido.trim()) throw new Error('Ingresá tu nombre y apellido');
+        if (!pwValid) throw new Error('La contraseña no cumple los requisitos');
+        if (!confirmOk) throw new Error('Las contraseñas no coinciden');
         const fullName = `${nombre.trim()} ${apellido.trim()}`;
         const { error } = await supabase.auth.signUp({
           email, password,
           options: { data: { nombre: nombre.trim(), apellido: apellido.trim(), full_name: fullName } },
         });
         if (error) throw error;
-        setSuccess('¡Cuenta creada! Ahora podés iniciar sesión.');
+        setSuccess('¡Cuenta creada! Revisá tu email para confirmarla.');
         setMode('login');
       } else if (mode === 'reset') {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: 'https://dariobenavidez.github.io/mis-finanzas/',
-        });
+        const { error } = await supabase.auth.resetPasswordForEmail(email);
         if (error) throw error;
-        setSuccess('¡Listo! Revisá tu email para restablecer la contraseña.');
+        setSuccess('Revisá tu email para restablecer la contraseña.');
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
@@ -56,121 +124,165 @@ export default function LoginScreen({ onLogin }) {
     setLoading(false);
   };
 
-  const tabs = [
-    { key: 'login', label: 'Iniciar sesión' },
-    { key: 'register', label: 'Registrarse' },
-    { key: 'reset', label: 'Olvidé clave' },
-  ];
+  const handleOAuth = async (provider) => {
+    try {
+      const redirectTo = 'orbe://auth/callback';
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider,
+        options: { redirectTo },
+      });
+      if (error) throw error;
+      if (data?.url) {
+        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+        if (result.type === 'success') {
+          const { data: sessionData } = await supabase.auth.getSession();
+          if (sessionData?.session?.user) onLogin(sessionData.session.user);
+        }
+      }
+    } catch {
+      setError('No se pudo iniciar sesión con ese proveedor.');
+    }
+  };
+
+  const isLogin    = mode === 'login';
+  const isRegister = mode === 'register';
+  const isReset    = mode === 'reset';
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-        {/* Logo */}
-        <View style={styles.logoContainer}>
-          <View style={styles.logoBox}>
-            <Text style={styles.logoEmoji}>◎</Text>
-          </View>
-          <Text style={styles.title}>Orbe</Text>
-          <Text style={styles.subtitle}>Tu asistente financiera personal</Text>
+    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+      <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+
+        {/* ── Header verde con logo ── */}
+        <View style={styles.header}>
+          <Image
+            source={require('../assets/images/orbe-logo.png')}
+            style={styles.logo}
+            resizeMode="contain"
+          />
+          <Text style={styles.tagline}>Tu asistente financiera personal</Text>
         </View>
 
-        {/* Card */}
+        {/* ── Card blanca ── */}
         <View style={styles.card}>
-          {/* Tabs */}
-          <View style={styles.tabs}>
-            {tabs.map(t => (
-              <TouchableOpacity
-                key={t.key}
-                style={[styles.tab, mode === t.key && styles.tabActive]}
-                onPress={() => { setMode(t.key); setError(''); setSuccess(''); }}
-              >
-                <Text style={[styles.tabText, mode === t.key && styles.tabTextActive]}>
-                  {t.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </View>
 
-          {/* Nombre y Apellido (solo registro) */}
-          {mode === 'register' && (
+          <Text style={styles.greeting}>
+            {isLogin ? '¡Bienvenido de nuevo!' : isRegister ? '¡Creá tu cuenta!' : 'Recuperar contraseña'}
+          </Text>
+
+          {/* Nombre + Apellido */}
+          {isRegister && (
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Nombre</Text>
-                <TextInput
-                  style={styles.input}
-                  value={nombre}
-                  onChangeText={setNombre}
-                  placeholder="Ej: Lucas"
-                  placeholderTextColor={C.textMuted}
-                  autoCapitalize="words"
-                />
+                <Field icon="👤" placeholder="Nombre" value={nombre} onChangeText={setNombre} autoCapitalize="words"/>
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.label}>Apellido</Text>
-                <TextInput
-                  style={styles.input}
-                  value={apellido}
-                  onChangeText={setApellido}
-                  placeholder="Ej: García"
-                  placeholderTextColor={C.textMuted}
-                  autoCapitalize="words"
-                />
+                <Field icon="👤" placeholder="Apellido" value={apellido} onChangeText={setApellido} autoCapitalize="words"/>
               </View>
             </View>
           )}
 
           {/* Email */}
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={styles.input}
-            value={email}
-            onChangeText={setEmail}
-            placeholder="tu@email.com"
-            placeholderTextColor={C.textMuted}
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
+          <Field icon="✉️" placeholder="Email" value={email} onChangeText={setEmail} keyboardType="email-address"/>
 
           {/* Password */}
-          {mode !== 'reset' && (
-            <>
-              <Text style={styles.label}>Contraseña</Text>
-              <TextInput
-                style={styles.input}
+          {!isReset && (
+            <View>
+              <Field
+                icon="🔒"
+                placeholder="Contraseña"
                 value={password}
-                onChangeText={setPassword}
-                placeholder="Mínimo 6 caracteres"
-                placeholderTextColor={C.textMuted}
-                secureTextEntry
+                onChangeText={v => { setPassword(v); if (!pwFocused) setPwFocused(true); }}
+                secureTextEntry={!showPw}
+                showToggle
+                onToggle={() => setShowPw(p => !p)}
               />
-            </>
-          )}
-
-          {mode === 'reset' && (
-            <View style={styles.infoBox}>
-              <Text style={styles.infoText}>Te enviaremos un email para restablecer tu contraseña.</Text>
+              {/* Reglas de contraseña (solo en registro) */}
+              {isRegister && password.length > 0 && (
+                <View style={styles.pwRules}>
+                  {pwRules.map((r, i) => (
+                    <View key={i} style={styles.pwRule}>
+                      <Text style={{ fontSize: 11, color: r.ok ? C.gold : C.textMuted }}>
+                        {r.ok ? '✓' : '○'} {r.label}
+                      </Text>
+                    </View>
+                  ))}
+                </View>
+              )}
             </View>
           )}
 
-          {error ? <View style={styles.errorBox}><Text style={styles.errorText}>{error}</Text></View> : null}
-          {success ? <View style={styles.successBox}><Text style={styles.successText}>{success}</Text></View> : null}
+          {/* Confirmar contraseña */}
+          {isRegister && (
+            <View>
+              <Field
+                icon="🔒"
+                placeholder="Repetir contraseña"
+                value={confirm}
+                onChangeText={setConfirm}
+                secureTextEntry={!showCf}
+                showToggle
+                onToggle={() => setShowCf(p => !p)}
+              />
+              {confirm.length > 0 && (
+                <Text style={{ fontSize: 11, color: confirmOk ? C.gold : C.red, marginTop: -8, marginBottom: 10, marginLeft: 4 }}>
+                  {confirmOk ? '✓ Las contraseñas coinciden' : '✗ No coinciden'}
+                </Text>
+              )}
+            </View>
+          )}
 
-          {/* Button */}
+          {/* Error / Success */}
+          {error   ? <View style={styles.errorBox}><Text style={styles.errorText}>⚠️ {error}</Text></View>   : null}
+          {success ? <View style={styles.successBox}><Text style={styles.successText}>✅ {success}</Text></View> : null}
+
+          {/* Botón principal */}
           <TouchableOpacity
-            style={[styles.button, loading && styles.buttonDisabled]}
+            style={[styles.mainBtn, loading && { opacity: 0.7 }]}
             onPress={handleSubmit}
             disabled={loading}
           >
             {loading
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.buttonText}>
-                  {mode === 'login' ? 'Entrar' : mode === 'register' ? 'Crear cuenta' : 'Enviar email'}
+              ? <ActivityIndicator color="#fff"/>
+              : <Text style={styles.mainBtnText}>
+                  {isLogin ? 'Iniciar sesión' : isRegister ? 'Crear cuenta' : 'Enviar email'}
                 </Text>
             }
           </TouchableOpacity>
+
+          {/* OAuth (solo login/register) */}
+          {!isReset && (
+            <>
+              <View style={styles.divider}>
+                <View style={styles.dividerLine}/>
+                <Text style={styles.dividerText}>o continuá con</Text>
+                <View style={styles.dividerLine}/>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                <OAuthBtn icon="G" label="Google"   color={C.red}  onPress={() => handleOAuth('google')}/>
+                <OAuthBtn icon="f" label="Facebook" color={C.blue} onPress={() => handleOAuth('facebook')}/>
+              </View>
+            </>
+          )}
+
+          {/* Links de modo */}
+          <View style={styles.links}>
+            {!isLogin && (
+              <TouchableOpacity onPress={() => { setMode('login'); clear(); }}>
+                <Text style={styles.link}>¿Ya tenés cuenta? <Text style={styles.linkBold}>Iniciá sesión</Text></Text>
+              </TouchableOpacity>
+            )}
+            {!isRegister && (
+              <TouchableOpacity onPress={() => { setMode('register'); clear(); }}>
+                <Text style={styles.link}>¿No tenés cuenta? <Text style={styles.linkBold}>Registrate</Text></Text>
+              </TouchableOpacity>
+            )}
+            {!isReset && (
+              <TouchableOpacity onPress={() => { setMode('reset'); clear(); }}>
+                <Text style={[styles.link, { marginTop: 4 }]}>¿Olvidaste tu contraseña?</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -178,56 +290,137 @@ export default function LoginScreen({ onLogin }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.bg },
-  scroll: { flexGrow: 1, justifyContent: 'center', padding: 24 },
-  logoContainer: { alignItems: 'center', marginBottom: 32 },
-  logoBox: {
-    width: 72, height: 72, borderRadius: 20,
-    backgroundColor: C.accent, alignItems: 'center',
-    justifyContent: 'center', marginBottom: 14,
-    shadowColor: C.accent, shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3, shadowRadius: 16, elevation: 8,
+  root:    { flex: 1, backgroundColor: C.green },
+  scroll:  { flexGrow: 1 },
+
+  // Header
+  header: {
+    backgroundColor: C.green,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: 70,
+    paddingBottom: 36,
+    paddingHorizontal: 24,
   },
-  logoEmoji: { fontSize: 36 },
-  title: { fontSize: 28, fontWeight: '800', color: C.text, letterSpacing: -0.5 },
-  subtitle: { fontSize: 14, color: C.textMuted, marginTop: 4 },
+  logo: {
+    width: 200,
+    height: 80,
+    marginBottom: 12,
+  },
+  tagline: {
+    color: '#FFFFFF80',
+    fontSize: 13,
+    fontWeight: '500',
+    letterSpacing: 0.3,
+  },
+
+  // Card
   card: {
-    backgroundColor: C.surface, borderRadius: 24, padding: 24,
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08, shadowRadius: 16, elevation: 4,
+    backgroundColor: C.bg,
+    borderTopLeftRadius: 36,
+    borderTopRightRadius: 36,
+    padding: 28,
+    paddingBottom: 48,
+    flex: 1,
   },
-  tabs: {
-    flexDirection: 'row', backgroundColor: C.bg,
-    borderRadius: 12, padding: 4, marginBottom: 24,
+  greeting: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: C.text,
+    letterSpacing: -0.5,
+    marginBottom: 24,
   },
-  tab: { flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: 'center' },
-  tabActive: { backgroundColor: C.accent },
-  tabText: { fontSize: 12, fontWeight: '600', color: C.textMuted },
-  tabTextActive: { color: '#fff' },
-  label: {
-    fontSize: 11, fontWeight: '700', color: C.textMuted,
-    textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6,
+
+  // Fields
+  fieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: C.surface,
+    borderWidth: 1,
+    borderColor: C.border,
+    borderRadius: 16,
+    marginBottom: 12,
+    paddingLeft: 14,
   },
-  input: {
-    backgroundColor: '#f8faf8', borderWidth: 1, borderColor: C.border,
-    borderRadius: 12, padding: 14, fontSize: 14, color: C.text, marginBottom: 16,
+  fieldIcon:  { fontSize: 16, marginRight: 8 },
+  fieldInput: {
+    flex: 1,
+    paddingVertical: 15,
+    fontSize: 15,
+    color: C.text,
   },
-  infoBox: { backgroundColor: C.bg, borderRadius: 10, padding: 12, marginBottom: 16 },
-  infoText: { fontSize: 13, color: C.textMuted },
+
+  // Password rules
+  pwRules: {
+    flexWrap: 'wrap',
+    flexDirection: 'row',
+    gap: 6,
+    marginTop: -4,
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  pwRule: {},
+
+  // Main button
+  mainBtn: {
+    backgroundColor: C.green,
+    borderRadius: 18,
+    paddingVertical: 17,
+    alignItems: 'center',
+    marginTop: 8,
+    shadowColor: C.green,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  mainBtnText: { color: '#fff', fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
+
+  // Divider
+  divider: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+    gap: 10,
+  },
+  dividerLine: { flex: 1, height: 1, backgroundColor: C.border },
+  dividerText: { fontSize: 12, color: C.textMuted, fontWeight: '500' },
+
+  // OAuth
+  oauthBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 16,
+    paddingVertical: 14,
+  },
+  oauthIcon:  { fontSize: 16, fontWeight: '800', color: '#fff' },
+  oauthLabel: { fontSize: 14, fontWeight: '700', color: '#fff' },
+
+  // Error / Success
   errorBox: {
-    backgroundColor: '#fff5f5', borderWidth: 1, borderColor: '#f0c8c8',
-    borderRadius: 10, padding: 12, marginBottom: 16,
+    backgroundColor: '#FFF3F3',
+    borderWidth: 1,
+    borderColor: '#F5C5C5',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 14,
   },
   errorText: { fontSize: 13, color: C.red },
   successBox: {
-    backgroundColor: C.accentLight, borderWidth: 1, borderColor: C.accent + '40',
-    borderRadius: 10, padding: 12, marginBottom: 16,
+    backgroundColor: '#F0FBF7',
+    borderWidth: 1,
+    borderColor: '#A8DFC9',
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 14,
   },
-  successText: { fontSize: 13, color: C.accent },
-  button: {
-    backgroundColor: C.accent, borderRadius: 14,
-    padding: 15, alignItems: 'center', marginTop: 4,
-  },
-  buttonDisabled: { backgroundColor: '#a0c4b4' },
-  buttonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  successText: { fontSize: 13, color: C.green },
+
+  // Links
+  links:    { marginTop: 20, alignItems: 'center', gap: 6 },
+  link:     { fontSize: 13, color: C.textMuted },
+  linkBold: { color: C.green, fontWeight: '700' },
 });
