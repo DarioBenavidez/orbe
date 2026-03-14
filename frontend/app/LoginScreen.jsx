@@ -384,16 +384,18 @@ const styles = StyleSheet.create({
 
   // OAuth
   oauthBtn: {
-    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    borderRadius: 16,
-    paddingVertical: 14,
+    borderRadius: 14,
+    paddingVertical: 11,
+    paddingHorizontal: 20,
+    alignSelf: 'center',
+    minWidth: 200,
   },
-  oauthIcon:  { fontSize: 16, fontWeight: '800', color: '#fff' },
-  oauthLabel: { fontSize: 14, fontWeight: '700', color: '#fff' },
+  oauthIcon:  { fontSize: 14, fontWeight: '800', color: '#fff' },
+  oauthLabel: { fontSize: 13, fontWeight: '700', color: '#fff' },
 
   // Error / Success
   errorBox: {
