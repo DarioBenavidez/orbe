@@ -6,7 +6,7 @@ import {
   KeyboardAvoidingView, Switch, Linking,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { loadData, saveData } from '../constants/supabase';
+import { loadData, saveData, supabase, BACKEND_URL } from '../constants/supabase';
 
 // ── Notificaciones (opcional) ────────────────────────────────
 let Notifications = null;
@@ -1376,11 +1376,31 @@ export default function MainApp({ user, onLogout }) {
   const nombre   = meta.nombre || user?.email?.split('@')[0] || 'Usuario';
   const fullName = meta.full_name || nombre;
 
-  const connectWhatsApp = () => {
-    const waUrl = `https://wa.me/5491125728211?text=${encodeURIComponent('Hola')}`;
-    Linking.openURL(waUrl).catch(() => {
-      Alert.alert('Error', 'No se pudo abrir WhatsApp. Verificá que esté instalado.');
-    });
+  const connectWhatsApp = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        Alert.alert('Error', 'Sesión no encontrada. Cerrá sesión y volvé a ingresar.');
+        return;
+      }
+      const resp = await fetch(`${BACKEND_URL}/api/generate-link-code`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+      });
+      if (!resp.ok) throw new Error('Error generando código');
+      const { code } = await resp.json();
+      const waUrl = `https://wa.me/5491125728211?text=${encodeURIComponent(`ORBE:${code}`)}`;
+      Alert.alert(
+        'Conectar WhatsApp',
+        `Tu código de vinculación es:\n\n${code}\n\nSe enviará automáticamente al abrir WhatsApp. El código expira en 10 minutos.`,
+        [
+          { text: 'Cancelar', style: 'cancel' },
+          { text: 'Abrir WhatsApp', onPress: () => Linking.openURL(waUrl).catch(() => Alert.alert('Error', 'No se pudo abrir WhatsApp.')) },
+        ]
+      );
+    } catch {
+      Alert.alert('Error', 'No se pudo generar el código. Verificá tu conexión.');
+    }
   };
 
   useEffect(() => {

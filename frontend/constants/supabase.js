@@ -5,6 +5,9 @@ import * as SecureStore from 'expo-secure-store';
 const SUPABASE_URL = 'https://cvazbnthpsntqoatzswj.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN2YXpibnRocHNudHFvYXR6c3dqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyMzkyMTMsImV4cCI6MjA4NzgxNTIxM30.KLevD2MfnMD0lndOhvngaG5JR76VKTBg_ofCmerRCRg';
 
+// URL del backend en Railway — actualizar si cambia el dominio
+export const BACKEND_URL = 'https://orbe-production.up.railway.app';
+
 // Usa AsyncStorage para valores grandes, SecureStore para los pequeños
 const LargeSecureStore = {
   async getItem(key) {

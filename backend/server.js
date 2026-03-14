@@ -1,14 +1,41 @@
 require('dotenv').config();
 const express = require('express');
+const crypto  = require('crypto');
 const { createClient } = require('@supabase/supabase-js');
 const Anthropic = require('@anthropic-ai/sdk');
 const Groq = require('groq-sdk');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 
 const app = express();
-app.use(express.json());
+
+// ── Seguridad: headers HTTP ────────────────────────────────
+app.use(helmet());
+
+// ── Seguridad: body size limit + guardar raw body para firma Meta ─
+app.use(express.json({
+  limit: '2mb',
+  verify: (req, _res, buf) => { req.rawBody = buf; },
+}));
+
+// ── Seguridad: rate limit global (por IP) ─────────────────
+app.use(rateLimit({
+  windowMs: 60 * 1000,   // 1 minuto
+  max: 120,              // max 120 requests/min por IP
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Demasiadas solicitudes. Intentá más tarde.' },
+}));
 
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_ANON_KEY);
-const supabaseAdmin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_ANON_KEY, { auth: { autoRefreshToken: false, persistSession: false } });
+if (!process.env.SUPABASE_SERVICE_KEY) {
+  console.error('⚠️  SUPABASE_SERVICE_KEY no configurada — operaciones admin deshabilitadas');
+}
+const supabaseAdmin = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY, // nunca fallback a anon para admin
+  { auth: { autoRefreshToken: false, persistSession: false } }
+);
 const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const groq = process.env.GROQ_API_KEY ? new Groq({ apiKey: process.env.GROQ_API_KEY }) : null;
 
@@ -3136,6 +3163,77 @@ function scheduleDaily() {
 }
 if (process.env.NODE_ENV !== 'test') scheduleDaily();
 
+// ── Seguridad: códigos de vinculación temporales (10 min, uso único) ──
+const linkingCodes = new Map();
+function generateLinkingCode(userId, userName) {
+  const code = String(Math.floor(100000 + Math.random() * 900000)); // 6 dígitos
+  // Limpiar códigos expirados
+  const now = Date.now();
+  for (const [k, v] of linkingCodes) { if (now > v.expires) linkingCodes.delete(k); }
+  linkingCodes.set(code, { userId, userName, expires: now + 10 * 60_000 });
+  return code;
+}
+function consumeLinkingCode(code) {
+  const entry = linkingCodes.get(code);
+  if (!entry || Date.now() > entry.expires) { linkingCodes.delete(code); return null; }
+  linkingCodes.delete(code); // uso único
+  return entry;
+}
+
+// ── Seguridad: rate limit por teléfono (en memoria) ──────
+const phoneRateMap = new Map();
+function isPhoneRateLimited(phone) {
+  const now = Date.now();
+  const windowMs = 60_000; // 1 minuto
+  const maxPerWindow = 20; // máx 20 mensajes/min por número
+  const entry = phoneRateMap.get(phone) || { count: 0, reset: now + windowMs };
+  if (now > entry.reset) { entry.count = 0; entry.reset = now + windowMs; }
+  entry.count++;
+  phoneRateMap.set(phone, entry);
+  return entry.count > maxPerWindow;
+}
+// Limpiar entradas viejas cada 5 min
+setInterval(() => {
+  const now = Date.now();
+  for (const [k, v] of phoneRateMap) { if (now > v.reset + 60_000) phoneRateMap.delete(k); }
+}, 5 * 60_000);
+
+// ── Seguridad: verificar firma X-Hub-Signature-256 de Meta ─
+function verifyMetaSignature(req) {
+  const appSecret = process.env.WHATSAPP_APP_SECRET;
+  if (!appSecret) return true; // skip si no está configurado (dev)
+  const sig = req.headers['x-hub-signature-256'];
+  if (!sig) return false;
+  const expected = 'sha256=' + crypto.createHmac('sha256', appSecret).update(req.rawBody || '').digest('hex');
+  try { return crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected)); } catch { return false; }
+}
+
+// ── Seguridad: CORS solo para rutas /api/* ─────────────────
+app.use('/api', (req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*'); // React Native no usa CORS browser
+  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
+
+// ── API: generar código de vinculación seguro ──────────────
+app.post('/api/generate-link-code', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) return res.status(401).json({ error: 'No autorizado' });
+  const token = authHeader.slice(7);
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) return res.status(401).json({ error: 'Token inválido' });
+    const userName = user.user_metadata?.full_name || user.user_metadata?.nombre || user.email?.split('@')[0] || 'Usuario';
+    const code = generateLinkingCode(user.id, userName);
+    res.json({ code });
+  } catch (err) {
+    console.error('❌ Error generando código:', err.message);
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
 // ── Webhook: verificación Meta ─────────────────────────────
 app.get('/webhook', (req, res) => {
   const mode = req.query['hub.mode'];
@@ -3150,6 +3248,12 @@ app.get('/webhook', (req, res) => {
 
 // ── Webhook: mensajes entrantes ────────────────────────────
 app.post('/webhook', async (req, res) => {
+  // Verificar firma Meta
+  if (!verifyMetaSignature(req)) {
+    console.warn('⚠️  Firma Meta inválida — request rechazado');
+    return res.sendStatus(403);
+  }
+
   res.sendStatus(200); // Siempre responder 200 inmediatamente a Meta
 
   try {
@@ -3303,23 +3407,42 @@ Devolvé SOLO el JSON array, sin texto adicional.`;
       }
     }
 
+    // Rate limit por teléfono
+    if (isPhoneRateLimited(from)) {
+      console.warn(`⚠️  Rate limit: ${from}`);
+      return;
+    }
+
     const incomingMsg = message.text?.body?.trim();
     if (!incomingMsg) return;
 
-    console.log(`📩 ${from}: ${incomingMsg}`);
+    // Limitar longitud de mensajes (evita abuso de API)
+    if (incomingMsg.length > 4000) {
+      await sendWhatsAppMessage(from, `Ese mensaje es muy largo. Por favor enviá mensajes de menos de 4000 caracteres.`);
+      return;
+    }
 
-    // Activación legacy — formato: ORBE_ACTIVATE:userId:Nombre (compatibilidad hacia atrás)
-    if (incomingMsg.startsWith('ORBE_ACTIVATE:')) {
-      const parts = incomingMsg.replace('ORBE_ACTIVATE:', '').split(':');
-      const userId   = parts[0]?.trim();
-      const userName = parts[1]?.trim() || null;
-      if (userId) {
-        await linkPhoneToUser(from, userId, userName);
+    console.log(`📩 ${from}: ${incomingMsg.substring(0, 100)}${incomingMsg.length > 100 ? '...' : ''}`);
+
+    // Activación segura con código temporal — formato: ORBE:123456
+    if (incomingMsg.startsWith('ORBE:')) {
+      const code = incomingMsg.replace('ORBE:', '').trim();
+      const entry = consumeLinkingCode(code);
+      if (entry) {
+        await linkPhoneToUser(from, entry.userId, entry.userName);
         const greeting  = getGreeting();
-        const firstName = userName ? userName.split(' ')[0] : null;
+        const firstName = entry.userName ? entry.userName.split(' ')[0] : null;
         const saludo    = firstName ? `${greeting}, ${firstName}` : greeting;
         await sendWhatsAppMessage(from, `✅ *¡${saludo}! Soy Orbe, tu asistente financiera personal* 🌟\n\nYa estamos conectados. Desde ahora podés registrar gastos, consultar tu balance, pedir el precio del dólar y mucho más, todo por acá sin abrir la app.\n\nProbá con:\n• *"hola"*\n• *"balance"*\n• *"gasté $500 en café"*\n• *"¿a cuánto está el dólar?"*`);
+      } else {
+        await sendWhatsAppMessage(from, `❌ Código inválido o expirado. Abrí la app de Orbe y generá un nuevo código desde *Perfil → Conectar WhatsApp*.`);
       }
+      return;
+    }
+
+    // Legacy ORBE_ACTIVATE — deshabilitado por seguridad
+    if (incomingMsg.startsWith('ORBE_ACTIVATE:')) {
+      await sendWhatsAppMessage(from, `⚠️ Este método ya no está disponible. Abrí la app de Orbe y usá el botón *Conectar WhatsApp* para obtener un código seguro.`);
       return;
     }
 
@@ -3333,10 +3456,11 @@ Devolvé SOLO el JSON array, sin texto adicional.`;
           if (parsed.type === 'awaiting_email') {
             // El usuario respondió con su email
             const email = incomingMsg.trim().toLowerCase();
-            // Validar que parezca un email antes de buscar
-            if (!email.includes('@')) {
+            // Validación de email con regex
+            const emailRegex = /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z]{2,})+$/;
+            if (!emailRegex.test(email)) {
               await savePendingSuggestion(from, JSON.stringify({ type: 'awaiting_email' }));
-              await sendWhatsAppMessage(from, `Eso no parece un email. Escribime el email con el que te registraste en Orbe (ej: *nombre@gmail.com*).`);
+              await sendWhatsAppMessage(from, `Eso no parece un email válido. Escribime el email con el que te registraste en Orbe (ej: *nombre@gmail.com*).`);
               return;
             }
             try {
@@ -3743,7 +3867,7 @@ Devolvé SOLO el JSON array, sin texto adicional.`;
   }
 });
 
-app.get('/', (req, res) => res.json({ status: 'ok', app: 'Orbe', version: '5.0.0' }));
+app.get('/', (req, res) => res.json({ status: 'ok' }));
 
 if (process.env.NODE_ENV !== 'test') {
   const PORT = process.env.PORT || 3000;
