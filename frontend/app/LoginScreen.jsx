@@ -158,15 +158,16 @@ export default function LoginScreen({ onLogin }) {
             style={styles.logo}
             resizeMode="contain"
           />
-          <Text style={styles.tagline}>Tu asistente financiera personal</Text>
         </View>
 
         {/* ── Card blanca ── */}
         <View style={styles.card}>
 
-          <Text style={styles.greeting}>
-            {isLogin ? '¡Bienvenido de nuevo!' : isRegister ? '¡Creá tu cuenta!' : 'Recuperar contraseña'}
-          </Text>
+          {(isRegister || isReset) && (
+            <Text style={styles.greeting}>
+              {isRegister ? '¡Creá tu cuenta!' : 'Recuperar contraseña'}
+            </Text>
+          )}
 
           {/* Nombre + Apellido */}
           {isRegister && (
@@ -299,8 +300,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   logo: {
-    width: 260,
-    height: 110,
+    width: 320,
+    height: 140,
     marginBottom: 12,
   },
   tagline: {
