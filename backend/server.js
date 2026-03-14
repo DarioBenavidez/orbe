@@ -89,6 +89,11 @@ function defaultData() {
     suscripciones: [],
     onboardingDone: false,
     credits: {},
+    // Módulo empresarial
+    activos: [],
+    productos: [],
+    ventas: [],
+    negocio: null,
   };
 }
 async function loadData(uid) {
@@ -108,6 +113,10 @@ async function loadData(uid) {
     suscripciones: Array.isArray(d.suscripciones) ? d.suscripciones : [],
     onboardingDone: typeof d.onboardingDone === 'boolean' ? d.onboardingDone : false,
     credits: d.credits && typeof d.credits === 'object' && !Array.isArray(d.credits) ? d.credits : {},
+    activos: Array.isArray(d.activos) ? d.activos : [],
+    productos: Array.isArray(d.productos) ? d.productos : [],
+    ventas: Array.isArray(d.ventas) ? d.ventas : [],
+    negocio: d.negocio && typeof d.negocio === 'object' ? d.negocio : null,
   };
 }
 async function saveData(uid, payload) {
@@ -383,6 +392,19 @@ ACCIONES DISPONIBLES:
 {"type":"agregar_categoria","name":"Mascotas","icon":"🐾"}
 {"type":"agregar_recordatorio","description":"Pagar seguro","date":"YYYY-MM-DD"}
 {"type":"gasto_compartido","description":"Alquiler","amount":200000,"category":"Vivienda","sharedWith":"pareja","date":"YYYY-MM-DD"}
+{"type":"registrar_negocio","nombre":"Kiosco Don Dario","tipo":"kiosco|comercio|servicio|emprendimiento|otro"}
+{"type":"agregar_activo","name":"Computadora","value":400000,"residualValue":50000,"usefulLifeYears":4,"purchaseDate":"YYYY-MM-DD","category":"Tecnología"}
+{"type":"consultar_amortizacion"}
+{"type":"agregar_producto","name":"Coca Cola 500ml","cost":500,"price":900,"unit":"unidad"}
+{"type":"consultar_productos"}
+{"type":"eliminar_producto","keyword":"coca"}
+{"type":"registrar_venta","items":[{"name":"Coca Cola 500ml","quantity":2,"unitPrice":900}],"date":"YYYY-MM-DD","paymentMethod":"efectivo|transferencia|tarjeta"}
+{"type":"consultar_ventas_negocio"}
+{"type":"calcular_margen","keyword":"coca cola"}
+{"type":"punto_equilibrio","costosFijos":0}
+{"type":"estado_de_resultados"}
+{"type":"flujo_de_caja_negocio"}
+{"type":"educacion_financiera","concepto":"amortizacion|margen|punto_equilibrio|balance|flujo_de_caja|roi|ebitda|capital_de_trabajo|costos_fijos_variables"}
 {"type":"conversacion","respuesta":"..."}
 {"type":"unknown"}
 
@@ -451,6 +473,44 @@ REGLAS DE INTERPRETACIÓN:
 - "a cuántas canastas básicas equivale X", "qué tan caro es X en canastas", "equivalencia en canasta" → equivalencia_canasta
 - "llamate X", "cambiá tu nombre a X", "de ahora en adelante sos X" → cambiar_nombre (nombre: el nuevo nombre)
 - "onboarding", "configuración inicial", "ayudame a configurar todo" → onboarding
+- "tengo un negocio / registrá mi negocio / mi emprendimiento se llama X" → registrar_negocio
+- "compré X por $Y / tengo un activo / agregá un activo / computadora/auto/heladera/etc" → agregar_activo (value: precio de compra, usefulLifeYears: vida útil estimada, residualValue: valor al final — si no menciona estos últimos, estimá razonables)
+- "cuánto se amortiza / amortización / depreciación de mis activos / mis activos" → consultar_amortizacion
+- "agregá el producto X / vendo X a $Y, me cuesta $Z / precio de venta X, costo X" → agregar_producto
+- "mis productos / qué vendo / lista de productos / qué margen tengo" → consultar_productos
+- "vendí X unidades de Y / registrá una venta / hice una venta de $X" → registrar_venta
+- "cuánto vendí / mis ventas del mes / reporte de ventas" → consultar_ventas_negocio
+- "cuál es el margen de X / cuánto gano por X / margen de ganancia de X" → calcular_margen
+- "cuánto tengo que vender para cubrir los costos / punto de equilibrio / break-even" → punto_equilibrio (costosFijos: si los menciona, sino 0 para calcular automáticamente)
+- "estado de resultados / P&L / cómo va mi negocio / resultados del negocio" → estado_de_resultados
+- "flujo de caja / cash flow / movimiento de plata del negocio" → flujo_de_caja_negocio
+- "qué es X / explicame X / no entiendo X / cómo funciona X" donde X es un concepto de administración → educacion_financiera (concepto: el término más cercano de la lista)
+
+CONTEXTO EMPRESARIAL:
+${data.negocio ? `- Negocio registrado: ${data.negocio.nombre} (${data.negocio.tipo})` : '- Sin negocio registrado aún'}
+- Activos registrados: ${(data.activos || []).length}${(data.activos || []).length > 0 ? ' — ' + data.activos.map(a => `${a.name} (valor residual: ${fmt(a.residualValue || 0)})`).join(', ') : ''}
+- Productos/servicios: ${(data.productos || []).length}${(data.productos || []).length > 0 ? ' — ' + data.productos.map(p => `${p.name} costo:${fmt(p.cost)} precio:${fmt(p.price)} margen:${Math.round(((p.price-p.cost)/p.price)*100)}%`).join(', ') : ''}
+- Ventas del mes: ${(data.ventas || []).filter(v => { const p = parseDateParts(v.date); return p.month === month && p.year === year; }).length} registros | Total: ${fmt((data.ventas || []).filter(v => { const p = parseDateParts(v.date); return p.month === month && p.year === year; }).reduce((s, v) => s + v.total, 0))}
+
+CONOCIMIENTO DE ADMINISTRACIÓN DE EMPRESAS:
+Sos especialista en administración de empresas y educás al usuario cuando pregunta o cuando el contexto lo merece. Nunca des un sermón, pero sí explicá conceptos cuando el usuario no sabe algo — claro, simple, con ejemplos en pesos argentinos.
+
+Conceptos clave que manejás:
+• AMORTIZACIÓN/DEPRECIACIÓN: distribución del costo de un activo a lo largo de su vida útil. Ej: una computadora de $400.000 con vida útil de 4 años se amortiza $100.000 por año ($8.333/mes). No es una salida de caja — es un costo contable que refleja el desgaste real del activo. Método más simple: lineal = (valor de compra - valor residual) / años de vida útil.
+• BALANCE GENERAL (o de situación): foto del patrimonio en un momento. ACTIVOS (lo que tenés: caja, inventario, equipos) = PASIVOS (lo que debés: deudas, cuentas a pagar) + PATRIMONIO NETO (lo que realmente es tuyo). La ecuación siempre debe balancear.
+• ESTADO DE RESULTADOS (P&L): ingresos — costo de ventas = GANANCIA BRUTA → menos gastos operativos (sueldos, alquiler, servicios) = GANANCIA OPERATIVA (EBITDA) → menos amortizaciones e impuestos = GANANCIA NETA.
+• FLUJO DE CAJA (Cash Flow): movimiento de dinero real. No es lo mismo que ganancia — podés ser rentable y quedarte sin caja (si vendés a crédito). Flujo operativo (del negocio) + flujo de inversión (compra/venta de activos) + flujo de financiamiento (préstamos/capital) = variación de caja.
+• MARGEN BRUTO: (precio de venta - costo directo) / precio de venta × 100. Ej: vendés a $1000 lo que te costó $600 → margen bruto = 40%.
+• MARGEN NETO: ganancia neta / ingresos totales × 100. Descuenta TODOS los costos.
+• PUNTO DE EQUILIBRIO (Break-even): el nivel de ventas donde no ganás ni perdés. Fórmula: costos fijos / margen de contribución unitario. El margen de contribución = precio - costo variable por unidad.
+• ROI (Retorno sobre inversión): (ganancia obtenida - inversión) / inversión × 100. Ej: invertiste $100.000, ganaste $130.000 → ROI = 30%.
+• CAPITAL DE TRABAJO: activo corriente (caja + cuentas a cobrar + inventario) - pasivo corriente (deudas a corto plazo). Mide la liquidez operativa.
+• COSTO FIJO vs VARIABLE: los fijos no cambian con el volumen (alquiler, sueldo propio) — los variables sí (materia prima, comisiones). Esta distinción es clave para el punto de equilibrio.
+• EBITDA: Earnings Before Interest, Taxes, Depreciation and Amortization. Mide la rentabilidad operativa pura antes de ajustes contables y financieros.
+• PRECIO DE TRANSFERENCIA: cuando te vendés a vos mismo (ej: usás stock personal para el negocio), hay que registrar ese costo.
+• ACTIVO FIJO vs CORRIENTE: el fijo dura más de un año (equipos, mobiliario, rodado) y se amortiza. El corriente se consume en menos de un año (inventario, efectivo).
+
+Cuándo educar: si el usuario pregunta "¿qué es X?", explicá. Si el usuario toma una decisión que podría mejorarse con contexto (ej: vende sin conocer su margen), podés mencionarlo brevemente. Siempre con ejemplos concretos en pesos. Máximo 4 líneas en la explicación — si quiere más detalle, que pregunte.
 
 CÓMO RAZONÁS (lo más importante):
 Pensás antes de responder. No das respuestas automáticas. Te hacés preguntas: ¿qué está necesitando realmente esta persona? ¿hay algo en los números que debería mencionar aunque no me lo pidió? ¿el contexto financiero cambia lo que voy a decir?
@@ -1772,6 +1832,206 @@ Sin listas. Máximo 8 líneas. Tono cálido, directo y que inspire confianza en 
       } else {
         return `💵 *USD ${amountUSD} de tu cuenta — ${action.description || ''}*\n\nAl blue de hoy (${dolarBlue ? fmt(dolarBlue) : '(?)'}), son ${aproxARS ? fmt(aproxARS) : '(?)'} en pesos.\n\n¿Cómo lo registro?\n• *"en pesos"* → lo convierto al tipo de hoy y lo anoto en ARS\n• *"en dólares"* → lo guardo como gasto en USD para que puedas rastrear tu saldo en dólares`;
       }
+    }
+
+    // ── MÓDULO EMPRESARIAL ─────────────────────────────────
+
+    case 'registrar_negocio': {
+      const negocio = { nombre: action.nombre, tipo: action.tipo || 'negocio' };
+      await saveData(userId, { ...data, negocio });
+      return `🏪 *Negocio registrado!*\n\n📝 ${negocio.nombre}\n🏷️ Tipo: ${negocio.tipo}\n\nAhora podés agregar productos, registrar ventas, activos y mucho más. ¿Por dónde empezamos?`;
+    }
+
+    case 'agregar_activo': {
+      const activos = data.activos || [];
+      const activo = {
+        id: Date.now().toString(),
+        name: action.name,
+        value: parseFloat(action.value),
+        residualValue: parseFloat(action.residualValue || 0),
+        usefulLifeYears: parseFloat(action.usefulLifeYears || 5),
+        purchaseDate: action.purchaseDate || today(),
+        category: action.category || 'General',
+      };
+      await saveData(userId, { ...data, activos: [...activos, activo] });
+      const amortAnual = (activo.value - activo.residualValue) / activo.usefulLifeYears;
+      const amortMensual = amortAnual / 12;
+      return `🏭 *Activo registrado!*\n\n📝 ${activo.name}\n💰 Valor de compra: ${fmt(activo.value)}\n📆 Vida útil: ${activo.usefulLifeYears} años\n🔻 Valor residual: ${fmt(activo.residualValue)}\n\n📊 *Amortización:*\n• Anual: ${fmt(Math.round(amortAnual))}\n• Mensual: ${fmt(Math.round(amortMensual))}\n\n_Esto es un costo contable mensual de ${fmt(Math.round(amortMensual))} que representa el desgaste real del activo._`;
+    }
+
+    case 'consultar_amortizacion': {
+      const activos = data.activos || [];
+      if (!activos.length) return `📭 No tenés activos registrados${name ? ', ' + name : ''}.\n\nPodés agregar uno: *"compré una computadora por $400.000"*`;
+      const totalMensual = activos.reduce((s, a) => s + (a.value - a.residualValue) / a.usefulLifeYears / 12, 0);
+      const lines = activos.map(a => {
+        const amortMensual = (a.value - a.residualValue) / a.usefulLifeYears / 12;
+        const purchaseYear = parseDateParts(a.purchaseDate).year;
+        const purchaseMonth = parseDateParts(a.purchaseDate).month;
+        const { month: cm, year: cy } = currentMonth();
+        const mesesTranscurridos = (cy - purchaseYear) * 12 + (cm - purchaseMonth);
+        const valorActual = Math.max(a.residualValue, a.value - amortMensual * mesesTranscurridos);
+        return `🏭 *${a.name}*\n   Valor original: ${fmt(a.value)} | Valor actual: ${fmt(Math.round(valorActual))}\n   Amortización: ${fmt(Math.round(amortMensual))}/mes | Vida útil: ${a.usefulLifeYears} años`;
+      });
+      return `🏭 *Amortización de activos*\n\n${lines.join('\n\n')}\n\n📊 *Total amortización mensual: ${fmt(Math.round(totalMensual))}*\n_Este monto es el costo real mensual de tus activos (desgaste/obsolescencia)._`;
+    }
+
+    case 'agregar_producto': {
+      const productos = data.productos || [];
+      const existing = productos.findIndex(p => p.name.toLowerCase() === action.name.toLowerCase());
+      const producto = {
+        id: existing >= 0 ? productos[existing].id : Date.now().toString(),
+        name: action.name,
+        cost: parseFloat(action.cost),
+        price: parseFloat(action.price),
+        unit: action.unit || 'unidad',
+      };
+      const margen = ((producto.price - producto.cost) / producto.price * 100).toFixed(1);
+      const ganancia = producto.price - producto.cost;
+      if (existing >= 0) {
+        productos[existing] = producto;
+        await saveData(userId, { ...data, productos });
+        return `✅ *${producto.name}* actualizado!\n\n💰 Costo: ${fmt(producto.cost)} | Precio: ${fmt(producto.price)}\n📈 Margen bruto: *${margen}%* (ganás ${fmt(ganancia)} por ${producto.unit})`;
+      }
+      await saveData(userId, { ...data, productos: [...productos, producto] });
+      return `✅ *${producto.name}* agregado!\n\n💰 Costo: ${fmt(producto.cost)} | Precio: ${fmt(producto.price)}\n📈 Margen bruto: *${margen}%* (ganás ${fmt(ganancia)} por ${producto.unit})`;
+    }
+
+    case 'consultar_productos': {
+      const productos = data.productos || [];
+      if (!productos.length) return `📭 No tenés productos registrados todavía.\n\nAgregá uno: *"vendo Coca Cola a $900, me cuesta $600"*`;
+      const lines = productos.map(p => {
+        const margen = ((p.price - p.cost) / p.price * 100).toFixed(1);
+        const emoji = margen >= 40 ? '🟢' : margen >= 25 ? '🟡' : '🔴';
+        return `${emoji} *${p.name}*: costo ${fmt(p.cost)} → precio ${fmt(p.price)} | margen ${margen}%`;
+      });
+      const margenProm = productos.reduce((s, p) => s + (p.price - p.cost) / p.price * 100, 0) / productos.length;
+      return `📦 *Tus productos (${productos.length})*\n\n${lines.join('\n')}\n\n📊 Margen promedio: *${margenProm.toFixed(1)}%*`;
+    }
+
+    case 'eliminar_producto': {
+      const productos = data.productos || [];
+      const filtered = productos.filter(p => !p.name.toLowerCase().includes(action.keyword.toLowerCase()));
+      if (filtered.length === productos.length) return `🤔 No encontré ningún producto con "${action.keyword}".`;
+      await saveData(userId, { ...data, productos: filtered });
+      return `🗑️ Producto eliminado correctamente.`;
+    }
+
+    case 'registrar_venta': {
+      const ventas = data.ventas || [];
+      const productos = data.productos || [];
+      let total = 0;
+      const items = (action.items || []).map(item => {
+        const prod = productos.find(p => p.name.toLowerCase().includes(item.name.toLowerCase()));
+        const unitPrice = parseFloat(item.unitPrice) || (prod?.price || 0);
+        const qty = parseInt(item.quantity) || 1;
+        total += unitPrice * qty;
+        return { name: prod?.name || item.name, quantity: qty, unitPrice, subtotal: unitPrice * qty };
+      });
+      if (!items.length) return `🤔 No entendí qué vendiste. Decime el producto y cantidad.`;
+      const venta = { id: Date.now().toString(), date: action.date || today(), items, total, paymentMethod: action.paymentMethod || 'efectivo' };
+      await saveData(userId, { ...data, ventas: [...ventas, venta] });
+      const itemLines = items.map(i => `• ${i.name} x${i.quantity} = ${fmt(i.subtotal)}`).join('\n');
+      return `💵 *Venta registrada!*\n\n${itemLines}\n\n💰 Total: *${fmt(total)}*\n💳 ${venta.paymentMethod}`;
+    }
+
+    case 'consultar_ventas_negocio': {
+      const ventas = data.ventas || [];
+      const ventasMes = ventas.filter(v => { const p = parseDateParts(v.date); return p.month === month && p.year === year; });
+      if (!ventasMes.length) return `📭 No hay ventas registradas este mes${name ? ', ' + name : ''}.\n\nPodés registrar una: *"vendí 3 Coca Colas"*`;
+      const totalVentas = ventasMes.reduce((s, v) => s + v.total, 0);
+      const productos = data.productos || [];
+      // Calcular costo estimado si hay productos cargados
+      let costoEstimado = 0;
+      ventasMes.forEach(v => v.items.forEach(i => {
+        const prod = productos.find(p => p.name.toLowerCase().includes(i.name.toLowerCase()));
+        if (prod) costoEstimado += prod.cost * i.quantity;
+      }));
+      const gananciaEstimada = costoEstimado > 0 ? totalVentas - costoEstimado : null;
+      let resp = `📊 *Ventas de ${MONTH_NAMES[month]}*\n\n💵 Total vendido: *${fmt(totalVentas)}*\n🔢 Cantidad de ventas: ${ventasMes.length}`;
+      if (gananciaEstimada !== null) resp += `\n💰 Ganancia bruta estimada: *${fmt(Math.round(gananciaEstimada))}*\n📈 Margen: ${((gananciaEstimada / totalVentas) * 100).toFixed(1)}%`;
+      return resp;
+    }
+
+    case 'calcular_margen': {
+      const productos = data.productos || [];
+      if (action.keyword) {
+        const prod = productos.find(p => p.name.toLowerCase().includes(action.keyword.toLowerCase()));
+        if (!prod) return `🤔 No encontré el producto "${action.keyword}". ¿Cómo se llama exactamente?`;
+        const margen = ((prod.price - prod.cost) / prod.price * 100).toFixed(1);
+        const ganancia = prod.price - prod.cost;
+        const markupPct = ((prod.price - prod.cost) / prod.cost * 100).toFixed(1);
+        return `📈 *Análisis de ${prod.name}*\n\n💰 Costo: ${fmt(prod.cost)}\n💵 Precio de venta: ${fmt(prod.price)}\n📊 Margen bruto: *${margen}%*\n📦 Markup: *${markupPct}%*\n💸 Ganancia por unidad: *${fmt(ganancia)}*\n\n_Margen = (precio - costo) / precio. Markup = (precio - costo) / costo._`;
+      }
+      if (!productos.length) return `📭 No tenés productos cargados. Agregá uno primero.`;
+      const lines = productos.map(p => {
+        const m = ((p.price - p.cost) / p.price * 100).toFixed(1);
+        return `• ${p.name}: margen ${m}% (ganás ${fmt(p.price - p.cost)}/u)`;
+      });
+      return `📈 *Márgenes de tus productos*\n\n${lines.join('\n')}`;
+    }
+
+    case 'punto_equilibrio': {
+      const productos = data.productos || [];
+      const costosFijosParam = parseFloat(action.costosFijos) || 0;
+      // Gastos fijos del mes como proxy de costos fijos si no se especifican
+      const gastosFijosConfig = (data.recurringExpenses || []).filter(g => g.active).reduce((s, g) => s + g.amount, 0);
+      const costosFijos = costosFijosParam > 0 ? costosFijosParam : gastosFijosConfig;
+      if (costosFijos === 0 && !productos.length) {
+        return `📊 Para calcular el punto de equilibrio necesito saber tus costos fijos mensuales (alquiler, sueldos, servicios) y tus productos con precio y costo.\n\nDecime: *"mi punto de equilibrio con costos fijos de $50.000"*`;
+      }
+      if (!productos.length) {
+        return `📊 *Punto de equilibrio*\n\n🔒 Costos fijos: ${fmt(costosFijos)}\n\nNo tenés productos cargados para calcular el margen de contribución. Agregá al menos un producto con costo y precio.`;
+      }
+      const margenProm = productos.reduce((s, p) => s + (p.price - p.cost), 0) / productos.length;
+      const precioPromedio = productos.reduce((s, p) => s + p.price, 0) / productos.length;
+      const unidadesReq = costosFijos > 0 ? Math.ceil(costosFijos / margenProm) : 0;
+      const ventasReq = unidadesReq * precioPromedio;
+      return `📊 *Punto de equilibrio*\n\n🔒 Costos fijos mensuales: ${fmt(costosFijos)}\n📦 Margen de contribución promedio: ${fmt(Math.round(margenProm))}/unidad\n\n🎯 *Para cubrir tus costos necesitás:*\n• ${unidadesReq} unidades vendidas\n• O ${fmt(Math.round(ventasReq))} en ventas\n\n_Por encima de eso, cada venta es ganancia pura._`;
+    }
+
+    case 'estado_de_resultados': {
+      const txsMes = data.transactions.filter(t => { const p = parseDateParts(t.date); return p.month === month && p.year === year; });
+      const ingresosTotales = txsMes.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((s, t) => s + t.amount, 0);
+      const ventasMes = (data.ventas || []).filter(v => { const p = parseDateParts(v.date); return p.month === month && p.year === year; });
+      const ingresoVentas = ventasMes.reduce((s, v) => s + v.total, 0);
+      const ingresoTotal = ingresosTotales + ingresoVentas;
+      const gastosTotales = txsMes.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
+      const gastosFijos = (data.recurringExpenses || []).filter(g => g.active).reduce((s, g) => s + g.amount, 0);
+      const amortizacion = (data.activos || []).reduce((s, a) => s + (a.value - a.residualValue) / a.usefulLifeYears / 12, 0);
+      const resultadoOperativo = ingresoTotal - gastosTotales;
+      const resultadoNeto = resultadoOperativo - amortizacion;
+      return `📋 *Estado de Resultados — ${MONTH_NAMES[month]} ${year}*\n\n💰 *INGRESOS*\n   Cobros/sueldo: ${fmt(ingresosTotales)}${ingresoVentas > 0 ? `\n   Ventas negocio: ${fmt(ingresoVentas)}` : ''}\n   *Total ingresos: ${fmt(ingresoTotal)}*\n\n💸 *EGRESOS*\n   Gastos del mes: ${fmt(gastosTotales)}\n   *Total egresos: ${fmt(gastosTotales)}*\n\n📊 *RESULTADO OPERATIVO: ${fmtSigned(resultadoOperativo)}*${amortizacion > 0 ? `\n   (-) Amortizaciones: ${fmt(Math.round(amortizacion))}\n\n📊 *RESULTADO NETO: ${fmtSigned(Math.round(resultadoNeto))}*` : ''}`;
+    }
+
+    case 'flujo_de_caja_negocio': {
+      const txsMes = data.transactions.filter(t => { const p = parseDateParts(t.date); return p.month === month && p.year === year; });
+      const entradas = txsMes.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((s, t) => s + t.amount, 0);
+      const ventasMes = (data.ventas || []).filter(v => { const p = parseDateParts(v.date); return p.month === month && p.year === year; });
+      const entradasVentas = ventasMes.reduce((s, v) => s + v.total, 0);
+      const salidas = txsMes.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
+      const flujoOperativo = (entradas + entradasVentas) - salidas;
+      const prestamosAFavor = (data.loans || []).filter(l => l.remaining > 0).reduce((s, l) => s + l.remaining, 0);
+      return `💧 *Flujo de Caja — ${MONTH_NAMES[month]} ${year}*\n\n📥 *ENTRADAS*\n   Ingresos: ${fmt(entradas)}${entradasVentas > 0 ? `\n   Ventas: ${fmt(entradasVentas)}` : ''}\n   *Total entradas: ${fmt(entradas + entradasVentas)}*\n\n📤 *SALIDAS*\n   Gastos: ${fmt(salidas)}\n   *Total salidas: ${fmt(salidas)}*\n\n${flujoOperativo >= 0 ? '✅' : '⚠️'} *Flujo operativo: ${fmtSigned(flujoOperativo)}*${prestamosAFavor > 0 ? `\n\n📋 Dinero en la calle (préstamos): ${fmt(prestamosAFavor)}` : ''}\n\n_El flujo de caja refleja el movimiento real de dinero — distinto a la ganancia contable._`;
+    }
+
+    case 'educacion_financiera': {
+      const conceptos = {
+        amortizacion: `📚 *Amortización / Depreciación*\n\nCuando comprás un activo (computadora, heladera, auto), no lo "gastás" de una — se desgasta con el tiempo. La amortización distribuye ese costo a lo largo de su vida útil.\n\n*Ejemplo:* Comprás una computadora por $400.000 con vida útil de 4 años → amortizás $100.000/año = $8.333/mes.\n\nEse $8.333 mensual es un costo real de tu negocio aunque no salga plata de tu bolsillo en ese momento. Ignorarlo infla artificialmente tus ganancias.`,
+        margen: `📚 *Margen de ganancia*\n\nHay dos tipos que no hay que confundir:\n\n*Margen bruto* = (precio - costo) / precio × 100\n*Markup* = (precio - costo) / costo × 100\n\n*Ejemplo:* Vendés algo a $1.000 que te costó $600:\n→ Margen bruto: 40% (de cada $1000 que entra, $400 son ganancia)\n→ Markup: 66.7% (le pusiste un 66.7% encima del costo)\n\nEl margen es más útil para analizar rentabilidad. El markup para fijar precios.`,
+        punto_equilibrio: `📚 *Punto de equilibrio (Break-even)*\n\nEs el nivel de ventas donde no ganás ni perdés. Por debajo = pérdida. Por encima = ganancia.\n\n*Fórmula:* Costos fijos / (precio - costo variable por unidad)\n\n*Ejemplo:* Tenés $50.000 de costos fijos/mes. Vendés algo a $1.000 que te cuesta $600 → margen de contribución = $400 → necesitás vender 125 unidades/mes para cubrir los costos.`,
+        balance: `📚 *Balance General*\n\nFoto del patrimonio en un momento dado. La ecuación fundamental:\n\n*ACTIVOS = PASIVOS + PATRIMONIO NETO*\n\nActivos: lo que tenés (caja, mercadería, equipos, créditos a cobrar)\nPasivos: lo que debés (préstamos, cuentas a pagar, tarjetas)\nPatrimonio neto: lo que realmente es tuyo = activos - pasivos\n\nUn negocio sano tiene más activos que pasivos. Si el patrimonio neto es negativo, estás "quebrado" contablemente.`,
+        flujo_de_caja: `📚 *Flujo de Caja (Cash Flow)*\n\nEl error más común: confundir ganancia con liquidez. Podés ser rentable y quedarte sin efectivo.\n\n*Ejemplo:* Vendiste $500.000 en el mes pero te pagan a 60 días → tenés ganancia pero sin caja para pagar sueldos hoy.\n\nEl flujo de caja mide el movimiento REAL de dinero:\n• Flujo operativo: del negocio diario\n• Flujo de inversión: compra/venta de activos\n• Flujo financiero: préstamos tomados/pagados`,
+        roi: `📚 *ROI (Retorno sobre Inversión)*\n\nMide qué tan rentable fue una inversión:\n\n*ROI = (ganancia obtenida - inversión) / inversión × 100*\n\n*Ejemplo:* Invertiste $100.000 en stock, lo vendiste por $160.000 → ROI = 60%\n\nSiempre comparalo contra alternativas: si el plazo fijo rinde 8% mensual y tu negocio te da 5%, quizás convenga reubicar el capital.`,
+        ebitda: `📚 *EBITDA*\n\nSignifica: Earnings Before Interest, Taxes, Depreciation and Amortization (Ganancias antes de intereses, impuestos, depreciación y amortización).\n\nEs la rentabilidad operativa PURA — lo que genera el negocio con su operación, sin los ajustes financieros ni contables.\n\n*Para qué sirve:* comparar negocios sin que la estructura de deuda o el país (impuestos) distorsionen la comparación. Un EBITDA positivo y creciente es señal de un negocio sano.`,
+        capital_de_trabajo: `📚 *Capital de Trabajo*\n\n*Capital de trabajo = Activo corriente - Pasivo corriente*\n\nActivo corriente: lo que se convierte en cash en menos de 1 año (caja, cuentas a cobrar, inventario)\nPasivo corriente: deudas que vencen en menos de 1 año\n\nSi es positivo: el negocio puede pagar sus deudas de corto plazo con sus recursos de corto plazo.\nSi es negativo: riesgo de iliquidez — aunque el negocio sea rentable.\n\nEs la diferencia entre solvencia y liquidez.`,
+        costos_fijos_variables: `📚 *Costos Fijos vs Variables*\n\n*Fijos:* no cambian con el volumen de ventas. Ej: alquiler, sueldo, internet → los pagás aunque vendas cero.\n\n*Variables:* cambian con la producción/ventas. Ej: materia prima, embalaje, comisiones.\n\n*Por qué importa:* el punto de equilibrio usa solo los costos fijos. Cuantos más fijos tenés, más vendés para no perder. Una empresa con muchos variables y pocos fijos tiene más flexibilidad ante una caída de ventas.`,
+      };
+      const concepto = action.concepto || 'margen';
+      const resp = conceptos[concepto];
+      if (resp) return resp;
+      // Si el concepto no está en la lista, usar Claude para explicarlo
+      const eduPrompt = `Sos Orbe, asistente financiera especialista en administración de empresas. Explicá el concepto "${concepto}" en español rioplatense informal, con un ejemplo concreto en pesos argentinos. Máximo 5 líneas. Sin listas largas. Como si se lo explicaras a un emprendedor que no tiene formación contable.`;
+      return await callClaude(eduPrompt, [], `Explicame qué es ${concepto}`);
     }
 
     case 'conversacion':
