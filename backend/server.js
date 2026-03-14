@@ -89,6 +89,7 @@ function defaultData() {
     suscripciones: [],
     onboardingDone: false,
     credits: {},
+    turnos: [],
     // Módulo empresarial
     activos: [],
     productos: [],
@@ -113,6 +114,7 @@ async function loadData(uid) {
     suscripciones: Array.isArray(d.suscripciones) ? d.suscripciones : [],
     onboardingDone: typeof d.onboardingDone === 'boolean' ? d.onboardingDone : false,
     credits: d.credits && typeof d.credits === 'object' && !Array.isArray(d.credits) ? d.credits : {},
+    turnos: Array.isArray(d.turnos) ? d.turnos : [],
     activos: Array.isArray(d.activos) ? d.activos : [],
     productos: Array.isArray(d.productos) ? d.productos : [],
     ventas: Array.isArray(d.ventas) ? d.ventas : [],
@@ -406,6 +408,9 @@ ACCIONES DISPONIBLES:
 {"type":"flujo_de_caja_negocio"}
 {"type":"educacion_financiera","concepto":"amortizacion|margen|punto_equilibrio|balance|flujo_de_caja|roi|ebitda|capital_de_trabajo|costos_fijos_variables"}
 {"type":"exportar_csv","scope":"transacciones|ventas|prestamos|todo"}
+{"type":"agendar_turno","description":"Turno médico Dr. García","date":"YYYY-MM-DD","time":"10:30","location":"Av. Corrientes 1234","turnoType":"médico|banco|trámite|veterinario|odontólogo|otro"}
+{"type":"consultar_turnos"}
+{"type":"cancelar_turno","keyword":"dr garcia"}
 {"type":"conversacion","respuesta":"..."}
 {"type":"unknown"}
 
@@ -486,7 +491,10 @@ REGLAS DE INTERPRETACIÓN:
 - "estado de resultados / P&L / cómo va mi negocio / resultados del negocio" → estado_de_resultados
 - "flujo de caja / cash flow / movimiento de plata del negocio" → flujo_de_caja_negocio
 - "qué es X / explicame X / no entiendo X / cómo funciona X" donde X es un concepto de administración → educacion_financiera (concepto: el término más cercano de la lista)
-- "exportá mis datos a Excel / pasame en Excel / quiero un CSV / exportar transacciones" → exportar_csv (scope: "transacciones" por defecto, "ventas" si habla de ventas, "prestamos" si habla de préstamos, "todo" si quiere todo)
+- "exportá mis datos a Excel / pasame en Excel / quiero un CSV / exportar transacciones" → exportar_csv
+- "tengo turno / agendá un turno / tengo cita / tengo que ir al médico/banco/trámite el [fecha]" → agendar_turno (description: descripción del turno, date: fecha resuelta YYYY-MM-DD, time: hora si la menciona, location: lugar si lo menciona, turnoType: inferilo del contexto)
+- "qué turnos tengo / mis turnos / agenda / compromisos" → consultar_turnos
+- "cancelá el turno de X / borrá el turno del médico / ya no voy al turno de X" → cancelar_turno (scope: "transacciones" por defecto, "ventas" si habla de ventas, "prestamos" si habla de préstamos, "todo" si quiere todo)
 - Preguntas sobre Excel (fórmulas, errores, tablas dinámicas, Power Query, atajos, etc.) → conversacion (Orbe responde como experta en Excel con ejemplos concretos)
 
 CONTEXTO EMPRESARIAL:
@@ -2638,6 +2646,51 @@ Sin listas. Máximo 8 líneas. Tono cálido, directo y que inspire confianza en 
       return `💧 *Flujo de Caja — ${MONTH_NAMES[month]} ${year}*\n\n📥 *ENTRADAS*\n   Ingresos: ${fmt(entradas)}${entradasVentas > 0 ? `\n   Ventas: ${fmt(entradasVentas)}` : ''}\n   *Total entradas: ${fmt(entradas + entradasVentas)}*\n\n📤 *SALIDAS*\n   Gastos: ${fmt(salidas)}\n   *Total salidas: ${fmt(salidas)}*\n\n${flujoOperativo >= 0 ? '✅' : '⚠️'} *Flujo operativo: ${fmtSigned(flujoOperativo)}*${prestamosAFavor > 0 ? `\n\n📋 Dinero en la calle (préstamos): ${fmt(prestamosAFavor)}` : ''}\n\n_El flujo de caja refleja el movimiento real de dinero — distinto a la ganancia contable._`;
     }
 
+    case 'agendar_turno': {
+      const turnos = data.turnos || [];
+      const turno = {
+        id: Date.now().toString(),
+        description: action.description,
+        date: action.date,
+        time: action.time || null,
+        location: action.location || null,
+        turnoType: action.turnoType || 'otro',
+        notified: false,
+      };
+      await saveData(userId, { ...data, turnos: [...turnos, turno] });
+      const typeEmoji = { médico: '🏥', banco: '🏦', trámite: '📋', veterinario: '🐾', odontólogo: '🦷', otro: '📅' };
+      const emoji = typeEmoji[turno.turnoType] || '📅';
+      const daysUntil = Math.round((new Date(turno.date) - new Date(today())) / (1000 * 60 * 60 * 24));
+      const whenText = daysUntil === 0 ? '¡es hoy!' : daysUntil === 1 ? 'es mañana' : daysUntil === 2 ? 'es pasado mañana' : `en ${daysUntil} días`;
+      return `${emoji} *Turno agendado!*\n\n📝 ${turno.description}\n📅 ${turno.date}${turno.time ? ` a las ${turno.time}hs` : ''}${turno.location ? `\n📍 ${turno.location}` : ''}\n\n⏰ ${whenText} — te aviso 2 días antes.`;
+    }
+
+    case 'consultar_turnos': {
+      const turnos = data.turnos || [];
+      const proximos = turnos
+        .filter(t => t.date >= today())
+        .sort((a, b) => a.date.localeCompare(b.date));
+      if (!proximos.length) return `📅 No tenés turnos agendados${name ? ', ' + name : ''}.\n\nPodés agendar uno: *"tengo turno con el médico el 20 de marzo a las 10hs"*`;
+      const typeEmoji = { médico: '🏥', banco: '🏦', trámite: '📋', veterinario: '🐾', odontólogo: '🦷', otro: '📅' };
+      const lines = proximos.map(t => {
+        const emoji = typeEmoji[t.turnoType] || '📅';
+        const daysUntil = Math.round((new Date(t.date) - new Date(today())) / (1000 * 60 * 60 * 24));
+        const tag = daysUntil === 0 ? '🔴 HOY' : daysUntil === 1 ? '🟡 Mañana' : daysUntil === 2 ? '🟠 Pasado mañana' : `📅 ${t.date}`;
+        return `${emoji} *${t.description}*\n   ${tag}${t.time ? ` a las ${t.time}hs` : ''}${t.location ? ` — ${t.location}` : ''}`;
+      });
+      return `📅 *Tus próximos turnos*\n\n${lines.join('\n\n')}`;
+    }
+
+    case 'cancelar_turno': {
+      const turnos = data.turnos || [];
+      const keyword = (action.keyword || '').toLowerCase();
+      const filtered = turnos.filter(t => !t.description.toLowerCase().includes(keyword));
+      if (filtered.length === turnos.length) return `🤔 No encontré ningún turno que coincida con *${action.keyword}*. ¿Cómo se llamaba exactamente?`;
+      const cancelado = turnos.find(t => t.description.toLowerCase().includes(keyword));
+      await saveData(userId, { ...data, turnos: filtered });
+      return `🗑️ Turno de *${cancelado.description}* cancelado. Si lo reagendás, avisame.`;
+    }
+
     case 'exportar_csv': {
       const scope = action.scope || 'transacciones';
       let csv = '';
@@ -2863,6 +2916,35 @@ async function checkAndSendNotifications() {
             ? `🏦 Hoy vence tu plazo fijo en *${pf.banco}* por ${fmt(pf.amount)}${pf.ganancia ? `. Ganancia: ${fmt(pf.ganancia)}` : ''}. ¿Lo renovás?`
             : `🏦 Mañana vence tu plazo fijo en *${pf.banco}* por ${fmt(pf.amount)}. Te aviso con tiempo.`;
           await sendWhatsAppMessage(user.phone, msg);
+        }
+      }
+
+      // Turnos que vencen en 2 días
+      const turnos = data.turnos || [];
+      const in2days = new Date(today());
+      in2days.setDate(in2days.getDate() + 2);
+      const in2daysStr = in2days.toISOString().slice(0, 10);
+      const turnosMañana = new Date(today());
+      turnosMañana.setDate(turnosMañana.getDate() + 1);
+      const turnosMañanaStr = turnosMañana.toISOString().slice(0, 10);
+
+      for (const turno of turnos) {
+        const typeEmoji = { médico: '🏥', banco: '🏦', trámite: '📋', veterinario: '🐾', odontólogo: '🦷', otro: '📅' };
+        const emoji = typeEmoji[turno.turnoType] || '📅';
+        if (turno.date === in2daysStr && !turno.notified) {
+          // Recordatorio 2 días antes — marcar como notificado
+          const updatedTurnos = turnos.map(t => t.id === turno.id ? { ...t, notified: true } : t);
+          await saveData(user.user_id, { ...data, turnos: updatedTurnos });
+          const timeStr = turno.time ? ` a las *${turno.time}hs*` : '';
+          const locStr = turno.location ? `\n📍 ${turno.location}` : '';
+          await sendWhatsAppMessage(user.phone, `${emoji} *Recordatorio de turno*\n\nEl pasado mañana tenés: *${turno.description}*${timeStr}${locStr}\n\n¡Que no se te pase!`);
+        } else if (turno.date === turnosMañanaStr) {
+          const timeStr = turno.time ? ` a las *${turno.time}hs*` : '';
+          const locStr = turno.location ? `\n📍 ${turno.location}` : '';
+          await sendWhatsAppMessage(user.phone, `${emoji} *¡Mañana tenés turno!*\n\n*${turno.description}*${timeStr}${locStr}\n\n¿Está todo listo?`);
+        } else if (turno.date === today()) {
+          const timeStr = turno.time ? ` a las *${turno.time}hs*` : '';
+          await sendWhatsAppMessage(user.phone, `${emoji} *¡Hoy tenés turno!*\n\n*${turno.description}*${timeStr}\n\n¡Éxitos!`);
         }
       }
     }
