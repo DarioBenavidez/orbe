@@ -300,8 +300,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   logo: {
-    width: 320,
-    height: 140,
+    width: 640,
+    height: 280,
     marginBottom: 12,
   },
   tagline: {
