@@ -239,7 +239,6 @@ export default function LoginScreen({ onLogin }) {
             onPress={handleSubmit}
             disabled={loading}
           >
-            <View style={styles.mainBtnCorner} />
             {loading
               ? <ActivityIndicator color={C.goldLight}/>
               : <Text style={styles.mainBtnText}>
@@ -363,23 +362,13 @@ const styles = StyleSheet.create({
     paddingVertical: 17,
     alignItems: 'center',
     marginTop: 8,
-    overflow: 'hidden',
-    shadowColor: C.green,
+    borderWidth: 0.8,
+    borderColor: C.gold,
+    shadowColor: C.gold,
     shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
+    shadowOpacity: 0.3,
     shadowRadius: 12,
     elevation: 8,
-  },
-  mainBtnCorner: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    width: 52,
-    height: 52,
-    borderTopWidth: 2.5,
-    borderLeftWidth: 2.5,
-    borderColor: C.gold,
-    borderTopLeftRadius: 18,
   },
   mainBtnText: { color: C.goldLight, fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
 
