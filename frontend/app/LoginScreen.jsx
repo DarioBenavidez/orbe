@@ -38,10 +38,9 @@ function validatePassword(pw) {
 }
 
 // ── Field con ícono ────────────────────────────────────────────
-function Field({ icon, placeholder, value, onChangeText, keyboardType, secureTextEntry, autoCapitalize, showToggle, onToggle }) {
+function Field({ placeholder, value, onChangeText, keyboardType, secureTextEntry, autoCapitalize, showToggle, onToggle }) {
   return (
     <View style={styles.fieldRow}>
-      <Text style={styles.fieldIcon}>{icon}</Text>
       <TextInput
         style={styles.fieldInput}
         placeholder={placeholder}
@@ -174,22 +173,21 @@ export default function LoginScreen({ onLogin }) {
           {isRegister && (
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <View style={{ flex: 1 }}>
-                <Field icon="👤" placeholder="Nombre" value={nombre} onChangeText={setNombre} autoCapitalize="words"/>
+                <Field placeholder="Nombre" value={nombre} onChangeText={setNombre} autoCapitalize="words"/>
               </View>
               <View style={{ flex: 1 }}>
-                <Field icon="👤" placeholder="Apellido" value={apellido} onChangeText={setApellido} autoCapitalize="words"/>
+                <Field placeholder="Apellido" value={apellido} onChangeText={setApellido} autoCapitalize="words"/>
               </View>
             </View>
           )}
 
           {/* Email */}
-          <Field icon="✉️" placeholder="Email" value={email} onChangeText={setEmail} keyboardType="email-address"/>
+          <Field placeholder="Email" value={email} onChangeText={setEmail} keyboardType="email-address"/>
 
           {/* Password */}
           {!isReset && (
             <View>
               <Field
-                icon="🔒"
                 placeholder="Contraseña"
                 value={password}
                 onChangeText={v => { setPassword(v); if (!pwFocused) setPwFocused(true); }}
@@ -216,7 +214,6 @@ export default function LoginScreen({ onLogin }) {
           {isRegister && (
             <View>
               <Field
-                icon="🔒"
                 placeholder="Repetir contraseña"
                 value={confirm}
                 onChangeText={setConfirm}
@@ -338,9 +335,8 @@ const styles = StyleSheet.create({
     borderColor: C.border,
     borderRadius: 16,
     marginBottom: 12,
-    paddingLeft: 14,
+    paddingLeft: 16,
   },
-  fieldIcon:  { fontSize: 16, marginRight: 8 },
   fieldInput: {
     flex: 1,
     paddingVertical: 15,
