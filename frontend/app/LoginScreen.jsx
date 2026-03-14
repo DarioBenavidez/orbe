@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, KeyboardAvoidingView, Platform,
-  ScrollView, ActivityIndicator, Image,
+  ScrollView, ActivityIndicator, Image, Animated,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
 import { supabase } from '../constants/supabase';
@@ -86,6 +86,20 @@ export default function LoginScreen({ onLogin }) {
   const [loading, setLoading]     = useState(false);
   const [pwFocused, setPwFocused] = useState(false);
 
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(fadeAnim, { toValue: 1, duration: 1200, useNativeDriver: true }),
+        Animated.delay(1800),
+        Animated.timing(fadeAnim, { toValue: 0, duration: 1200, useNativeDriver: true }),
+        Animated.delay(1800),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, []);
+
   const pwRules    = validatePassword(password);
   const pwValid    = pwRules.every(r => r.ok);
   const confirmOk  = confirm === password && confirm.length > 0;
@@ -152,11 +166,18 @@ export default function LoginScreen({ onLogin }) {
 
         {/* ── Header verde con logo ── */}
         <View style={styles.header}>
-          <Image
-            source={require('../assets/images/orbe-logo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
+          <View style={styles.logo}>
+            <Animated.Image
+              source={require('../assets/images/orbe-logo.png')}
+              style={[StyleSheet.absoluteFill, { opacity: fadeAnim.interpolate({ inputRange: [0, 1], outputRange: [1, 0] }) }]}
+              resizeMode="contain"
+            />
+            <Animated.Image
+              source={require('../assets/images/orbe-logo-2.png')}
+              style={[StyleSheet.absoluteFill, { opacity: fadeAnim }]}
+              resizeMode="contain"
+            />
+          </View>
           <Text style={styles.tagline}>Tu asistente financiero personal</Text>
         </View>
 
