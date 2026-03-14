@@ -164,9 +164,11 @@ export default function LoginScreen({ onLogin }) {
         {/* ── Card blanca ── */}
         <View style={styles.card}>
 
-          <Text style={styles.greeting}>
-            {isLogin ? 'Bienvenido' : isRegister ? '¡Creá tu cuenta!' : 'Recuperar contraseña'}
-          </Text>
+          {(isRegister || isReset) && (
+            <Text style={styles.greeting}>
+              {isRegister ? '¡Creá tu cuenta!' : 'Recuperar contraseña'}
+            </Text>
+          )}
 
           {/* Nombre + Apellido */}
           {isRegister && (
