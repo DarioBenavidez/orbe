@@ -1248,6 +1248,207 @@ function Calendario({ data, onSave }) {
   );
 }
 
+// ── Préstamos (loans dados) ─────────────────────────────────────
+function Prestamos({ data, onSave }) {
+  const C = useC();
+  const loans  = data.loans  || [];
+  const credits = data.credits || {};
+
+  const totalPrestado  = loans.reduce((s, l) => s + (l.amount || 0), 0);
+  const totalPendiente = loans.reduce((s, l) => s + (l.remaining ?? l.amount ?? 0), 0);
+  const totalCreditos  = Object.values(credits).reduce((s, c) => s + (c.amount || 0), 0);
+
+  const delLoan = (name) => Alert.alert('Eliminar préstamo', `¿Eliminar el préstamo de ${name}?`, [
+    { text: 'Cancelar' },
+    { text: 'Eliminar', style: 'destructive', onPress: () =>
+        onSave({ ...data, loans: loans.filter(l => l.name !== name) })
+    },
+  ]);
+
+  if (loans.length === 0 && Object.keys(credits).length === 0) {
+    return (
+      <View style={{ flex:1, padding:16 }}>
+        <View style={{ padding:40, alignItems:'center' }}>
+          <Text style={{ fontSize:48, marginBottom:12 }}>🤝</Text>
+          <Text style={{ color:C.textMuted, fontSize:14, textAlign:'center' }}>Sin préstamos registrados</Text>
+          <Text style={{ color:C.textDim, fontSize:12, textAlign:'center', marginTop:8 }}>
+            Usá WhatsApp para registrar cuando le prestás plata a alguien
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={{ flex:1 }}>
+      <ScrollView contentContainerStyle={{ padding:16, paddingBottom:40 }} showsVerticalScrollIndicator={false}>
+        {/* Resumen */}
+        {loans.length > 0 && (
+          <View style={{ flexDirection:'row', gap:10, marginBottom:16 }}>
+            <Card style={{ flex:1, padding:16 }}>
+              <Text style={{ fontSize:9, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:1 }}>Prestado</Text>
+              <Text style={{ fontSize:18, fontWeight:'800', color:C.accent, marginTop:4 }}>{fmt(totalPrestado)}</Text>
+            </Card>
+            <Card style={{ flex:1, padding:16 }}>
+              <Text style={{ fontSize:9, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:1 }}>Pendiente</Text>
+              <Text style={{ fontSize:18, fontWeight:'800', color:C.red, marginTop:4 }}>{fmt(totalPendiente)}</Text>
+            </Card>
+          </View>
+        )}
+
+        {/* Saldo a favor */}
+        {Object.values(credits).length > 0 && (
+          <Card style={{ marginBottom:14, borderLeftWidth:3, borderLeftColor:C.green }}>
+            <Text style={{ fontSize:14, fontWeight:'700', color:C.text, marginBottom:12 }}>✅ Saldo a favor</Text>
+            {Object.values(credits).map(c => (
+              <View key={c.name} style={{ flexDirection:'row', justifyContent:'space-between', paddingVertical:8, borderBottomWidth:1, borderBottomColor:C.border }}>
+                <Text style={{ fontSize:14, color:C.text, fontWeight:'500' }}>{c.name}</Text>
+                <Text style={{ fontSize:14, color:C.green, fontWeight:'700' }}>{fmt(c.amount)}</Text>
+              </View>
+            ))}
+            <Text style={{ fontSize:11, color:C.textMuted, marginTop:8 }}>💡 Estos montos se descontarán automáticamente del próximo préstamo</Text>
+          </Card>
+        )}
+
+        {/* Lista de préstamos */}
+        {loans.map(l => {
+          const remaining = l.remaining ?? l.amount ?? 0;
+          const total     = l.amount || 0;
+          const pct       = total > 0 ? Math.min(((total - remaining) / total) * 100, 100) : 0;
+          const pagado    = total - remaining;
+          return (
+            <Card key={l.name} style={{ marginBottom:12 }}>
+              <View style={{ flexDirection:'row', alignItems:'flex-start', marginBottom:12 }}>
+                <IconCircle icon="🤝" bg={C.accent+'18'} size={44}/>
+                <View style={{ flex:1, marginLeft:12 }}>
+                  <Text style={{ fontSize:15, fontWeight:'700', color:C.text }}>{l.name}</Text>
+                  <Text style={{ fontSize:12, color:C.textMuted, marginTop:2 }}>
+                    Pagado: {fmt(pagado)} · Pendiente: {fmt(remaining)}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={() => delLoan(l.name)}>
+                  <Text style={{ color:C.red, fontSize:12 }}>Eliminar</Text>
+                </TouchableOpacity>
+              </View>
+              <View style={{ backgroundColor:C.surface2, borderRadius:99, height:8, marginBottom:6 }}>
+                <View style={{ backgroundColor: remaining === 0 ? C.green : C.accent, height:8, borderRadius:99, width:`${pct}%` }}/>
+              </View>
+              <View style={{ flexDirection:'row', justifyContent:'space-between' }}>
+                <Text style={{ fontSize:11, color:C.textMuted }}>{fmt(total)} total</Text>
+                <Text style={{ fontSize:11, color: remaining===0 ? C.green : C.accent, fontWeight:'700' }}>
+                  {remaining===0 ? '✅ Saldado' : `${pct.toFixed(0)}% cobrado`}
+                </Text>
+              </View>
+            </Card>
+          );
+        })}
+
+        <Card style={{ backgroundColor:C.surface2 }}>
+          <Text style={{ fontSize:12, color:C.textMuted, textAlign:'center' }}>
+            💬 Para registrar nuevos préstamos o cobros, usá el bot de WhatsApp
+          </Text>
+        </Card>
+      </ScrollView>
+    </View>
+  );
+}
+
+// ── Turnos ──────────────────────────────────────────────────────
+function Turnos({ data, onSave }) {
+  const C = useC();
+  const turnos = (data.turnos || []).sort((a, b) => a.date.localeCompare(b.date));
+  const today  = new Date().toISOString().split('T')[0];
+
+  const [modal, setModal]   = useState(false);
+  const emptyF = { description:'', date:'', time:'', location:'', turnoType:'médico' };
+  const [form, setForm]     = useState(emptyF);
+  const TIPOS = ['médico', 'peluquería', 'banco', 'trámite', 'reunión', 'otro'];
+
+  const addTurno = () => {
+    if (!form.description || !form.date) return;
+    const turno = { ...form, id: Date.now().toString(), notified: false };
+    onSave({ ...data, turnos: [...(data.turnos || []), turno] });
+    setModal(false); setForm(emptyF);
+  };
+
+  const delTurno = (id) => Alert.alert('Cancelar turno', '¿Cancelar este turno?', [
+    { text: 'No' },
+    { text: 'Cancelar turno', style: 'destructive', onPress: () =>
+        onSave({ ...data, turnos: (data.turnos || []).filter(t => t.id !== id) })
+    },
+  ]);
+
+  const proximos  = turnos.filter(t => t.date >= today);
+  const pasados   = turnos.filter(t => t.date < today);
+
+  const TurnoCard = ({ t }) => {
+    const diasRestantes = Math.ceil((new Date(t.date) - new Date(today)) / (1000 * 60 * 60 * 24));
+    const esHoy     = t.date === today;
+    const esPasado  = t.date < today;
+    const color     = esHoy ? C.accent : esPasado ? C.textMuted : diasRestantes <= 2 ? C.red : C.text;
+    return (
+      <Card style={{ marginBottom:10, opacity: esPasado ? 0.6 : 1 }}>
+        <View style={{ flexDirection:'row', alignItems:'flex-start' }}>
+          <IconCircle icon={t.turnoType==='médico'?'🏥':t.turnoType==='banco'?'🏦':t.turnoType==='peluquería'?'💈':'📋'} bg={C.accent+'18'} size={44}/>
+          <View style={{ flex:1, marginLeft:12 }}>
+            <Text style={{ fontSize:14, fontWeight:'700', color:C.text }}>{t.description}</Text>
+            <Text style={{ fontSize:12, color, fontWeight:'600', marginTop:2 }}>
+              {esHoy ? '🔔 Hoy' : esPasado ? 'Pasado' : diasRestantes === 1 ? '⚠️ Mañana' : `${t.date}`}
+              {t.time ? ` · ${t.time}hs` : ''}
+            </Text>
+            {t.location ? <Text style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>📍 {t.location}</Text> : null}
+          </View>
+          <TouchableOpacity onPress={() => delTurno(t.id)}>
+            <Text style={{ color:C.red, fontSize:12 }}>Cancelar</Text>
+          </TouchableOpacity>
+        </View>
+      </Card>
+    );
+  };
+
+  return (
+    <View style={{ flex:1 }}>
+      <ScrollView contentContainerStyle={{ padding:16, paddingBottom:100 }} showsVerticalScrollIndicator={false}>
+        {proximos.length === 0 && pasados.length === 0 && (
+          <View style={{ padding:40, alignItems:'center' }}>
+            <Text style={{ fontSize:48, marginBottom:12 }}>📅</Text>
+            <Text style={{ color:C.textMuted, fontSize:14, textAlign:'center' }}>Sin turnos agendados</Text>
+          </View>
+        )}
+        {proximos.length > 0 && (
+          <>
+            <Text style={{ fontSize:11, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:1, marginBottom:10 }}>Próximos</Text>
+            {proximos.map(t => <TurnoCard key={t.id} t={t}/>)}
+          </>
+        )}
+        {pasados.length > 0 && (
+          <>
+            <Text style={{ fontSize:11, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:1, marginTop:16, marginBottom:10 }}>Historial</Text>
+            {pasados.slice().reverse().slice(0, 5).map(t => <TurnoCard key={t.id} t={t}/>)}
+          </>
+        )}
+      </ScrollView>
+      <FAB onPress={() => setModal(true)}/>
+      <ModalSheet visible={modal} onClose={() => { setModal(false); setForm(emptyF); }} title="Nuevo turno">
+        <Input label="Descripción" value={form.description} onChangeText={v => setForm(f => ({ ...f, description:v }))} placeholder="Ej: Médico clínico, Banco Galicia"/>
+        <Input label="Fecha (YYYY-MM-DD)" value={form.date} onChangeText={v => setForm(f => ({ ...f, date:v }))} placeholder={today} keyboardType="numeric"/>
+        <Input label="Hora (opcional)" value={form.time} onChangeText={v => setForm(f => ({ ...f, time:v }))} placeholder="14:30" keyboardType="numeric"/>
+        <Input label="Lugar (opcional)" value={form.location} onChangeText={v => setForm(f => ({ ...f, location:v }))} placeholder="Ej: Av. Corrientes 1234"/>
+        <Text style={{ fontSize:10, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:1, marginBottom:8 }}>Tipo</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:16 }}>
+          {TIPOS.map(t => (
+            <Chip key={t} label={t} active={form.turnoType===t} onPress={() => setForm(f => ({ ...f, turnoType:t }))} style={{ marginRight:8 }}/>
+          ))}
+        </ScrollView>
+        <View style={{ flexDirection:'row', gap:10 }}>
+          <Btn label="Cancelar" variant="ghost" style={{ flex:1 }} onPress={() => setModal(false)}/>
+          <Btn label="Guardar" style={{ flex:1 }} onPress={addTurno}/>
+        </View>
+      </ModalSheet>
+    </View>
+  );
+}
+
 // ── Planear Tab ────────────────────────────────────────────────
 function PlanearTab({ data, onSave }) {
   const C = useC();
@@ -1255,7 +1456,9 @@ function PlanearTab({ data, onSave }) {
   const SUBS = [
     { key:'ahorros',    label:'🐷 Ahorros' },
     { key:'deudas',     label:'💳 Deudas' },
-    { key:'calendario', label:'📅 Eventos' },
+    { key:'prestamos',  label:'🤝 Préstamos' },
+    { key:'turnos',     label:'📅 Turnos' },
+    { key:'calendario', label:'🗓 Eventos' },
     { key:'proyeccion', label:'📈 Proyección' },
   ];
   return (
@@ -1266,11 +1469,17 @@ function PlanearTab({ data, onSave }) {
       </>
     }>
       <View style={{ flex:1 }}>
-        <View style={{ paddingHorizontal:16, paddingTop:16, marginBottom:4 }}>
-          <SubTabs tabs={SUBS} active={sub} onChange={setSub}/>
+        <View style={{ paddingTop:14, marginBottom:4 }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal:16, gap:8 }}>
+            {SUBS.map(t => (
+              <Chip key={t.key} label={t.label} active={sub===t.key} onPress={() => setSub(t.key)}/>
+            ))}
+          </ScrollView>
         </View>
         {sub==='ahorros'    && <Ahorros    data={data} onSave={onSave}/>}
         {sub==='deudas'     && <Deudas     data={data} onSave={onSave}/>}
+        {sub==='prestamos'  && <Prestamos  data={data} onSave={onSave}/>}
+        {sub==='turnos'     && <Turnos     data={data} onSave={onSave}/>}
         {sub==='calendario' && <Calendario data={data} onSave={onSave}/>}
         {sub==='proyeccion' && <Proyeccion data={data}/>}
       </View>
@@ -1279,13 +1488,23 @@ function PlanearTab({ data, onSave }) {
 }
 
 // ── Perfil Tab ─────────────────────────────────────────────────
-function PerfilTab({ user, onLogout, connectWhatsApp, dark, setDark }) {
+function PerfilTab({ user, onLogout, connectWhatsApp, dark, setDark, data }) {
   const C = useC();
   const meta     = user?.user_metadata || {};
   const nombre   = meta.nombre || user?.email?.split('@')[0] || 'Usuario';
   const apellido = meta.apellido || '';
   const fullName = meta.full_name || `${nombre} ${apellido}`.trim();
   const initial  = fullName[0]?.toUpperCase() || 'U';
+
+  // Estadísticas del usuario
+  const stats = data ? (() => {
+    const txCount = data.transactions?.length || 0;
+    const months  = data.transactions?.length > 0
+      ? new Set(data.transactions.map(t => t.date?.slice(0,7))).size
+      : 0;
+    const catCount = Object.keys(data.categories || {}).length;
+    return { txCount, months, catCount };
+  })() : null;
 
   return (
     <View style={{ flex:1, backgroundColor:C.header }}>
@@ -1303,16 +1522,34 @@ function PerfilTab({ user, onLogout, connectWhatsApp, dark, setDark }) {
       </View>
 
       {/* Content */}
-      <View style={{ flex:1, backgroundColor:C.bg, borderTopLeftRadius:28, borderTopRightRadius:28, overflow:'hidden' }}>
+      <View style={{ flex:1, backgroundColor:C.bg, borderTopLeftRadius:32, borderTopRightRadius:32, overflow:'hidden' }}>
         <ScrollView contentContainerStyle={{ padding:20 }} showsVerticalScrollIndicator={false}>
+
+          {/* Stats rápidas */}
+          {stats && (
+            <View style={{ flexDirection:'row', gap:10, marginBottom:16 }}>
+              {[
+                { label:'Transacciones', val:stats.txCount, icon:'💳' },
+                { label:'Meses activo', val:stats.months, icon:'📆' },
+                { label:'Categorías', val:stats.catCount, icon:'🏷' },
+              ].map(s => (
+                <Card key={s.label} style={{ flex:1, padding:14, alignItems:'center' }}>
+                  <Text style={{ fontSize:20, marginBottom:4 }}>{s.icon}</Text>
+                  <Text style={{ fontSize:20, fontWeight:'800', color:C.accent }}>{s.val}</Text>
+                  <Text style={{ fontSize:9, color:C.textMuted, fontWeight:'700', textTransform:'uppercase', letterSpacing:0.5, textAlign:'center', marginTop:2 }}>{s.label}</Text>
+                </Card>
+              ))}
+            </View>
+          )}
+
           <Card style={{ marginBottom:14 }}>
             {/* WhatsApp */}
             <TouchableOpacity onPress={connectWhatsApp}
               style={{ flexDirection:'row', alignItems:'center', paddingVertical:14, borderBottomWidth:1, borderBottomColor:C.border }}>
-              <IconCircle icon="💬" bg="#00c48c22" size={44}/>
+              <IconCircle icon="💬" bg="#25D36622" size={44}/>
               <View style={{ flex:1, marginLeft:14 }}>
                 <Text style={{ fontSize:15, fontWeight:'600', color:C.text }}>Conectar WhatsApp</Text>
-                <Text style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>Registrá gastos y consultá tu balance</Text>
+                <Text style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>Registrá gastos y consultá tu balance por chat</Text>
               </View>
               <Text style={{ color:C.textMuted, fontSize:20 }}>›</Text>
             </TouchableOpacity>
@@ -1333,7 +1570,7 @@ function PerfilTab({ user, onLogout, connectWhatsApp, dark, setDark }) {
           <Card>
             <TouchableOpacity onPress={onLogout}
               style={{ flexDirection:'row', alignItems:'center', paddingVertical:6 }}>
-              <IconCircle icon="🚪" bg={C.red+'22'} size={44}/>
+              <IconCircle icon="🚪" bg={C.red+'18'} size={44}/>
               <Text style={{ flex:1, fontSize:15, fontWeight:'600', color:C.red, marginLeft:14 }}>Cerrar sesión</Text>
               <Text style={{ color:C.red, fontSize:20 }}>›</Text>
             </TouchableOpacity>
@@ -1438,7 +1675,7 @@ export default function MainApp({ user, onLogout }) {
           {tab==='inicio'   && <InicioTab data={data} onSave={save} onMonthPress={() => setMonthPicker(true)}/>}
           {tab==='analisis' && <AnalisisTab data={data} onSave={save}/>}
           {tab==='planear'  && <PlanearTab data={data} onSave={save}/>}
-          {tab==='perfil'   && <PerfilTab user={user} onLogout={onLogout} connectWhatsApp={connectWhatsApp} dark={dark} setDark={setDark}/>}
+          {tab==='perfil'   && <PerfilTab user={user} onLogout={onLogout} connectWhatsApp={connectWhatsApp} dark={dark} setDark={setDark} data={data}/>}
         </View>
 
         {/* Bottom Tab Bar */}
