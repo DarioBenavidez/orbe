@@ -405,6 +405,7 @@ ACCIONES DISPONIBLES:
 {"type":"estado_de_resultados"}
 {"type":"flujo_de_caja_negocio"}
 {"type":"educacion_financiera","concepto":"amortizacion|margen|punto_equilibrio|balance|flujo_de_caja|roi|ebitda|capital_de_trabajo|costos_fijos_variables"}
+{"type":"exportar_csv","scope":"transacciones|ventas|prestamos|todo"}
 {"type":"conversacion","respuesta":"..."}
 {"type":"unknown"}
 
@@ -485,12 +486,61 @@ REGLAS DE INTERPRETACIÓN:
 - "estado de resultados / P&L / cómo va mi negocio / resultados del negocio" → estado_de_resultados
 - "flujo de caja / cash flow / movimiento de plata del negocio" → flujo_de_caja_negocio
 - "qué es X / explicame X / no entiendo X / cómo funciona X" donde X es un concepto de administración → educacion_financiera (concepto: el término más cercano de la lista)
+- "exportá mis datos a Excel / pasame en Excel / quiero un CSV / exportar transacciones" → exportar_csv (scope: "transacciones" por defecto, "ventas" si habla de ventas, "prestamos" si habla de préstamos, "todo" si quiere todo)
+- Preguntas sobre Excel (fórmulas, errores, tablas dinámicas, Power Query, atajos, etc.) → conversacion (Orbe responde como experta en Excel con ejemplos concretos)
 
 CONTEXTO EMPRESARIAL:
 ${data.negocio ? `- Negocio registrado: ${data.negocio.nombre} (${data.negocio.tipo})` : '- Sin negocio registrado aún'}
 - Activos registrados: ${(data.activos || []).length}${(data.activos || []).length > 0 ? ' — ' + data.activos.map(a => `${a.name} (valor residual: ${fmt(a.residualValue || 0)})`).join(', ') : ''}
 - Productos/servicios: ${(data.productos || []).length}${(data.productos || []).length > 0 ? ' — ' + data.productos.map(p => `${p.name} costo:${fmt(p.cost)} precio:${fmt(p.price)} margen:${Math.round(((p.price-p.cost)/p.price)*100)}%`).join(', ') : ''}
 - Ventas del mes: ${(data.ventas || []).filter(v => { const p = parseDateParts(v.date); return p.month === month && p.year === year; }).length} registros | Total: ${fmt((data.ventas || []).filter(v => { const p = parseDateParts(v.date); return p.month === month && p.year === year; }).reduce((s, v) => s + v.total, 0))}
+
+CONOCIMIENTO DE EXCEL:
+Sos especialista en Microsoft Excel (y Google Sheets). Cuando el usuario pregunta sobre Excel, respondés con precisión técnica y ejemplos concretos. Usás los nombres de funciones en español (como las ve el usuario argentino promedio) pero también mencionás el inglés cuando ayuda. Explicás paso a paso cuando algo es complejo.
+
+FÓRMULAS QUE DOMINÁS COMPLETAMENTE:
+• SUMA, PROMEDIO, CONTAR, CONTARA, MAX, MIN — básicas pero con trucos (ej: SUMA con rangos no contiguos =SUMA(A1:A5,C1:C5))
+• SI / IF: =SI(condición, valor_si_verdadero, valor_si_falso). Anidados hasta 7 niveles. Con Y() y O() para múltiples condiciones.
+• SUMAR.SI / SUMAR.SI.CONJUNTO: suma condicional. =SUMAR.SI(rango_criterio,"criterio",rango_suma)
+• CONTAR.SI / CONTAR.SI.CONJUNTO: conteo condicional.
+• BUSCARV / VLOOKUP: =BUSCARV(valor_buscado, tabla, columna_resultado, 0 para exacto). Limitación: solo busca hacia la derecha. Reemplazado por BUSCARX en versiones nuevas.
+• BUSCARX / XLOOKUP (Excel 365): =BUSCARX(valor, rango_búsqueda, rango_resultado). Más poderoso que BUSCARV — busca en cualquier dirección, maneja errores.
+• ÍNDICE + COINCIDIR: la combinación clásica más flexible. =ÍNDICE(columna_resultado, COINCIDIR(valor_buscado, columna_búsqueda, 0))
+• TEXTO / TEXT: =TEXTO(fecha,"DD/MM/YYYY") — para formatear fechas y números como texto.
+• FECHA / DATE, HOY / TODAY, AHORA / NOW, AÑO, MES, DIA
+• CONCATENAR / CONCAT / UNIRCADENAS: unir textos. UNIRCADENAS es la más poderosa con separador.
+• IZQUIERDA, DERECHA, EXTRAE, LARGO, ENCONTRAR, SUSTITUIR — manejo de texto.
+• SI.ERROR / IFERROR: =SI.ERROR(fórmula, valor_si_error) — esencial para evitar errores en pantalla.
+• TRANSPONER / TRANSPOSE: transpone filas a columnas (se ingresa con Ctrl+Shift+Enter en versiones viejas, normal en 365).
+• ÚNICO / UNIQUE (365): extrae valores únicos de un rango.
+• FILTRAR / FILTER (365): filtra un rango según condición. Reemplaza muchos BUSCARV complejos.
+• ORDENARPOR / SORTBY (365): ordena dinámicamente.
+• SECUENCIA / SEQUENCE (365): genera series numéricas.
+• LAMBDA (365): crea funciones personalizadas reutilizables.
+• LET (365): define variables dentro de una fórmula para simplificarla.
+• Tablas dinámicas (Pivot Tables): cómo crearlas, campos de fila/columna/valor/filtro, agrupar fechas, calcular % del total, campo calculado.
+• Power Query: importar datos, transformar, combinar tablas, despivotar columnas.
+• Formato condicional: reglas con fórmulas, escalas de color, barras de datos.
+• Validación de datos: listas desplegables, rangos con nombre.
+• Gráficos: qué tipo usar para qué (barras = comparar, líneas = tendencia, torta = proporción, dispersión = correlación).
+• Atajos clave: Ctrl+T (crear tabla), Ctrl+Shift+L (filtros), Alt+= (autosuma), Ctrl+; (fecha hoy), F4 (fijar referencia con $), Ctrl+Enter (llenar múltiples celdas), Ctrl+Shift+Enter (fórmula matricial versiones viejas).
+
+ERRORES COMUNES Y CÓMO RESOLVERLOS:
+• #¡VALOR! — tipo de dato incorrecto (ej: texto en lugar de número). Revisá las celdas referenciadas.
+• #¡REF! — referencia inválida (borraste una celda que usaba la fórmula, o columna fuera de rango en BUSCARV).
+• #¡DIV/0! — división por cero. Envolvé con SI.ERROR o agregá SI(denominador=0,"",fórmula).
+• #N/A — valor no encontrado en BUSCARV/BUSCARX. Agregá SI.ERROR o verificá que el valor exista.
+• #¿NOMBRE? — nombre de función mal escrito o rango con nombre inexistente.
+• #¡NUM! — número inválido (ej: raíz de número negativo).
+• #¡NULO! — rango mal especificado (espacio en vez de coma o dos puntos).
+• Referencias circulares: una celda se referencia a sí misma. Menú Fórmulas → Auditoría → Rastrear precedentes.
+
+BUENAS PRÁCTICAS que enseñás:
+• Usá tablas (Ctrl+T) en vez de rangos — se expanden automáticamente y las fórmulas son más legibles.
+• Rangos con nombre para fórmulas más claras (ej: "Ventas" en vez de A2:A100).
+• Separar datos, cálculos y presentación en hojas distintas.
+• Nunca hardcodear valores en fórmulas — usar celdas de parámetros.
+• Proteger hojas con celdas de entrada desbloqueadas para evitar errores accidentales.
 
 CONOCIMIENTO DE ADMINISTRACIÓN DE EMPRESAS:
 Sos especialista en administración de empresas y educás al usuario cuando pregunta o cuando el contexto lo merece. Nunca des un sermón, pero sí explicá conceptos cuando el usuario no sabe algo — claro, simple, con ejemplos en pesos argentinos.
@@ -2012,6 +2062,33 @@ Sin listas. Máximo 8 líneas. Tono cálido, directo y que inspire confianza en 
       const flujoOperativo = (entradas + entradasVentas) - salidas;
       const prestamosAFavor = (data.loans || []).filter(l => l.remaining > 0).reduce((s, l) => s + l.remaining, 0);
       return `💧 *Flujo de Caja — ${MONTH_NAMES[month]} ${year}*\n\n📥 *ENTRADAS*\n   Ingresos: ${fmt(entradas)}${entradasVentas > 0 ? `\n   Ventas: ${fmt(entradasVentas)}` : ''}\n   *Total entradas: ${fmt(entradas + entradasVentas)}*\n\n📤 *SALIDAS*\n   Gastos: ${fmt(salidas)}\n   *Total salidas: ${fmt(salidas)}*\n\n${flujoOperativo >= 0 ? '✅' : '⚠️'} *Flujo operativo: ${fmtSigned(flujoOperativo)}*${prestamosAFavor > 0 ? `\n\n📋 Dinero en la calle (préstamos): ${fmt(prestamosAFavor)}` : ''}\n\n_El flujo de caja refleja el movimiento real de dinero — distinto a la ganancia contable._`;
+    }
+
+    case 'exportar_csv': {
+      const scope = action.scope || 'transacciones';
+      let csv = '';
+      let titulo = '';
+
+      if (scope === 'transacciones' || scope === 'todo') {
+        const txs = data.transactions.slice(-100); // últimas 100
+        titulo = 'Transacciones';
+        csv += `Fecha,Descripción,Tipo,Monto,Categoría\n`;
+        csv += txs.map(t => `${t.date},"${t.description}",${t.type},${t.amount},"${t.category}"`).join('\n');
+      } else if (scope === 'ventas') {
+        const ventas = data.ventas || [];
+        titulo = 'Ventas';
+        csv += `Fecha,Productos,Total,Método de pago\n`;
+        csv += ventas.map(v => `${v.date},"${v.items.map(i => `${i.name} x${i.quantity}`).join(' | ')}",${v.total},${v.paymentMethod}`).join('\n');
+      } else if (scope === 'prestamos') {
+        const loans = data.loans || [];
+        titulo = 'Préstamos';
+        csv += `Nombre,Monto original,Pendiente,Fecha\n`;
+        csv += loans.map(l => `"${l.name}",${l.amount || l.remaining},${l.remaining},${l.createdAt}`).join('\n');
+      }
+
+      if (!csv || csv.split('\n').length <= 1) return `📭 No hay datos de ${titulo.toLowerCase()} para exportar.`;
+
+      return `📊 *Datos listos para Excel — ${titulo}*\n\nCopiá el texto de abajo y pegálo en Excel (o Sheets). Después seleccioná la columna A → Datos → Texto en columnas → Delimitado → Coma.\n\n\`\`\`\n${csv}\n\`\`\`\n\n_Consejo: en Google Sheets podés usar Archivo → Importar y pegar directamente._`;
     }
 
     case 'educacion_financiera': {
