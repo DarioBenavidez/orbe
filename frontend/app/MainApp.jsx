@@ -1849,6 +1849,8 @@ export default function MainApp({ user, onLogout }) {
 
   const [waModal, setWaModal] = useState(false);
   const [waPhone, setWaPhone] = useState('');
+  const [waOtp, setWaOtp] = useState('');
+  const [waStep, setWaStep] = useState(1); // 1: número, 2: código
   const [waLoading, setWaLoading] = useState(false);
   const [waCountry, setWaCountry] = useState({ code: 'ARG', prefix: '549', flag: '🇦🇷' });
   const [waCountryOpen, setWaCountryOpen] = useState(false);
@@ -1877,35 +1879,55 @@ export default function MainApp({ user, onLogout }) {
 
   const connectWhatsApp = () => {
     setWaPhone('');
+    setWaOtp('');
+    setWaStep(1);
     setWaCountryOpen(false);
     setWaModal(true);
   };
 
-  const doConnectWhatsApp = async () => {
+  const doSendOtp = async () => {
     const phone = waCountry.prefix + waPhone.replace(/\D/g, '');
-    if (phone.length < 10) {
-      Alert.alert('Número inválido', 'Ingresá tu número de WhatsApp con código de país (ej: 5491112345678).');
+    if (waPhone.replace(/\D/g, '').length < 6) {
+      Alert.alert('Número inválido', 'Ingresá tu número sin el código de país.');
       return;
     }
     setWaLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) {
-        Alert.alert('Error', 'Sesión no encontrada. Cerrá sesión y volvé a ingresar.');
-        return;
-      }
-      const resp = await fetch(`${BACKEND_URL}/api/generate-link-code`, {
+      if (!session?.access_token) { Alert.alert('Error', 'Sesión no encontrada.'); return; }
+      const resp = await fetch(`${BACKEND_URL}/api/send-phone-otp`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone }),
       });
-      if (!resp.ok) throw new Error('Error generando código');
-      const { code } = await resp.json();
-      setWaModal(false);
-      const waUrl = `https://wa.me/5491125728211?text=${encodeURIComponent(`ORBE:${code}`)}`;
-      Linking.openURL(waUrl).catch(() => Alert.alert('Error', 'No se pudo abrir WhatsApp.'));
+      const body = await resp.json();
+      if (!resp.ok) { Alert.alert('Error', body.error || 'No se pudo enviar el código.'); return; }
+      setWaStep(2);
     } catch {
-      Alert.alert('Error', 'No se pudo generar el código. Verificá tu conexión.');
+      Alert.alert('Error', 'No se pudo enviar el código. Verificá tu conexión.');
+    } finally {
+      setWaLoading(false);
+    }
+  };
+
+  const doVerifyOtp = async () => {
+    if (waOtp.length !== 6) { Alert.alert('Código inválido', 'El código tiene 6 dígitos.'); return; }
+    const phone = waCountry.prefix + waPhone.replace(/\D/g, '');
+    setWaLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) { Alert.alert('Error', 'Sesión no encontrada.'); return; }
+      const resp = await fetch(`${BACKEND_URL}/api/verify-phone-otp`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, otp: waOtp }),
+      });
+      const body = await resp.json();
+      if (!resp.ok) { Alert.alert('Error', body.error || 'Código incorrecto.'); return; }
+      setWaModal(false);
+      Alert.alert('¡Listo!', 'Tu WhatsApp está conectado. Revisá el chat de Orbe.');
+    } catch {
+      Alert.alert('Error', 'No se pudo verificar el código. Intentá de nuevo.');
     } finally {
       setWaLoading(false);
     }
@@ -2037,51 +2059,82 @@ export default function MainApp({ user, onLogout }) {
 
         {/* WhatsApp linking modal */}
         <ModalSheet visible={waModal} onClose={() => { setWaModal(false); setWaCountryOpen(false); }} title="Conectar WhatsApp">
-          <Text style={{ fontSize:13, color:C.textMuted, marginBottom:16, lineHeight:20 }}>
-            Seleccioná tu país e ingresá tu número de WhatsApp sin el código de área.
-          </Text>
+          {waStep === 1 ? (
+            <>
+              <Text style={{ fontSize:13, color:C.textMuted, marginBottom:16, lineHeight:20 }}>
+                Te vamos a enviar un código de verificación a tu WhatsApp para confirmar que el número es tuyo.
+              </Text>
 
-          {/* Country selector */}
-          <Text style={{ fontSize:10, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:0.5, marginBottom:8 }}>País</Text>
-          <TouchableOpacity onPress={() => setWaCountryOpen(o => !o)}
-            style={{ flexDirection:'row', alignItems:'center', justifyContent:'space-between', backgroundColor:C.surface2, borderRadius:14, paddingHorizontal:14, paddingVertical:12, marginBottom:4, borderWidth:1, borderColor: waCountryOpen ? C.gold : C.border }}>
-            <Text style={{ fontSize:15 }}>{waCountry.flag}  {waCountry.code}  <Text style={{ color:C.textMuted, fontSize:13 }}>+{waCountry.prefix}</Text></Text>
-            <Text style={{ color:C.textMuted, fontSize:12 }}>{waCountryOpen ? '▲' : '▼'}</Text>
-          </TouchableOpacity>
+              {/* Country selector */}
+              <Text style={{ fontSize:10, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:0.5, marginBottom:8 }}>País</Text>
+              <TouchableOpacity onPress={() => setWaCountryOpen(o => !o)}
+                style={{ flexDirection:'row', alignItems:'center', justifyContent:'space-between', backgroundColor:C.surface2, borderRadius:14, paddingHorizontal:14, paddingVertical:12, marginBottom:4, borderWidth:1, borderColor: waCountryOpen ? C.gold : C.border }}>
+                <Text style={{ fontSize:15 }}>{waCountry.flag}  {waCountry.code}  <Text style={{ color:C.textMuted, fontSize:13 }}>+{waCountry.prefix}</Text></Text>
+                <Text style={{ color:C.textMuted, fontSize:12 }}>{waCountryOpen ? '▲' : '▼'}</Text>
+              </TouchableOpacity>
+              {waCountryOpen && (
+                <View style={{ backgroundColor:C.surface, borderRadius:14, borderWidth:1, borderColor:C.border, marginBottom:8, maxHeight:200, overflow:'hidden' }}>
+                  <ScrollView showsVerticalScrollIndicator={false}>
+                    {WA_COUNTRIES.map(c => (
+                      <TouchableOpacity key={c.code} onPress={() => { setWaCountry(c); setWaCountryOpen(false); }}
+                        style={{ flexDirection:'row', alignItems:'center', paddingHorizontal:14, paddingVertical:11, borderBottomWidth:1, borderBottomColor:C.border, backgroundColor: waCountry.code === c.code ? C.accentLight : 'transparent' }}>
+                        <Text style={{ fontSize:18, marginRight:10 }}>{c.flag}</Text>
+                        <Text style={{ flex:1, fontSize:14, color:C.text, fontWeight: waCountry.code === c.code ? '700' : '400' }}>{c.name}</Text>
+                        <Text style={{ fontSize:13, color:C.textMuted }}>+{c.prefix}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </View>
+              )}
 
-          {waCountryOpen && (
-            <View style={{ backgroundColor:C.surface, borderRadius:14, borderWidth:1, borderColor:C.border, marginBottom:8, maxHeight:200, overflow:'hidden' }}>
-              <ScrollView showsVerticalScrollIndicator={false}>
-                {WA_COUNTRIES.map(c => (
-                  <TouchableOpacity key={c.code} onPress={() => { setWaCountry(c); setWaCountryOpen(false); }}
-                    style={{ flexDirection:'row', alignItems:'center', paddingHorizontal:14, paddingVertical:11, borderBottomWidth:1, borderBottomColor:C.border, backgroundColor: waCountry.code === c.code ? C.accentLight : 'transparent' }}>
-                    <Text style={{ fontSize:18, marginRight:10 }}>{c.flag}</Text>
-                    <Text style={{ flex:1, fontSize:14, color:C.text, fontWeight: waCountry.code === c.code ? '700' : '400' }}>{c.name}</Text>
-                    <Text style={{ fontSize:13, color:C.textMuted }}>+{c.prefix}</Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-            </View>
+              {/* Phone input */}
+              <Text style={{ fontSize:10, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:0.5, marginBottom:8, marginTop:8 }}>Número</Text>
+              <View style={{ flexDirection:'row', alignItems:'center', backgroundColor:C.surface2, borderRadius:14, paddingHorizontal:14, borderWidth:1, borderColor:C.border, marginBottom:20 }}>
+                <Text style={{ fontSize:14, color:C.textMuted, marginRight:6 }}>+{waCountry.prefix}</Text>
+                <TextInput
+                  style={{ flex:1, fontSize:15, color:C.text, paddingVertical:12 }}
+                  placeholder="Ej: 1112345678"
+                  placeholderTextColor={C.textMuted}
+                  value={waPhone}
+                  onChangeText={setWaPhone}
+                  keyboardType="phone-pad"
+                />
+              </View>
+
+              <View style={{ flexDirection:'row', gap:10 }}>
+                <Btn label="Cancelar" variant="ghost" style={{ flex:1 }} onPress={() => setWaModal(false)}/>
+                <Btn label={waLoading ? 'Enviando...' : 'Enviar código'} style={{ flex:1 }} onPress={doSendOtp} disabled={waLoading}/>
+              </View>
+            </>
+          ) : (
+            <>
+              <Text style={{ fontSize:13, color:C.textMuted, marginBottom:6, lineHeight:20 }}>
+                Te enviamos un código de 6 dígitos al número:
+              </Text>
+              <Text style={{ fontSize:15, fontWeight:'700', color:C.text, marginBottom:20 }}>
+                {waCountry.flag} +{waCountry.prefix} {waPhone}
+              </Text>
+
+              <Text style={{ fontSize:10, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:0.5, marginBottom:8 }}>Código de verificación</Text>
+              <TextInput
+                style={{ backgroundColor:C.surface2, borderRadius:14, paddingHorizontal:14, paddingVertical:14, fontSize:24, color:C.text, letterSpacing:8, textAlign:'center', borderWidth:1, borderColor:C.border, marginBottom:20 }}
+                placeholder="000000"
+                placeholderTextColor={C.textMuted}
+                value={waOtp}
+                onChangeText={v => setWaOtp(v.replace(/\D/g, '').slice(0, 6))}
+                keyboardType="number-pad"
+                maxLength={6}
+              />
+
+              <View style={{ flexDirection:'row', gap:10 }}>
+                <Btn label="Volver" variant="ghost" style={{ flex:1 }} onPress={() => setWaStep(1)}/>
+                <Btn label={waLoading ? 'Verificando...' : 'Verificar'} style={{ flex:1 }} onPress={doVerifyOtp} disabled={waLoading}/>
+              </View>
+              <TouchableOpacity onPress={doSendOtp} style={{ marginTop:16, alignItems:'center' }}>
+                <Text style={{ fontSize:13, color:C.textMuted }}>¿No te llegó? <Text style={{ color:C.gold, fontWeight:'700' }}>Reenviar</Text></Text>
+              </TouchableOpacity>
+            </>
           )}
-
-          {/* Phone input */}
-          <Text style={{ fontSize:10, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:0.5, marginBottom:8, marginTop:8 }}>Número</Text>
-          <View style={{ flexDirection:'row', alignItems:'center', backgroundColor:C.surface2, borderRadius:14, paddingHorizontal:14, borderWidth:1, borderColor:C.border, marginBottom:16 }}>
-            <Text style={{ fontSize:14, color:C.textMuted, marginRight:6 }}>+{waCountry.prefix}</Text>
-            <TextInput
-              style={{ flex:1, fontSize:15, color:C.text, paddingVertical:12 }}
-              placeholder="Ej: 1112345678"
-              placeholderTextColor={C.textMuted}
-              value={waPhone}
-              onChangeText={setWaPhone}
-              keyboardType="phone-pad"
-            />
-          </View>
-
-          <View style={{ flexDirection:'row', gap:10 }}>
-            <Btn label="Cancelar" variant="ghost" style={{ flex:1 }} onPress={() => setWaModal(false)}/>
-            <Btn label={waLoading ? '...' : 'Continuar'} style={{ flex:1 }} onPress={doConnectWhatsApp} disabled={waLoading}/>
-          </View>
         </ModalSheet>
       </View>
     </ThemeCtx.Provider>

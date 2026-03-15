@@ -3220,6 +3220,16 @@ function consumeLinkingCode(code, fromPhone) {
   return entry;
 }
 
+// ── OTP de verificación de teléfono ───────────────────────
+const phoneOTPs = new Map();
+function generatePhoneOTP(userId, userName, phone) {
+  const otp = String(Math.floor(100000 + Math.random() * 900000));
+  const now = Date.now();
+  for (const [k, v] of phoneOTPs) { if (now > v.expires) phoneOTPs.delete(k); }
+  phoneOTPs.set(phone, { otp, userId, userName, expires: now + 10 * 60_000 });
+  return otp;
+}
+
 // ── Seguridad: rate limit por teléfono (en memoria) ──────
 const phoneRateMap = new Map();
 function isPhoneRateLimited(phone) {
@@ -3273,6 +3283,60 @@ app.post('/api/generate-link-code', async (req, res) => {
     res.json({ code });
   } catch (err) {
     console.error('❌ Error generando código:', err.message);
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+// ── API: enviar OTP al WhatsApp del usuario ────────────────
+app.post('/api/send-phone-otp', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) return res.status(401).json({ error: 'No autorizado' });
+  const token = authHeader.slice(7);
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) return res.status(401).json({ error: 'Token inválido' });
+    const phone = (req.body?.phone || '').replace(/\D/g, '');
+    if (phone.length < 10) return res.status(400).json({ error: 'Número inválido' });
+    // Evitar spam: si ya hay un OTP vigente para este número, no generar otro
+    const existing = phoneOTPs.get(phone);
+    if (existing && Date.now() < existing.expires - 9 * 60_000) {
+      return res.status(429).json({ error: 'Ya se envió un código recientemente. Esperá un momento.' });
+    }
+    const userName = user.user_metadata?.full_name || user.user_metadata?.nombre || user.email?.split('@')[0] || 'Usuario';
+    const otp = generatePhoneOTP(user.id, userName, phone);
+    await sendWhatsAppMessage(phone, `🔐 *Tu código de verificación de Orbe es:*\n\n*${otp}*\n\nIngresálo en la app. Expira en 10 minutos.\n\n_Si no lo pediste vos, ignorá este mensaje._`);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('❌ Error enviando OTP:', err.message);
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+// ── API: verificar OTP y vincular teléfono ─────────────────
+app.post('/api/verify-phone-otp', async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) return res.status(401).json({ error: 'No autorizado' });
+  const token = authHeader.slice(7);
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) return res.status(401).json({ error: 'Token inválido' });
+    const phone = (req.body?.phone || '').replace(/\D/g, '');
+    const otp   = (req.body?.otp   || '').trim();
+    const entry = phoneOTPs.get(phone);
+    if (!entry || Date.now() > entry.expires) return res.status(400).json({ error: 'Código expirado. Pedí uno nuevo.' });
+    if (entry.otp !== otp) return res.status(400).json({ error: 'Código incorrecto.' });
+    if (entry.userId !== user.id) return res.status(403).json({ error: 'No autorizado.' });
+    phoneOTPs.delete(phone);
+    await linkPhoneToUser(phone, user.id, entry.userName);
+    const greeting  = getGreeting();
+    const firstName = entry.userName.split(' ')[0];
+    await sendWhatsAppMessage(phone, `✅ *¡${greeting}, ${firstName}! Soy Orbe, tu asistente financiero personal* 🌟\n\nYa estamos conectados. Desde ahora podés registrar gastos, consultar tu balance, pedir el precio del dólar y mucho más, todo por acá sin abrir la app.\n\nProbá con:\n• *"hola"*\n• *"balance"*\n• *"gasté $500 en café"*`);
+    setTimeout(async () => {
+      await sendWhatsAppMessage(phone, `📌 *Un tip rápido:* te recomiendo anclar este chat en WhatsApp para tenerme siempre a mano.\n\nEn Android: mantenés presionado el chat → 📌 Anclar\nEn iPhone: deslizá el chat a la derecha → 📌`);
+    }, 2000);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('❌ Error verificando OTP:', err.message);
     res.status(500).json({ error: 'Error interno' });
   }
 });
