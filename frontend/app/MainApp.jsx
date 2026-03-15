@@ -96,7 +96,7 @@ function Btn({ label, onPress, variant = 'primary', style, disabled }) {
     <TouchableOpacity onPress={onPress} disabled={disabled}
       style={[{ borderRadius:16, padding:15, alignItems:'center', backgroundColor:bg,
         opacity: disabled ? 0.5 : 1,
-        borderWidth: variant==='primary' ? 0 : 1, borderColor: C.border,
+        borderWidth: 1, borderColor: variant==='primary' ? C.gold : C.border,
       }, style]}>
       <Text style={{ fontSize:14, fontWeight:'700', color, letterSpacing:0.2 }}>{label}</Text>
     </TouchableOpacity>
@@ -133,7 +133,7 @@ function Chip({ label, active, onPress, style }) {
     <TouchableOpacity onPress={onPress} style={[{
       paddingHorizontal:15, paddingVertical:8, borderRadius:99,
       backgroundColor: active ? C.accent : C.surface2,
-      borderWidth:1, borderColor: active ? C.accent : C.border,
+      borderWidth:1, borderColor: active ? C.gold : C.border,
     }, style]}>
       <Text style={{ fontSize:12, fontWeight:'700', color: active ? '#fff' : C.textMuted, letterSpacing:0.1 }}>{label}</Text>
     </TouchableOpacity>
@@ -157,6 +157,7 @@ function SubTabs({ tabs, active, onChange }) {
           style={{
             flex:1, paddingVertical:10, borderRadius:12, alignItems:'center',
             backgroundColor: active===t.key ? C.accent : 'transparent',
+            borderWidth: active===t.key ? 1 : 0, borderColor: C.gold,
           }}>
           <Text style={{ fontSize:12, fontWeight:'700', color: active===t.key ? '#fff' : C.textMuted }}>{t.label}</Text>
         </TouchableOpacity>
@@ -192,7 +193,8 @@ function FAB({ onPress }) {
     <TouchableOpacity onPress={onPress} style={{
       position:'absolute', bottom:28, right:20, width:56, height:56, borderRadius:28,
       backgroundColor:C.accent, alignItems:'center', justifyContent:'center',
-      shadowColor:'#6366F1', shadowOffset:{width:0,height:8}, shadowOpacity:0.5, shadowRadius:18, elevation:10,
+      borderWidth:1, borderColor:C.gold,
+      shadowColor: C.gold, shadowOffset:{width:0,height:8}, shadowOpacity:0.4, shadowRadius:18, elevation:10,
     }}>
       <Text style={{ color:'#fff', fontSize:28, lineHeight:32, fontWeight:'300' }}>+</Text>
     </TouchableOpacity>
@@ -522,7 +524,7 @@ function AnalisisTab({ data, onSave }) {
           <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:14 }}>
             <Text style={{ fontSize:15, fontWeight:'700', color:C.text }}>Presupuesto</Text>
             <TouchableOpacity onPress={() => setCatModal(true)}
-              style={{ backgroundColor:C.accent, borderRadius:10, paddingHorizontal:12, paddingVertical:5 }}>
+              style={{ backgroundColor:C.accent, borderRadius:10, paddingHorizontal:12, paddingVertical:5, borderWidth:1, borderColor:C.gold }}>
               <Text style={{ color:'#fff', fontSize:12, fontWeight:'700' }}>+ Nueva</Text>
             </TouchableOpacity>
           </View>
@@ -749,7 +751,7 @@ function AddTxModal({ visible, onClose, data, onSave, editTx }) {
                   onChangeText={setNewCatName}
                 />
                 <TouchableOpacity onPress={addNewCategory}
-                  style={{ backgroundColor:C.accent, borderRadius:12, paddingHorizontal:16, alignItems:'center', justifyContent:'center' }}>
+                  style={{ backgroundColor:C.accent, borderRadius:12, paddingHorizontal:16, alignItems:'center', justifyContent:'center', borderWidth:1, borderColor:C.gold }}>
                   <Text style={{ color:'#fff', fontWeight:'700', fontSize:13 }}>Agregar</Text>
                 </TouchableOpacity>
               </View>
@@ -1109,7 +1111,7 @@ function Proyeccion({ data, onSave }) {
 
       {/* Botón actualizar sueldo */}
       <TouchableOpacity onPress={() => setModal(true)}
-        style={{ backgroundColor:C.accent, borderRadius:14, paddingVertical:13, alignItems:'center', marginBottom:16 }}>
+        style={{ backgroundColor:C.accent, borderRadius:14, paddingVertical:13, alignItems:'center', marginBottom:16, borderWidth:1, borderColor:C.gold }}>
         <Text style={{ color:'#fff', fontWeight:'700', fontSize:14 }}>💼 Actualizar sueldo futuro</Text>
       </TouchableOpacity>
 
@@ -1200,7 +1202,7 @@ function Proyeccion({ data, onSave }) {
                 const sel = fromMonth===m && fromYear===y;
                 return (
                   <TouchableOpacity key={i} onPress={() => { setFromMonth(m); setFromYear(y); }}
-                    style={{ backgroundColor:sel?C.accent:C.surface2, borderRadius:12, paddingVertical:10, paddingHorizontal:14, marginRight:8 }}>
+                    style={{ backgroundColor:sel?C.accent:C.surface2, borderRadius:12, paddingVertical:10, paddingHorizontal:14, marginRight:8, borderWidth:1, borderColor:sel?C.gold:C.border }}>
                     <Text style={{ fontSize:13, fontWeight:'700', color:sel?'#fff':C.textMuted }}>{MONTH_NAMES[m]}</Text>
                     <Text style={{ fontSize:10, color:sel?'#ffffff90':C.textMuted }}>{y}</Text>
                   </TouchableOpacity>
@@ -1214,7 +1216,7 @@ function Proyeccion({ data, onSave }) {
                 <Text style={{ color:C.textMuted, fontWeight:'700' }}>Cancelar</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={saveOverride}
-                style={{ flex:1, backgroundColor:C.accent, borderRadius:14, paddingVertical:14, alignItems:'center' }}>
+                style={{ flex:1, backgroundColor:C.accent, borderRadius:14, paddingVertical:14, alignItems:'center', borderWidth:1, borderColor:C.gold }}>
                 <Text style={{ color:'#fff', fontWeight:'700' }}>Guardar</Text>
               </TouchableOpacity>
             </View>
@@ -1875,7 +1877,7 @@ export default function MainApp({ user, onLogout }) {
         <Modal visible={!!panel} animationType="slide" onRequestClose={() => setPanel(null)}>
           <ThemeCtx.Provider value={C}>
             <View style={{ flex:1, backgroundColor: C.bg }}>
-              <View style={{ backgroundColor: C.accent, paddingTop: 52, paddingBottom: 16, paddingHorizontal: 20, flexDirection:'row', alignItems:'center', gap:12 }}>
+              <View style={{ backgroundColor: C.accent, paddingTop: 52, paddingBottom: 16, paddingHorizontal: 20, flexDirection:'row', alignItems:'center', gap:12, borderBottomWidth:1, borderBottomColor:C.gold }}>
                 <TouchableOpacity onPress={() => setPanel(null)}>
                   <Text style={{ color:'#fff', fontSize:22 }}>←</Text>
                 </TouchableOpacity>
@@ -1913,8 +1915,9 @@ export default function MainApp({ user, onLogout }) {
                     width:52, height:52, borderRadius:26, backgroundColor:C.accent,
                     alignItems:'center', justifyContent:'center',
                     marginTop:-20,
-                    shadowColor:'#6366F1', shadowOffset:{width:0,height:8},
-                    shadowOpacity:0.5, shadowRadius:16, elevation:12,
+                    borderWidth:1, borderColor:C.gold,
+                    shadowColor: C.gold, shadowOffset:{width:0,height:8},
+                    shadowOpacity:0.4, shadowRadius:16, elevation:12,
                   }}>
                     <Text style={{ color:'#fff', fontSize:26, fontWeight:'300', lineHeight:30 }}>+</Text>
                   </View>
