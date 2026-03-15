@@ -3244,7 +3244,7 @@ function generatePhoneOTP(userId, userName, phone) {
   const otp = String(Math.floor(100000 + Math.random() * 900000));
   const now = Date.now();
   for (const [k, v] of phoneOTPs) { if (now > v.expires) phoneOTPs.delete(k); }
-  phoneOTPs.set(phone, { otp, userId, userName, expires: now + 10 * 60_000 });
+  phoneOTPs.set(phone, { otp, userId, userName, expires: now + 1 * 60_000 });
   return otp;
 }
 
@@ -3317,12 +3317,12 @@ app.post('/api/send-phone-otp', async (req, res) => {
     if (phone.length < 10) return res.status(400).json({ error: 'Número inválido' });
     // Evitar spam: si ya hay un OTP vigente para este número, no generar otro
     const existing = phoneOTPs.get(phone);
-    if (existing && Date.now() < existing.expires - 9 * 60_000) {
+    if (existing && Date.now() < existing.expires) {
       return res.status(429).json({ error: 'Ya se envió un código recientemente. Esperá un momento.' });
     }
     const userName = user.user_metadata?.full_name || user.user_metadata?.nombre || user.email?.split('@')[0] || 'Usuario';
     const otp = generatePhoneOTP(user.id, userName, phone);
-    await sendWhatsAppMessage(phone, `🔐 *Tu código de verificación de Orbe es:*\n\n*${otp}*\n\nIngresálo en la app. Expira en 10 minutos.\n\n_Si no lo pediste vos, ignorá este mensaje._`);
+    await sendWhatsAppMessage(phone, `🔐 *Tu código de verificación de Orbe es:*\n\n*${otp}*\n\nIngresálo en la app. Expira en 1 minuto.\n\n_Si no lo pediste vos, ignorá este mensaje._`);
     res.json({ ok: true });
   } catch (err) {
     console.error('❌ Error enviando OTP:', err.message);
@@ -3341,7 +3341,7 @@ app.post('/api/verify-phone-otp', async (req, res) => {
     const phone = (req.body?.phone || '').replace(/\D/g, '');
     const otp   = (req.body?.otp   || '').trim();
     const entry = phoneOTPs.get(phone);
-    if (!entry || Date.now() > entry.expires) return res.status(400).json({ error: 'Código expirado. Pedí uno nuevo.' });
+    if (!entry || Date.now() > entry.expires) return res.status(400).json({ error: 'Código expirado. Pedí uno nuevo en la app.' });
     if (entry.otp !== otp) return res.status(400).json({ error: 'Código incorrecto.' });
     if (entry.userId !== user.id) return res.status(403).json({ error: 'No autorizado.' });
     phoneOTPs.delete(phone);
