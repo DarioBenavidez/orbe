@@ -457,6 +457,7 @@ REGLAS DE INTERPRETACIÓN:
 - "qué vence?", "qué tengo que pagar?", "vencimientos del mes?", "qué me vence este mes?" → consultar_vencimientos (solo próximos del mes actual)
 - "quiero ahorrar X para Y / quiero juntar X para Y / estoy ahorrando para Y" → SIEMPRE agregar_ahorro (target=X, name=Y). NUNCA agregar_evento.
 - "agregá X al ahorro de Y / depositá X en Y / sumá X para Y / puse X en el ahorro" → SIEMPRE depositar_ahorro (keyword=Y, amount=X). NUNCA agregar_transaccion.
+- Si el mensaje anterior fue una confirmación de depósito de ahorro y el usuario responde de dónde salió la plata (ej: "del sueldo", "fue un extra", "vendí algo", "me lo regalaron", "un bono") → conversacion. Respondé con algo breve y empático que reconozca el origen: si es del sueldo destacá la disciplina de apartar una parte, si es un extra celebrá que lo destinó al ahorro en vez de gastarlo. Sin listas, sin asteriscos, máximo 2 líneas.
 - "unir los préstamos de X / consolidar / juntá todo de X" → consolidar_prestamos
 - "cambiá el nombre de X a Y / el préstamo de X se llama Y / guardá como Y en vez de X" → renombrar_prestamo (oldName=X, newName=Y)
 - "quiénes me deben / quiénes tienen deuda / listá los préstamos / mostrá todos los que me deben" → SIEMPRE consultar_todos_prestamos (NUNCA conversacion, NUNCA consultar_prestamo con nombre específico)
@@ -2165,7 +2166,8 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       const tx = { id: Date.now().toString(), type: 'ahorro_meta', description: `Ahorro: ${sv.name}`, amount: monto, category: 'Ahorro', date: today(), savingsId: sv.id };
       await saveData(userId, { ...data, savings, transactions: [...data.transactions, tx] });
       if (sv.current >= sv.target) return `🎉 *¡Meta cumplida!*\n\n🐷 ${sv.name}: ${fmt(sv.current)} / ${fmt(sv.target)} (100%)\n\n¡Llegaste a tu objetivo! ¿Querés crear una nueva meta?`;
-      return `🐷 *Depósito registrado!*\n\n📝 ${sv.name}\n💰 Depositaste: ${fmt(monto)}\n📊 Acumulado: ${fmt(sv.current)} / ${fmt(sv.target)} (${pct}%)\n${pct >= 80 ? '¡Ya casi llegás! 🔥' : `Falta ${fmt(sv.target - sv.current)} para la meta.`}`;
+      const baseMsg = `🐷 *Depósito registrado!*\n\n📝 ${sv.name}\n💰 Depositaste: ${fmt(monto)}\n📊 Acumulado: ${fmt(sv.current)} / ${fmt(sv.target)} (${pct}%)\n${pct >= 80 ? '¡Ya casi llegás! 🔥' : `Falta ${fmt(sv.target - sv.current)} para la meta.`}`;
+      return `${baseMsg}\n\n💬 ¿De dónde salió esa plata? ¿Del sueldo o fue un extra?`;
     }
 
     case 'agregar_deuda': {
