@@ -1850,14 +1850,39 @@ export default function MainApp({ user, onLogout }) {
   const [waModal, setWaModal] = useState(false);
   const [waPhone, setWaPhone] = useState('');
   const [waLoading, setWaLoading] = useState(false);
+  const [waCountry, setWaCountry] = useState({ code: 'ARG', prefix: '549', flag: '🇦🇷' });
+  const [waCountryOpen, setWaCountryOpen] = useState(false);
+
+  const WA_COUNTRIES = [
+    { code: 'ARG', prefix: '549',  flag: '🇦🇷', name: 'Argentina' },
+    { code: 'BOL', prefix: '591',  flag: '🇧🇴', name: 'Bolivia' },
+    { code: 'CHL', prefix: '56',   flag: '🇨🇱', name: 'Chile' },
+    { code: 'COL', prefix: '57',   flag: '🇨🇴', name: 'Colombia' },
+    { code: 'CRI', prefix: '506',  flag: '🇨🇷', name: 'Costa Rica' },
+    { code: 'CUB', prefix: '53',   flag: '🇨🇺', name: 'Cuba' },
+    { code: 'DOM', prefix: '1809', flag: '🇩🇴', name: 'Rep. Dominicana' },
+    { code: 'ECU', prefix: '593',  flag: '🇪🇨', name: 'Ecuador' },
+    { code: 'SLV', prefix: '503',  flag: '🇸🇻', name: 'El Salvador' },
+    { code: 'GTM', prefix: '502',  flag: '🇬🇹', name: 'Guatemala' },
+    { code: 'HND', prefix: '504',  flag: '🇭🇳', name: 'Honduras' },
+    { code: 'MEX', prefix: '52',   flag: '🇲🇽', name: 'México' },
+    { code: 'NIC', prefix: '505',  flag: '🇳🇮', name: 'Nicaragua' },
+    { code: 'PAN', prefix: '507',  flag: '🇵🇦', name: 'Panamá' },
+    { code: 'PRY', prefix: '595',  flag: '🇵🇾', name: 'Paraguay' },
+    { code: 'PER', prefix: '51',   flag: '🇵🇪', name: 'Perú' },
+    { code: 'PRI', prefix: '1787', flag: '🇵🇷', name: 'Puerto Rico' },
+    { code: 'URY', prefix: '598',  flag: '🇺🇾', name: 'Uruguay' },
+    { code: 'VEN', prefix: '58',   flag: '🇻🇪', name: 'Venezuela' },
+  ];
 
   const connectWhatsApp = () => {
     setWaPhone('');
+    setWaCountryOpen(false);
     setWaModal(true);
   };
 
   const doConnectWhatsApp = async () => {
-    const phone = waPhone.replace(/\D/g, '');
+    const phone = waCountry.prefix + waPhone.replace(/\D/g, '');
     if (phone.length < 10) {
       Alert.alert('Número inválido', 'Ingresá tu número de WhatsApp con código de país (ej: 5491112345678).');
       return;
@@ -2011,18 +2036,49 @@ export default function MainApp({ user, onLogout }) {
         </ModalSheet>
 
         {/* WhatsApp linking modal */}
-        <ModalSheet visible={waModal} onClose={() => setWaModal(false)} title="Conectar WhatsApp">
+        <ModalSheet visible={waModal} onClose={() => { setWaModal(false); setWaCountryOpen(false); }} title="Conectar WhatsApp">
           <Text style={{ fontSize:13, color:C.textMuted, marginBottom:16, lineHeight:20 }}>
-            Ingresá tu número de WhatsApp con código de país para que el código de vinculación solo funcione desde ese número.
+            Seleccioná tu país e ingresá tu número de WhatsApp sin el código de área.
           </Text>
-          <Input
-            label="Número de WhatsApp"
-            value={waPhone}
-            onChangeText={setWaPhone}
-            placeholder="Ej: 5491112345678"
-            keyboardType="phone-pad"
-          />
-          <View style={{ flexDirection:'row', gap:10, marginTop:4 }}>
+
+          {/* Country selector */}
+          <Text style={{ fontSize:10, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:0.5, marginBottom:8 }}>País</Text>
+          <TouchableOpacity onPress={() => setWaCountryOpen(o => !o)}
+            style={{ flexDirection:'row', alignItems:'center', justifyContent:'space-between', backgroundColor:C.surface2, borderRadius:14, paddingHorizontal:14, paddingVertical:12, marginBottom:4, borderWidth:1, borderColor: waCountryOpen ? C.gold : C.border }}>
+            <Text style={{ fontSize:15 }}>{waCountry.flag}  {waCountry.code}  <Text style={{ color:C.textMuted, fontSize:13 }}>+{waCountry.prefix}</Text></Text>
+            <Text style={{ color:C.textMuted, fontSize:12 }}>{waCountryOpen ? '▲' : '▼'}</Text>
+          </TouchableOpacity>
+
+          {waCountryOpen && (
+            <View style={{ backgroundColor:C.surface, borderRadius:14, borderWidth:1, borderColor:C.border, marginBottom:8, maxHeight:200, overflow:'hidden' }}>
+              <ScrollView showsVerticalScrollIndicator={false}>
+                {WA_COUNTRIES.map(c => (
+                  <TouchableOpacity key={c.code} onPress={() => { setWaCountry(c); setWaCountryOpen(false); }}
+                    style={{ flexDirection:'row', alignItems:'center', paddingHorizontal:14, paddingVertical:11, borderBottomWidth:1, borderBottomColor:C.border, backgroundColor: waCountry.code === c.code ? C.accentLight : 'transparent' }}>
+                    <Text style={{ fontSize:18, marginRight:10 }}>{c.flag}</Text>
+                    <Text style={{ flex:1, fontSize:14, color:C.text, fontWeight: waCountry.code === c.code ? '700' : '400' }}>{c.name}</Text>
+                    <Text style={{ fontSize:13, color:C.textMuted }}>+{c.prefix}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            </View>
+          )}
+
+          {/* Phone input */}
+          <Text style={{ fontSize:10, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:0.5, marginBottom:8, marginTop:8 }}>Número</Text>
+          <View style={{ flexDirection:'row', alignItems:'center', backgroundColor:C.surface2, borderRadius:14, paddingHorizontal:14, borderWidth:1, borderColor:C.border, marginBottom:16 }}>
+            <Text style={{ fontSize:14, color:C.textMuted, marginRight:6 }}>+{waCountry.prefix}</Text>
+            <TextInput
+              style={{ flex:1, fontSize:15, color:C.text, paddingVertical:12 }}
+              placeholder="Ej: 1112345678"
+              placeholderTextColor={C.textMuted}
+              value={waPhone}
+              onChangeText={setWaPhone}
+              keyboardType="phone-pad"
+            />
+          </View>
+
+          <View style={{ flexDirection:'row', gap:10 }}>
             <Btn label="Cancelar" variant="ghost" style={{ flex:1 }} onPress={() => setWaModal(false)}/>
             <Btn label={waLoading ? '...' : 'Continuar'} style={{ flex:1 }} onPress={doConnectWhatsApp} disabled={waLoading}/>
           </View>
