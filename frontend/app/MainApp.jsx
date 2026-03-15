@@ -308,7 +308,7 @@ function InicioTab({ data, onSave, onMonthPress, nombre, onOpenPanel }) {
         <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:22 }}>
           <View style={{ flex:1, marginRight:10 }}>
             <Text style={{ fontSize:13, color:'#ffffff70', fontWeight:'600', letterSpacing:0.3 }}>{(() => { const h=new Date().getHours(); return h<12?'Buenos días':h<18?'Buenas tardes':'Buenas noches'; })()}</Text>
-            <Text style={{ fontSize:22, fontWeight:'800', color:'#fff', letterSpacing:-0.7, marginTop:2 }} numberOfLines={1} ellipsizeMode="tail">Bienvenido, {nombre}</Text>
+            <Text style={{ fontSize:22, fontWeight:'800', color:'#fff', letterSpacing:-0.7, marginTop:2 }} numberOfLines={1} ellipsizeMode="tail">{nombre}</Text>
           </View>
           <TouchableOpacity onPress={onMonthPress}
             style={{ backgroundColor:'#ffffff15', borderRadius:20, paddingHorizontal:12, paddingVertical:8, borderWidth:1, borderColor:'#ffffff25', flexShrink:0 }}>
