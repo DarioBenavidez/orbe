@@ -3331,10 +3331,7 @@ app.post('/api/verify-phone-otp', async (req, res) => {
     await linkPhoneToUser(phone, user.id, entry.userName);
     const greeting  = getGreeting();
     const firstName = entry.userName.split(' ')[0];
-    await sendWhatsAppMessage(phone, `✅ *¡${greeting}, ${firstName}! Soy Orbe, tu asistente financiero personal* 🌟\n\nYa estamos conectados. Desde ahora podés registrar gastos, consultar tu balance, pedir el precio del dólar y mucho más, todo por acá sin abrir la app.\n\nProbá con:\n• *"hola"*\n• *"balance"*\n• *"gasté $500 en café"*`);
-    setTimeout(async () => {
-      await sendWhatsAppMessage(phone, `📌 *Un tip rápido:* te recomiendo anclar este chat en WhatsApp para tenerme siempre a mano.\n\nEn Android: mantenés presionado el chat → 📌 Anclar\nEn iPhone: deslizá el chat a la derecha → 📌`);
-    }, 2000);
+    await sendWhatsAppMessage(phone, `${greeting}, ${firstName}! Soy *Orbe*, tu asistente financiero personal.\n\nDesde acá podés registrar gastos, consultar tu balance, ver el dólar y mucho más — sin abrir la app.\n\n📌 *Tip:* anclá este chat para tenerme siempre a mano.\nAndroid: presioná el chat → Anclar\niPhone: deslizá el chat a la derecha → 📌\n\n¿Cómo andás?`);
     res.json({ ok: true });
   } catch (err) {
     console.error('❌ Error verificando OTP:', err.message);
@@ -3541,10 +3538,7 @@ Devolvé SOLO el JSON array, sin texto adicional.`;
         const greeting  = getGreeting();
         const firstName = entry.userName ? entry.userName.split(' ')[0] : null;
         const saludo    = firstName ? `${greeting}, ${firstName}` : greeting;
-        await sendWhatsAppMessage(from, `✅ *¡${saludo}! Soy Orbe, tu asistente financiero personal* 🌟\n\nYa estamos conectados. Desde ahora podés registrar gastos, consultar tu balance, pedir el precio del dólar y mucho más, todo por acá sin abrir la app.\n\nProbá con:\n• *"hola"*\n• *"balance"*\n• *"gasté $500 en café"*\n• *"¿a cuánto está el dólar?"*`);
-        setTimeout(async () => {
-          await sendWhatsAppMessage(from, `📌 *Un tip rápido:* te recomiendo anclar este chat en WhatsApp para tenerme siempre a mano.\n\nEn Android: mantenés presionado el chat → 📌 Anclar\nEn iPhone: deslizá el chat a la derecha → 📌\n\n¡Así me encontrás al instante cuando necesites registrar algo!`);
-        }, 2000);
+        await sendWhatsAppMessage(from, `${saludo}! Soy *Orbe*, tu asistente financiero personal.\n\nDesde acá podés registrar gastos, consultar tu balance, ver el dólar y mucho más — sin abrir la app.\n\n📌 *Tip:* anclá este chat para tenerme siempre a mano.\nAndroid: presioná el chat → Anclar\niPhone: deslizá el chat a la derecha → 📌\n\n¿Cómo andás?`);
       } else {
         await sendWhatsAppMessage(from, `❌ Código inválido o expirado. Abrí la app de Orbe y generá un nuevo código desde *Perfil → Conectar WhatsApp*.`);
       }
