@@ -4,6 +4,7 @@ import {
   ScrollView, Dimensions, StyleSheet,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { FontAwesome5 } from '@expo/vector-icons';
 
 const { width, height } = Dimensions.get('window');
 
@@ -36,10 +37,11 @@ const SLIDES = [
     accent:  '#C9A84C',
   },
   {
-    icon:    '💬',
+    icon:    null,
+    whatsapp: true,
     title:   'Hablá con Orbe por WhatsApp',
     body:    'Registrá un gasto, consultá tu balance o pedí el precio del dólar sin abrir la app. Solo escribile a Orbe.',
-    accent:  '#E8C97A',
+    accent:  '#25D366',
   },
 ];
 
@@ -88,7 +90,10 @@ export default function OnboardingScreen({ onDone }) {
         {SLIDES.map((slide, i) => (
           <View key={i} style={s.slide}>
             <View style={[s.iconCircle, { borderColor: slide.accent }]}>
-              <Text style={s.iconText}>{slide.icon}</Text>
+              {slide.whatsapp
+                ? <FontAwesome5 name="whatsapp" size={52} color="#25D366" solid/>
+                : <Text style={s.iconText}>{slide.icon}</Text>
+              }
             </View>
             <Text style={s.title}>{slide.title}</Text>
             <Text style={s.body}>{slide.body}</Text>
