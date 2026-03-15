@@ -1766,27 +1766,27 @@ function PerfilTab({ user, onLogout, connectWhatsApp, dark, setDark, data }) {
           <View style={{ height:40 }}/>
         </ScrollView>
       </View>
+
+      {/* Modal: Editar nombre */}
+      <ModalSheet visible={editNameModal} onClose={() => setEditNameModal(false)} title="Editar nombre">
+        <Input label="Nombre" value={editNombre} onChangeText={setEditNombre} placeholder="Tu nombre"/>
+        <Input label="Apellido" value={editApellido} onChangeText={setEditApellido} placeholder="Tu apellido"/>
+        <View style={{ flexDirection:'row', gap:10, marginTop:4 }}>
+          <Btn label="Cancelar" variant="ghost" style={{ flex:1 }} onPress={() => setEditNameModal(false)}/>
+          <Btn label={savingName ? '...' : 'Guardar'} style={{ flex:1 }} onPress={saveNombre}/>
+        </View>
+      </ModalSheet>
+
+      {/* Modal: Cambiar contraseña */}
+      <ModalSheet visible={pwModal} onClose={() => setPwModal(false)} title="Cambiar contraseña">
+        <Input label="Nueva contraseña" value={pwNew} onChangeText={setPwNew} placeholder="Mínimo 8 caracteres" secureTextEntry/>
+        <Input label="Repetir contraseña" value={pwConfirm} onChangeText={setPwConfirm} placeholder="Repetí la contraseña" secureTextEntry/>
+        <View style={{ flexDirection:'row', gap:10, marginTop:4 }}>
+          <Btn label="Cancelar" variant="ghost" style={{ flex:1 }} onPress={() => setPwModal(false)}/>
+          <Btn label={savingPw ? '...' : 'Guardar'} style={{ flex:1 }} onPress={changePassword}/>
+        </View>
+      </ModalSheet>
     </View>
-
-    {/* Modal: Editar nombre */}
-    <ModalSheet visible={editNameModal} onClose={() => setEditNameModal(false)} title="Editar nombre">
-      <Input label="Nombre" value={editNombre} onChangeText={setEditNombre} placeholder="Tu nombre"/>
-      <Input label="Apellido" value={editApellido} onChangeText={setEditApellido} placeholder="Tu apellido"/>
-      <View style={{ flexDirection:'row', gap:10, marginTop:4 }}>
-        <Btn label="Cancelar" variant="ghost" style={{ flex:1 }} onPress={() => setEditNameModal(false)}/>
-        <Btn label={savingName ? '...' : 'Guardar'} style={{ flex:1 }} onPress={saveNombre}/>
-      </View>
-    </ModalSheet>
-
-    {/* Modal: Cambiar contraseña */}
-    <ModalSheet visible={pwModal} onClose={() => setPwModal(false)} title="Cambiar contraseña">
-      <Input label="Nueva contraseña" value={pwNew} onChangeText={setPwNew} placeholder="Mínimo 8 caracteres" secureTextEntry/>
-      <Input label="Repetir contraseña" value={pwConfirm} onChangeText={setPwConfirm} placeholder="Repetí la contraseña" secureTextEntry/>
-      <View style={{ flexDirection:'row', gap:10, marginTop:4 }}>
-        <Btn label="Cancelar" variant="ghost" style={{ flex:1 }} onPress={() => setPwModal(false)}/>
-        <Btn label={savingPw ? '...' : 'Guardar'} style={{ flex:1 }} onPress={changePassword}/>
-      </View>
-    </ModalSheet>
   );
 }
 
