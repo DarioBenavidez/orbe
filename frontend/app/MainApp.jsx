@@ -79,10 +79,10 @@ function Card({ children, style }) {
   return (
     <View style={[{
       backgroundColor: C.surface, borderRadius: 20, padding: 18,
-      shadowColor: C.dark ? '#000' : '#6366F1',
-      shadowOffset: { width:0, height:4 },
-      shadowOpacity: C.dark ? 0.35 : 0.06, shadowRadius: 16,
-      elevation: 4, borderWidth: 1, borderColor: C.border,
+      shadowColor: C.dark ? '#000' : '#005247',
+      shadowOffset: { width:0, height:6 },
+      shadowOpacity: C.dark ? 0.5 : 0.12, shadowRadius: 20,
+      elevation: 8, borderWidth: 1, borderColor: C.border,
     }, style]}>
       {children}
     </View>
@@ -355,7 +355,7 @@ function InicioTab({ data, onSave, onMonthPress, nombre, onOpenPanel }) {
               { key:'proyeccion', label:'Proyección', icon:'📈' },
             ].map(m => (
               <TouchableOpacity key={m.key} onPress={() => onOpenPanel(m.key)}
-                style={{ backgroundColor:C.accent, borderWidth:1, borderColor:C.gold, borderRadius:16, padding:14, marginRight:10, alignItems:'center', width:90 }}>
+                style={{ backgroundColor:C.accent, borderWidth:1, borderColor:C.gold, borderRadius:16, padding:14, marginRight:10, alignItems:'center', width:90, shadowColor:'#C9A84C', shadowOffset:{ width:0, height:4 }, shadowOpacity:0.25, shadowRadius:8, elevation:6 }}>
                 <Text style={{ fontSize:24 }}>{m.icon}</Text>
                 <Text style={{ fontSize:11, color:'#fff', fontWeight:'700', marginTop:6, textAlign:'center' }}>{m.label}</Text>
               </TouchableOpacity>
