@@ -7,6 +7,7 @@ import {
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { LinearGradient } from 'expo-linear-gradient';
+import { FontAwesome5 } from '@expo/vector-icons';
 import { loadData, saveData, supabase, BACKEND_URL } from '../constants/supabase';
 
 
@@ -1962,7 +1963,10 @@ export default function MainApp({ user, onLogout }) {
                 ) : (
                   <>
                     <View style={{ alignItems:'center', justifyContent:'center', height:34 }}>
-                      <Text style={{ fontSize:22, opacity: isActive ? 1 : 0.35 }}>{t.icon}</Text>
+                      {t.key === '__whatsapp__'
+                        ? <FontAwesome5 name="whatsapp" size={24} color={isActive ? '#25D366' : C.textMuted} solid/>
+                        : <Text style={{ fontSize:22, opacity: isActive ? 1 : 0.35 }}>{t.icon}</Text>
+                      }
                     </View>
                     <Text style={{ fontSize:10, fontWeight:'700', color: isActive ? C.accent : C.textMuted, marginTop:2, letterSpacing:0.2 }}>{t.label}</Text>
                     {isActive && <View style={{ width:4, height:4, borderRadius:2, backgroundColor:C.accent, marginTop:3 }}/>}
