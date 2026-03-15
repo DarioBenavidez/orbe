@@ -307,7 +307,6 @@ function InicioTab({ data, onSave, onMonthPress, nombre, onOpenPanel }) {
           <View>
             <Text style={{ fontSize:13, color:'#ffffff70', fontWeight:'600', letterSpacing:0.3 }}>{(() => { const h=new Date().getHours(); return h<12?'Buenos días':h<18?'Buenas tardes':'Buenas noches'; })()}</Text>
             <Text style={{ fontSize:24, fontWeight:'800', color:'#fff', letterSpacing:-0.7, marginTop:2 }}>Bienvenido, {nombre}</Text>
-            <Text style={{ fontSize:15, fontWeight:'700', color:'#ffffffcc', marginTop:4 }}>Balance mensual</Text>
           </View>
           <TouchableOpacity onPress={onMonthPress}
             style={{ backgroundColor:'#ffffff15', borderRadius:20, paddingHorizontal:14, paddingVertical:8, borderWidth:1, borderColor:'#ffffff25' }}>
@@ -341,20 +340,6 @@ function InicioTab({ data, onSave, onMonthPress, nombre, onOpenPanel }) {
       </>
     }>
       <ScrollView contentContainerStyle={{ padding:16, paddingTop:20 }} showsVerticalScrollIndicator={false}>
-        {/* Quick stats */}
-        <View style={{ flexDirection:'row', gap:10, marginBottom:16 }}>
-          {[
-            { label:'Ahorros', val:totalSavings, icon:'🐷' },
-            { label:'Deudas', val:totalDebt, icon:'💳' },
-          ].map(k => (
-            <View key={k.label} style={{ flex:1, backgroundColor:C.accent, borderWidth:1, borderColor:C.gold, borderRadius:16, padding:12 }}>
-              <Text style={{ fontSize:20, marginBottom:6 }}>{k.icon}</Text>
-              <Text style={{ fontSize:9, fontWeight:'700', color:C.goldLight, textTransform:'uppercase', letterSpacing:1 }}>{k.label}</Text>
-              <Text style={{ fontSize:18, fontWeight:'800', color:'#FFFFFF', marginTop:4, letterSpacing:-0.5 }}>{fmt(k.val)}</Text>
-            </View>
-          ))}
-        </View>
-
         {/* Module strip */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:16 }}>
           {[
