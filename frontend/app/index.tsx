@@ -1,9 +1,11 @@
 import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet, Alert, Image } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { supabase } from '../constants/supabase';
 import LoginScreen from './LoginScreen';
 import MainApp from './MainApp';
+import OnboardingScreen from './OnboardingScreen';
 
 const C = {
   green: '#005247', gold: '#C9A84C', bg: '#005247',
@@ -15,8 +17,12 @@ export default function Index() {
   const [loading, setLoading] = useState(true);
   const [locked, setLocked] = useState(false);
   const [bioAvailable, setBioAvailable] = useState(false);
+  const [onboarded, setOnboarded] = useState<boolean | null>(null);
 
   useEffect(() => {
+    // Check if onboarded
+    AsyncStorage.getItem('orbe_onboarded').then(v => setOnboarded(v === '1'));
+
     // Check biometric availability
     LocalAuthentication.hasHardwareAsync().then(has => {
       if (has) LocalAuthentication.isEnrolledAsync().then(setBioAvailable);
@@ -68,12 +74,14 @@ export default function Index() {
     ]);
   };
 
-  if (loading) return (
+  if (onboarded === null || loading) return (
     <View style={s.center}>
       <Image source={require('../assets/images/orbe-logo.png')} style={{ width: 180, height: 72 }} resizeMode="contain"/>
       <ActivityIndicator size="large" color={C.gold} style={{ marginTop: 40 }}/>
     </View>
   );
+
+  if (!onboarded) return <OnboardingScreen onDone={() => setOnboarded(true)} />;
 
   if (!user) return <LoginScreen onLogin={setUser} />;
 
