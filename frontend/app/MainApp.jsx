@@ -425,8 +425,14 @@ function AnalisisTab({ data, onSave }) {
   const [editCat, setEditCat]   = useState(null);
   const ICON_OPTIONS = ['🏠','🛒','🚗','💊','🎬','👗','📚','💡','💳','📦','🍕','✈️','🐾','🏋️','🎮','💈','🌿','🎁','🏖️','💰'];
 
-  const updateLimit = (cat, val) =>
-    onSave({ ...data, budgets:data.budgets.map(b => b.cat===cat ? { ...b, limit:parseFloat(val)||0 } : b) });
+  const updateLimit = (cat, val) => {
+    const limit = parseFloat(val) || 0;
+    const exists = data.budgets.some(b => b.cat === cat);
+    const budgets = exists
+      ? data.budgets.map(b => b.cat === cat ? { ...b, limit } : b)
+      : [...data.budgets, { cat, limit }];
+    onSave({ ...data, budgets });
+  };
   const addCategory = () => {
     if (!catForm.name.trim()) return;
     const key = catForm.name.trim();
@@ -528,7 +534,8 @@ function AnalisisTab({ data, onSave }) {
               <Text style={{ color:'#fff', fontSize:12, fontWeight:'700' }}>+ Nueva</Text>
             </TouchableOpacity>
           </View>
-          {data.budgets.map(b => {
+          {Object.keys(cats).map(cat => {
+            const b = data.budgets.find(x => x.cat === cat) || { cat, limit: 0 };
             const spent = expByCat[b.cat] || 0;
             const pct   = b.limit > 0 ? Math.min((spent/b.limit)*100, 100) : 0;
             const over  = b.limit > 0 && spent > b.limit;
