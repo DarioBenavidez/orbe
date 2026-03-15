@@ -266,7 +266,7 @@ function ScreenWithHeader({ header, children }) {
       <View style={{ paddingTop:56, paddingHorizontal:22, paddingBottom:30 }}>
         {header}
       </View>
-      <View style={{ flex:1, backgroundColor:C.bg, borderTopLeftRadius:32, borderTopRightRadius:32, overflow:'hidden' }}>
+      <View style={{ flex:1, backgroundColor:C.bg, borderTopLeftRadius:32, borderTopRightRadius:32, overflow:'hidden', borderTopWidth:1, borderColor:C.gold }}>
         {children}
       </View>
     </View>
@@ -306,13 +306,13 @@ function InicioTab({ data, onSave, onMonthPress, nombre, onOpenPanel }) {
     <ScreenWithHeader header={
       <>
         <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:22 }}>
-          <View>
+          <View style={{ flex:1, marginRight:10 }}>
             <Text style={{ fontSize:13, color:'#ffffff70', fontWeight:'600', letterSpacing:0.3 }}>{(() => { const h=new Date().getHours(); return h<12?'Buenos días':h<18?'Buenas tardes':'Buenas noches'; })()}</Text>
-            <Text style={{ fontSize:24, fontWeight:'800', color:'#fff', letterSpacing:-0.7, marginTop:2 }}>Bienvenido, {nombre}</Text>
+            <Text style={{ fontSize:22, fontWeight:'800', color:'#fff', letterSpacing:-0.7, marginTop:2 }} numberOfLines={1} ellipsizeMode="tail">Bienvenido, {nombre}</Text>
           </View>
           <TouchableOpacity onPress={onMonthPress}
-            style={{ backgroundColor:'#ffffff15', borderRadius:20, paddingHorizontal:14, paddingVertical:8, borderWidth:1, borderColor:'#ffffff25' }}>
-            <Text style={{ color:'#ffffffcc', fontSize:13, fontWeight:'700' }}>{today} / {MONTH_NAMES[data.selectedMonth]} / {data.selectedYear} ▾</Text>
+            style={{ backgroundColor:'#ffffff15', borderRadius:20, paddingHorizontal:12, paddingVertical:8, borderWidth:1, borderColor:'#ffffff25', flexShrink:0 }}>
+            <Text style={{ color:'#ffffffcc', fontSize:12, fontWeight:'700' }}>{today} / {MONTH_NAMES[data.selectedMonth]} / {data.selectedYear} ▾</Text>
           </TouchableOpacity>
         </View>
         <View style={{ marginBottom:6 }}>
@@ -343,7 +343,7 @@ function InicioTab({ data, onSave, onMonthPress, nombre, onOpenPanel }) {
     }>
       <ScrollView contentContainerStyle={{ padding:16, paddingTop:20 }} showsVerticalScrollIndicator={false}>
         {/* Module strip */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:16 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:16 }} contentContainerStyle={{ paddingHorizontal:4 }}>
           {[
             { key:'ahorros',    label:'Ahorros',    icon:'🐷' },
             { key:'deudas',     label:'Deudas',     icon:'💳' },
@@ -664,6 +664,7 @@ function AddTxModal({ visible, onClose, data, onSave, editTx }) {
   const TYPES = [
     { key:'gasto', label:'Gasto' }, { key:'ingreso', label:'Ingreso' },
     { key:'sueldo', label:'Sueldo 💼' }, { key:'ahorro_meta', label:'Ahorro 🐷' },
+    { key:'presupuesto', label:'Presupuesto' },
   ];
   const emptyForm = { type:'gasto', description:'', amount:'', category:'', date: new Date().toISOString().split('T')[0], savingsId:'' };
   const [form, setForm] = useState(emptyForm);
@@ -686,6 +687,19 @@ function AddTxModal({ visible, onClose, data, onSave, editTx }) {
   };
 
   const saveTx = () => {
+    if (form.type === 'presupuesto') {
+      if (!form.category) return Alert.alert('Categoría requerida', 'Seleccioná una categoría para el presupuesto');
+      if (!form.amount || parseFloat(form.amount) <= 0) return Alert.alert('Error', 'Ingresá un monto válido');
+      const amt = parseFloat(form.amount);
+      const existingBudgets = data.budgets || [];
+      const updated = existingBudgets.some(b => b.cat === form.category)
+        ? existingBudgets.map(b => b.cat === form.category ? { ...b, limit: amt } : b)
+        : [...existingBudgets, { cat: form.category, limit: amt }];
+      onSave({ ...data, budgets: updated });
+      onClose();
+      setForm(emptyForm);
+      return;
+    }
     if (!form.description.trim()) return Alert.alert('Error', 'Ingresá una descripción');
     if (!form.amount || parseFloat(form.amount) <= 0) return Alert.alert('Error', 'Ingresá un monto válido');
     if ((form.type==='gasto'||form.type==='ingreso') && !form.category) return Alert.alert('Categoría requerida', 'Seleccioná una categoría para continuar');
@@ -710,7 +724,7 @@ function AddTxModal({ visible, onClose, data, onSave, editTx }) {
     setForm(emptyForm);
   };
 
-  const needsCategory = form.type==='gasto' || form.type==='ingreso';
+  const needsCategory = form.type==='gasto' || form.type==='ingreso' || form.type==='presupuesto';
   const currentCats = data.categories || DEFAULT_CATEGORIES;
 
   return (
@@ -728,7 +742,9 @@ function AddTxModal({ visible, onClose, data, onSave, editTx }) {
         <Input label="Monto" value={form.amount} onChangeText={v => setForm(f => ({ ...f, amount:v }))} placeholder="0" keyboardType="numeric" prefix="$"/>
 
         {/* Description */}
-        <Input label="Descripción" value={form.description} onChangeText={v => setForm(f => ({ ...f, description:v }))} placeholder="Ej: Supermercado, Netflix..."/>
+        {form.type !== 'presupuesto' && (
+          <Input label="Descripción" value={form.description} onChangeText={v => setForm(f => ({ ...f, description:v }))} placeholder="Ej: Supermercado, Netflix..."/>
+        )}
 
         {/* Category - only for gasto/ingreso, MANDATORY */}
         {needsCategory && (
@@ -1692,7 +1708,7 @@ function PerfilTab({ user, onLogout, connectWhatsApp, dark, setDark, data }) {
       </View>
 
       {/* Content */}
-      <View style={{ flex:1, backgroundColor:C.bg, borderTopLeftRadius:32, borderTopRightRadius:32, overflow:'hidden' }}>
+      <View style={{ flex:1, backgroundColor:C.bg, borderTopLeftRadius:32, borderTopRightRadius:32, overflow:'hidden', borderTopWidth:1, borderColor:C.gold }}>
         <ScrollView contentContainerStyle={{ padding:20 }} showsVerticalScrollIndicator={false}>
 
 
@@ -1781,9 +1797,9 @@ function PerfilTab({ user, onLogout, connectWhatsApp, dark, setDark, data }) {
 const TABS = [
   { key:'inicio',        label:'Inicio',    icon:'🏠' },
   { key:'analisis',      label:'Análisis',  icon:'📊' },
-  { key:'__add__',       label:'',          icon:'+' },
   { key:'__whatsapp__',  label:'WhatsApp',  icon:'💬' },
   { key:'perfil',        label:'Perfil',    icon:'👤' },
+  { key:'__add__',       label:'',          icon:'+' },
 ];
 
 // ── Main ───────────────────────────────────────────────────────
