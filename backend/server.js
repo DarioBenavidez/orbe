@@ -1200,8 +1200,18 @@ NUNCA devuelvas texto fuera del JSON. Devolvé SOLO el JSON.`;
 
   const text = await callClaude(systemPrompt, history, userMessage);
   try { return JSON.parse(text); } catch {
-    const match = text.match(/\{[\s\S]*\}/);
-    if (match) return JSON.parse(match[0]);
+    // Extraer el primer objeto JSON balanceado (ignora texto extra antes/después)
+    const start = text.indexOf('{');
+    if (start !== -1) {
+      let depth = 0;
+      for (let i = start; i < text.length; i++) {
+        if (text[i] === '{') depth++;
+        else if (text[i] === '}') { depth--; if (depth === 0) {
+          try { return JSON.parse(text.slice(start, i + 1)); } catch {}
+          break;
+        }}
+      }
+    }
     return { type: 'conversacion', respuesta: text };
   }
 }
