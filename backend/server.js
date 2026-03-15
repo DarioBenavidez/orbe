@@ -67,6 +67,12 @@ function fmt(n) {
 function fmtSigned(n) {
   return (n < 0 ? '-' : '') + fmt(n);
 }
+function fmtDate(dateStr) {
+  // "2026-03-21" → "21 de marzo"
+  const MESES = ['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+  const [, m, d] = dateStr.split('-').map(Number);
+  return `${d} de ${MESES[m - 1]}`;
+}
 function getGreeting() {
   const hour = arNow().getHours();
   if (hour >= 6 && hour < 12) return 'Buenos días';
@@ -524,7 +530,7 @@ REGLAS DE INTERPRETACIÓN:
 - "qué es X / explicame X / no entiendo X / cómo funciona X" donde X es un concepto de administración → educacion_financiera (concepto: el término más cercano de la lista)
 - "exportá mis datos a Excel / pasame en Excel / quiero un CSV / exportar transacciones" → exportar_csv
 - "tengo turno / agendá un turno / tengo cita / tengo que ir al médico/banco/trámite el [fecha]" → agendar_turno (description: descripción del turno, date: fecha resuelta YYYY-MM-DD, time: hora si la menciona, location: lugar si lo menciona, turnoType: inferilo del contexto)
-- "qué turnos tengo / mis turnos / agenda / compromisos" → consultar_turnos
+- "qué turnos tengo / mis turnos / agenda / compromisos / cuántos turnos tengo / tengo algún turno" → consultar_turnos
 - "cancelá el turno de X / borrá el turno del médico / ya no voy al turno de X" → cancelar_turno (scope: "transacciones" por defecto, "ventas" si habla de ventas, "prestamos" si habla de préstamos, "todo" si quiere todo)
 - Preguntas sobre Excel (fórmulas, errores, tablas dinámicas, Power Query, atajos, etc.) → conversacion (Orbe responde como experta en Excel con ejemplos concretos)
 
@@ -2726,7 +2732,7 @@ Sin listas. Máximo 8 líneas. Tono cálido, directo y que inspire confianza en 
       const emoji = typeEmoji[turno.turnoType] || '📅';
       const daysUntil = Math.round((new Date(turno.date) - new Date(today())) / (1000 * 60 * 60 * 24));
       const whenText = daysUntil === 0 ? '¡es hoy!' : daysUntil === 1 ? 'es mañana' : daysUntil === 2 ? 'es pasado mañana' : `en ${daysUntil} días`;
-      return `${emoji} *Turno agendado!*\n\n📝 ${turno.description}\n📅 ${turno.date}${turno.time ? ` a las ${turno.time}hs` : ''}${turno.location ? `\n📍 ${turno.location}` : ''}\n\n⏰ ${whenText} — te aviso 2 días antes.`;
+      return `${emoji} *Turno agendado!*\n\n📝 ${turno.description}\n📅 ${fmtDate(turno.date)}${turno.time ? ` a las ${turno.time}hs` : ''}${turno.location ? `\n📍 ${turno.location}` : ''}\n\n⏰ ${whenText} — te aviso 2 días antes.`;
     }
 
     case 'consultar_turnos': {
@@ -2739,7 +2745,7 @@ Sin listas. Máximo 8 líneas. Tono cálido, directo y que inspire confianza en 
       const lines = proximos.map(t => {
         const emoji = typeEmoji[t.turnoType] || '📅';
         const daysUntil = Math.round((new Date(t.date) - new Date(today())) / (1000 * 60 * 60 * 24));
-        const tag = daysUntil === 0 ? '🔴 HOY' : daysUntil === 1 ? '🟡 Mañana' : daysUntil === 2 ? '🟠 Pasado mañana' : `📅 ${t.date}`;
+        const tag = daysUntil === 0 ? '🔴 HOY' : daysUntil === 1 ? '🟡 Mañana' : daysUntil === 2 ? '🟠 Pasado mañana' : `📅 ${fmtDate(t.date)}`;
         return `${emoji} *${t.description}*\n   ${tag}${t.time ? ` a las ${t.time}hs` : ''}${t.location ? ` — ${t.location}` : ''}`;
       });
       return `📅 *Tus próximos turnos*\n\n${lines.join('\n\n')}`;
