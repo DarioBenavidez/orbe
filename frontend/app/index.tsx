@@ -6,6 +6,7 @@ import { supabase } from '../constants/supabase';
 import LoginScreen from './LoginScreen';
 import MainApp from './MainApp';
 import OnboardingScreen from './OnboardingScreen';
+import FinancialOnboardingScreen from './FinancialOnboardingScreen';
 
 const C = {
   green: '#005247', gold: '#C9A84C', bg: '#005247',
@@ -17,11 +18,12 @@ export default function Index() {
   const [loading, setLoading] = useState(true);
   const [locked, setLocked] = useState(false);
   const [bioAvailable, setBioAvailable] = useState(false);
-  const [onboarded, setOnboarded] = useState<boolean | null>(null);
-
+  const [onboarded, setOnboarded]           = useState<boolean | null>(null);
+  const [financialOnboarded, setFinancialOnboarded] = useState<boolean | null>(null);
   useEffect(() => {
     // Check if onboarded
     AsyncStorage.getItem('orbe_onboarded').then(v => setOnboarded(v === '1'));
+    AsyncStorage.getItem('orbe_financial_onboarded').then(v => setFinancialOnboarded(v === '1'));
 
     // Check biometric availability
     LocalAuthentication.hasHardwareAsync().then(has => {
@@ -74,7 +76,7 @@ export default function Index() {
     ]);
   };
 
-  if (onboarded === null || loading) return (
+  if (onboarded === null || financialOnboarded === null || loading) return (
     <View style={s.center}>
       <Image source={require('../assets/images/orbe-logo.png')} style={{ width: 180, height: 72 }} resizeMode="contain"/>
       <ActivityIndicator size="large" color={C.gold} style={{ marginTop: 40 }}/>
@@ -84,6 +86,13 @@ export default function Index() {
   if (!onboarded) return <OnboardingScreen onDone={() => setOnboarded(true)} />;
 
   if (!user) return <LoginScreen onLogin={setUser} />;
+
+  if (user && !financialOnboarded) return (
+    <FinancialOnboardingScreen
+      user={user}
+      onDone={() => setFinancialOnboarded(true)}
+    />
+  );
 
   if (locked) return (
     <View style={s.center}>

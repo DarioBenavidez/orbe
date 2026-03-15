@@ -124,32 +124,31 @@ export default function LoginScreen({ onLogin }) {
     setLoading(false);
   };
 
-  const handleOAuth = async (provider) => {
+
+  const handleOAuth = async () => {
     try {
-      const redirectTo = 'orbe://auth/callback';
+      const redirectTo = 'orbe://';
       const { data, error } = await supabase.auth.signInWithOAuth({
-        provider,
+        provider: 'google',
         options: { redirectTo, skipBrowserRedirect: true },
       });
       if (error) throw error;
       if (!data?.url) return;
-
       const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-      if (result.type !== 'success') return;
-
-      // Extraer el code del URL de callback y canjearlo por sesión
-      const url = result.url;
-      const codeMatch = url.match(/[?&]code=([^&]+)/);
-      const code = codeMatch?.[1];
-      if (code) {
-        const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
-        if (sessionError) throw sessionError;
-        if (sessionData?.session?.user) { onLogin(sessionData.session.user); return; }
+      if (result.type === 'success' && result.url) {
+        const { queryParams } = Linking.parse(result.url);
+        const code = queryParams?.code;
+        if (code) {
+          const { data: sessionData, error: sessionError } =
+            await supabase.auth.exchangeCodeForSession(code);
+          if (sessionError) throw sessionError;
+          if (sessionData?.session?.user) { onLogin(sessionData.session.user); return; }
+        }
       }
-      // Fallback
+      // Fallback: el _layout.tsx puede haber creado la sesión via deep link
+      await new Promise(r => setTimeout(r, 1000));
       const { data: fallback } = await supabase.auth.getSession();
       if (fallback?.session?.user) onLogin(fallback.session.user);
-      else setError('No se pudo completar el inicio de sesión. Intentá de nuevo.');
     } catch {
       setError('No se pudo iniciar sesión con Google. Intentá de nuevo.');
     }
@@ -260,15 +259,16 @@ export default function LoginScreen({ onLogin }) {
             }
           </TouchableOpacity>
 
-          {/* OAuth (solo login/register) */}
-          {!isReset && (
+
+          {/* OAuth (solo registro) */}
+          {isRegister && (
             <>
               <View style={styles.divider}>
                 <View style={styles.dividerLine}/>
                 <Text style={styles.dividerText}>o continuá con</Text>
                 <View style={styles.dividerLine}/>
               </View>
-              <OAuthBtn icon="G" label="Continuar con Google" color={C.red} onPress={() => handleOAuth('google')}/>
+              <OAuthBtn icon="G" label="Continuar con Google" color={C.red} onPress={handleOAuth}/>
             </>
           )}
 

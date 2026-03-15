@@ -278,10 +278,33 @@ function ScreenWithHeader({ header, children }) {
 // ── Inicio Tab ─────────────────────────────────────────────────
 function InicioTab({ data, onSave, onMonthPress, nombre, onOpenPanel }) {
   const C = useC();
+  const [txFilter, setTxFilter] = useState('mes');
   const txs = data.transactions.filter(t => {
     const { month, year } = parseDateParts(t.date);
     return month === data.selectedMonth && year === data.selectedYear;
   });
+
+  const filteredTxs = (() => {
+    if (txFilter === 'semana') {
+      const now = new Date();
+      const day = now.getDay() === 0 ? 6 : now.getDay() - 1; // Monday=0
+      const mon = new Date(now); mon.setDate(now.getDate() - day); mon.setHours(0,0,0,0);
+      const sun = new Date(mon); sun.setDate(mon.getDate() + 6); sun.setHours(23,59,59,999);
+      return data.transactions.filter(t => {
+        const d = new Date(t.date + 'T00:00:00');
+        return d >= mon && d <= sun;
+      });
+    }
+    if (txFilter === 'anterior') {
+      const m = data.selectedMonth === 0 ? 11 : data.selectedMonth - 1;
+      const y = data.selectedMonth === 0 ? data.selectedYear - 1 : data.selectedYear;
+      return data.transactions.filter(t => {
+        const { month, year } = parseDateParts(t.date);
+        return month === m && year === y;
+      });
+    }
+    return txs; // 'mes'
+  })();
   const totalIncome  = txs.filter(t => t.type==='ingreso'||t.type==='sueldo').reduce((a,t) => a+t.amount, 0);
   const totalExpense = txs.filter(t => t.type==='gasto').reduce((a,t) => a+t.amount, 0);
   const totalBudget  = data.budgets.reduce((s,b) => s+b.limit, 0);
@@ -405,11 +428,24 @@ function InicioTab({ data, onSave, onMonthPress, nombre, onOpenPanel }) {
         )}
 
         <Card style={{ marginBottom:32 }}>
-          <Text style={{ fontSize:15, fontWeight:'700', color:C.text, marginBottom:4, letterSpacing:-0.3 }}>Últimas transacciones</Text>
-          <Text style={{ fontSize:11, color:C.textMuted, marginBottom:14 }}>{MONTH_FULL[data.selectedMonth]} {data.selectedYear}</Text>
-          {txs.length === 0
-            ? <Text style={{ color:C.textDim, fontSize:13, textAlign:'center', paddingVertical:24 }}>Sin transacciones este mes</Text>
-            : txs.slice().reverse().slice(0,10).map(t => <TxRow key={t.id} tx={t} cats={cats} onDelete={id => Alert.alert('Eliminar','¿Eliminar esta transacción?',[{text:'Cancelar'},{text:'Eliminar',style:'destructive',onPress:()=>onSave({...data,transactions:data.transactions.filter(t=>t.id!==id)})}])}/>)
+          <Text style={{ fontSize:15, fontWeight:'700', color:C.text, marginBottom:12, letterSpacing:-0.3 }}>Transacciones</Text>
+          <View style={{ flexDirection:'row', gap:8, marginBottom:14 }}>
+            {[
+              { key:'semana',   label:'Esta semana' },
+              { key:'mes',      label:'Este mes' },
+              { key:'anterior', label:'Mes anterior' },
+            ].map(f => (
+              <TouchableOpacity key={f.key} onPress={() => setTxFilter(f.key)}
+                style={{ paddingHorizontal:12, paddingVertical:6, borderRadius:20, borderWidth:1,
+                  backgroundColor: txFilter===f.key ? C.accent : 'transparent',
+                  borderColor: txFilter===f.key ? C.accent : C.border }}>
+                <Text style={{ fontSize:12, fontWeight:'600', color: txFilter===f.key ? '#fff' : C.textMuted }}>{f.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          {filteredTxs.length === 0
+            ? <Text style={{ color:C.textDim, fontSize:13, textAlign:'center', paddingVertical:24 }}>Sin transacciones</Text>
+            : filteredTxs.slice().reverse().slice(0,20).map(t => <TxRow key={t.id} tx={t} cats={cats} onDelete={id => Alert.alert('Eliminar','¿Eliminar esta transacción?',[{text:'Cancelar'},{text:'Eliminar',style:'destructive',onPress:()=>onSave({...data,transactions:data.transactions.filter(t=>t.id!==id)})}])}/>)
           }
         </Card>
       </ScrollView>
@@ -1906,7 +1942,21 @@ export default function MainApp({ user, onLogout }) {
         body: JSON.stringify({ phone }),
       });
       const body = await resp.json();
-      if (!resp.ok) { Alert.alert('Error', body.error || 'No se pudo enviar el código.'); return; }
+      if (!resp.ok) {
+        if (body.needsFirstMessage) {
+          Alert.alert(
+            'Primero mandá un mensaje',
+            'Para recibir el código necesitás escribirle "Hola" al bot de Orbe en WhatsApp. Después volvé acá y pedí el código de nuevo.',
+            [
+              { text: 'Cancelar', style: 'cancel' },
+              { text: 'Abrir WhatsApp', onPress: () => Linking.openURL('https://wa.me/5491125728211') },
+            ]
+          );
+        } else {
+          Alert.alert('Error', body.error || 'No se pudo enviar el código.');
+        }
+        return;
+      }
       setWaStep(2);
     } catch {
       Alert.alert('Error', 'No se pudo enviar el código. Verificá tu conexión.');

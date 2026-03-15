@@ -1,42 +1,31 @@
-import { useState, useEffect } from 'react';
-import { View, ActivityIndicator } from 'react-native';
+import { useEffect } from 'react';
+import { Stack, router } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import * as Linking from 'expo-linking';
 import { supabase } from '../constants/supabase';
-import LoginScreen from './LoginScreen';
-import { Stack } from 'expo-router';
 
 export default function RootLayout() {
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(session?.user || null);
-      setLoading(false);
-    });
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user || null);
-    });
-    return () => subscription.unsubscribe();
+    const handleUrl = async (url: string) => {
+      const { queryParams } = Linking.parse(url);
+      const code = queryParams?.code as string | undefined;
+      if (code) {
+        await supabase.auth.exchangeCodeForSession(code);
+        router.replace('/');
+      }
+    };
+
+    const sub = Linking.addEventListener('url', ({ url }) => handleUrl(url));
+    Linking.getInitialURL().then(url => { if (url) handleUrl(url); });
+    return () => sub.remove();
   }, []);
-
-  if (loading) {
-    return (
-      <View style={{ flex: 1, backgroundColor: '#f0f4f1', alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color="#2e7d5a" />
-      </View>
-    );
-  }
-
-  if (!user) {
-    return <LoginScreen onLogin={setUser} />;
-  }
 
   return (
     <>
-      <StatusBar style="dark" />
+      <StatusBar style="light" />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
+        <Stack.Screen name="+not-found" />
       </Stack>
     </>
   );

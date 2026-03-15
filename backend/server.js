@@ -83,7 +83,7 @@ function getGreeting() {
 const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
 
 // ── WhatsApp Meta Cloud API ────────────────────────────────
-async function sendWhatsAppMessage(to, body) {
+async function sendWhatsAppMessage(to, body, { throwOnError = false } = {}) {
   try {
     const response = await fetch(`https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`, {
       method: 'POST',
@@ -99,10 +99,14 @@ async function sendWhatsAppMessage(to, body) {
       }),
     });
     const result = await response.json();
-    if (!response.ok) console.error('❌ Error WhatsApp:', JSON.stringify(result));
+    if (!response.ok) {
+      console.error('❌ Error WhatsApp:', JSON.stringify(result));
+      if (throwOnError) throw new Error(result?.error?.message || 'Error enviando mensaje de WhatsApp');
+    }
     return result;
   } catch (err) {
     console.error('❌ Error sendWhatsAppMessage:', err.message);
+    if (throwOnError) throw err;
   }
 }
 
@@ -3272,7 +3276,7 @@ function generatePhoneOTP(userId, userName, phone) {
   const otp = String(Math.floor(100000 + Math.random() * 900000));
   const now = Date.now();
   for (const [k, v] of phoneOTPs) { if (now > v.expires) phoneOTPs.delete(k); }
-  phoneOTPs.set(phone, { otp, userId, userName, expires: now + 1 * 60_000 });
+  phoneOTPs.set(phone, { otp, userId, userName, expires: now + 5 * 60_000 });
   return otp;
 }
 
@@ -3343,14 +3347,28 @@ app.post('/api/send-phone-otp', async (req, res) => {
     if (error || !user) return res.status(401).json({ error: 'Token inválido' });
     const phone = (req.body?.phone || '').replace(/\D/g, '');
     if (phone.length < 10) return res.status(400).json({ error: 'Número inválido' });
-    // Evitar spam: si ya hay un OTP vigente para este número, no generar otro
+    // Evitar spam: bloquear reenvío antes de 30 segundos
     const existing = phoneOTPs.get(phone);
-    if (existing && Date.now() < existing.expires) {
-      return res.status(429).json({ error: 'Ya se envió un código recientemente. Esperá un momento.' });
+    if (existing && Date.now() < existing.expires - 4.5 * 60_000) {
+      return res.status(429).json({ error: 'Esperá unos segundos antes de volver a pedir el código.' });
     }
     const userName = user.user_metadata?.full_name || user.user_metadata?.nombre || user.email?.split('@')[0] || 'Usuario';
     const otp = generatePhoneOTP(user.id, userName, phone);
-    await sendWhatsAppMessage(phone, `🔐 *Tu código de verificación de Orbe es:*\n\n*${otp}*\n\nIngresálo en la app. Expira en 1 minuto.\n\n_Si no lo pediste vos, ignorá este mensaje._`);
+    try {
+      await sendWhatsAppMessage(phone, `🔐 *Tu código de verificación de Orbe es:*\n\n*${otp}*\n\nIngresálo en la app. Expira en 5 minutos.\n\n_Si no lo pediste vos, ignorá este mensaje._`, { throwOnError: true });
+    } catch (waErr) {
+      phoneOTPs.delete(phone); // limpiar OTP si no se pudo enviar
+      const msg = waErr.message || '';
+      // Meta 131026 / 131047: usuario nunca inició conversación con el bot
+      const isWindowError = msg.includes('24') || msg.includes('window') || msg.includes('131026') || msg.includes('131047');
+      if (isWindowError) {
+        return res.status(400).json({
+          error: 'Para recibir el código necesitás enviarle primero un mensaje al bot de Orbe en WhatsApp. Escribile "Hola" y luego pedí el código de nuevo.',
+          needsFirstMessage: true,
+        });
+      }
+      return res.status(500).json({ error: 'No se pudo enviar el código por WhatsApp. Verificá que el número sea correcto.' });
+    }
     res.json({ ok: true });
   } catch (err) {
     console.error('❌ Error enviando OTP:', err.message);
@@ -3376,7 +3394,7 @@ app.post('/api/verify-phone-otp', async (req, res) => {
     await linkPhoneToUser(phone, user.id, entry.userName);
     const greeting  = getGreeting();
     const firstName = entry.userName.split(' ')[0];
-    await sendWhatsAppMessage(phone, `${greeting}, ${firstName}! Soy *Orbe*, tu asistente financiero personal.\n\nDesde acá podés registrar gastos, consultar tu balance, ver el dólar y mucho más — sin abrir la app.\n\n📌 *Tip:* anclá este chat para tenerme siempre a mano.\nAndroid: presioná el chat → Anclar\niPhone: deslizá el chat a la derecha → 📌\n\n¿Cómo andás?`);
+    await sendWhatsAppMessage(phone, `¡Hola ${firstName}! Bienvenido a Orbe. 🌟\n\nSoy tu asistente financiero personal. Estoy acá para ayudarte a entender a dónde va tu plata, ahorrar con un objetivo claro y no llevarte sorpresas a fin de mes.\n\nDesde este chat podés hacer todo sin abrir la app:\n\n💸 *Registrar gastos e ingresos*\n"Gasté $6000 en el súper" · "Cobré el sueldo"\n\n📊 *Consultar tu situación*\n"¿Cómo voy este mes?" · "¿Cuánto gasté en comida?"\n\n🎯 *Seguir tus metas de ahorro*\n"¿Cuánto me falta para mi meta?" · "Quiero ahorrar para un viaje"\n\n💳 *Controlar tus deudas*\n"¿Cuándo vence mi próxima cuota?"\n\n💵 *Precios del dólar*\n"¿A cuánto está el blue hoy?"\n\n📌 Anclá este chat para tenerme siempre a mano.\n\n¿Cómo arrancaste el mes? 😊`);
     res.json({ ok: true });
   } catch (err) {
     console.error('❌ Error verificando OTP:', err.message);
@@ -3583,7 +3601,8 @@ Devolvé SOLO el JSON array, sin texto adicional.`;
         const greeting  = getGreeting();
         const firstName = entry.userName ? entry.userName.split(' ')[0] : null;
         const saludo    = firstName ? `${greeting}, ${firstName}` : greeting;
-        await sendWhatsAppMessage(from, `${saludo}! Soy *Orbe*, tu asistente financiero personal.\n\nDesde acá podés registrar gastos, consultar tu balance, ver el dólar y mucho más — sin abrir la app.\n\n📌 *Tip:* anclá este chat para tenerme siempre a mano.\nAndroid: presioná el chat → Anclar\niPhone: deslizá el chat a la derecha → 📌\n\n¿Cómo andás?`);
+        const nombre = firstName || 'acá';
+        await sendWhatsAppMessage(from, `¡Hola ${nombre}! Bienvenido a Orbe. 🌟\n\nSoy tu asistente financiero personal. Estoy acá para ayudarte a entender a dónde va tu plata, ahorrar con un objetivo claro y no llevarte sorpresas a fin de mes.\n\nDesde este chat podés hacer todo sin abrir la app:\n\n💸 *Registrar gastos e ingresos*\n"Gasté $6000 en el súper" · "Cobré el sueldo"\n\n📊 *Consultar tu situación*\n"¿Cómo voy este mes?" · "¿Cuánto gasté en comida?"\n\n🎯 *Seguir tus metas de ahorro*\n"¿Cuánto me falta para mi meta?" · "Quiero ahorrar para un viaje"\n\n💳 *Controlar tus deudas*\n"¿Cuándo vence mi próxima cuota?"\n\n💵 *Precios del dólar*\n"¿A cuánto está el blue hoy?"\n\n📌 Anclá este chat para tenerme siempre a mano.\n\n¿Cómo arrancaste el mes? 😊`);
       } else {
         await sendWhatsAppMessage(from, `❌ Código inválido o expirado. Abrí la app de Orbe y generá un nuevo código desde *Perfil → Conectar WhatsApp*.`);
       }

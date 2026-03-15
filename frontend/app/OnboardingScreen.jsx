@@ -19,29 +19,36 @@ const C = {
 
 const SLIDES = [
   {
-    icon:    '📊',
-    title:   'Controlá tus finanzas',
-    body:    'Registrá gastos e ingresos en segundos. Mirá tu balance del mes y saber exactamente a dónde va tu plata.',
+    icon:    null,
+    welcome: true,
+    title:   'Bienvenido a Orbe',
+    body:    'Tu plata, bajo control. Sin planillas, sin complicaciones.',
     accent:  '#C9A84C',
   },
   {
-    icon:    '🐷',
-    title:   'Ahorrá con metas',
-    body:    'Creá metas de ahorro y seguí tu progreso. Orbe te muestra cuánto te falta y proyecta tus próximos 12 meses.',
+    icon:    '🤔',
+    title:   '¿A dónde fue tu plata este mes?',
+    body:    'Registrá gastos e ingresos en segundos y siempre sabé exactamente dónde estás parado.',
+    accent:  '#C9A84C',
+  },
+  {
+    icon:    '🎯',
+    title:   'Ahorrá con un objetivo',
+    body:    'Creá metas, seguí tu progreso y Orbe te proyecta cuándo llegás.',
     accent:  '#E8C97A',
-  },
-  {
-    icon:    '💳',
-    title:   'Manejá tus deudas',
-    body:    'Registrá cuotas y préstamos. Orbe te avisa cuándo vencen y los descuenta automáticamente de tu proyección.',
-    accent:  '#C9A84C',
   },
   {
     icon:    null,
     whatsapp: true,
-    title:   'Hablá con Orbe por WhatsApp',
-    body:    'Registrá un gasto, consultá tu balance o pedí el precio del dólar sin abrir la app. Solo escribile a Orbe.',
+    title:   'Tu asistente donde ya estás',
+    body:    'Hablá con Orbe por WhatsApp. Sin abrir la app: registrá un gasto, consultá tu saldo o pedí el precio del dólar con un mensaje.',
     accent:  '#25D366',
+  },
+  {
+    icon:    '🚀',
+    title:   '¡Listo para empezar!',
+    body:    'En 2 minutos tenés todo configurado. Orbe te acompaña en cada decisión financiera.',
+    accent:  '#C9A84C',
   },
 ];
 
@@ -92,7 +99,9 @@ export default function OnboardingScreen({ onDone }) {
             <View style={[s.iconCircle, { borderColor: slide.accent }]}>
               {slide.whatsapp
                 ? <FontAwesome5 name="whatsapp" size={52} color="#25D366" solid/>
-                : <Text style={s.iconText}>{slide.icon}</Text>
+                : slide.welcome
+                  ? <Image source={require('../assets/images/orbe-logo.png')} style={{ width: 120, height: 48 }} resizeMode="contain"/>
+                  : <Text style={s.iconText}>{slide.icon}</Text>
               }
             </View>
             <Text style={s.title}>{slide.title}</Text>
