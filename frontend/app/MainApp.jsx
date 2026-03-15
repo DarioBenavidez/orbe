@@ -1847,6 +1847,7 @@ export default function MainApp({ user, onLogout }) {
   const nombre   = meta.nombre || user?.email?.split('@')[0] || 'Usuario';
   const fullName = meta.full_name || nombre;
 
+  const [waLinked, setWaLinked] = useState(null); // null=cargando, false=no vinculado, string=phone vinculado
   const [waModal, setWaModal] = useState(false);
   const [waPhone, setWaPhone] = useState('');
   const [waOtp, setWaOtp] = useState('');
@@ -1878,6 +1879,10 @@ export default function MainApp({ user, onLogout }) {
   ];
 
   const connectWhatsApp = () => {
+    if (waLinked) {
+      Linking.openURL('https://wa.me/5491125728211').catch(() => Alert.alert('Error', 'No se pudo abrir WhatsApp.'));
+      return;
+    }
     setWaPhone('');
     setWaOtp('');
     setWaStep(1);
@@ -1924,6 +1929,8 @@ export default function MainApp({ user, onLogout }) {
       });
       const body = await resp.json();
       if (!resp.ok) { Alert.alert('Error', body.error || 'Código incorrecto.'); return; }
+      const fullPhone = waCountry.prefix + waPhone.replace(/\D/g, '');
+      setWaLinked(fullPhone);
       setWaModal(false);
       Alert.alert('¡Listo!', 'Tu WhatsApp está conectado. Revisá el chat de Orbe.');
     } catch {
@@ -1940,6 +1947,10 @@ export default function MainApp({ user, onLogout }) {
     loadData(user.id)
       .then(d => { setData(d || defaultData()); setLoading(false); })
       .catch(() => { setData(defaultData()); setLoading(false); });
+    // Check WhatsApp linked status
+    supabase.from('whatsapp_users').select('phone').eq('user_id', user.id).single()
+      .then(({ data: wa }) => setWaLinked(wa?.phone || false))
+      .catch(() => setWaLinked(false));
   }, [user]);
 
   const save = useCallback(async (newData) => {
