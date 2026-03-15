@@ -2844,6 +2844,21 @@ Tu tarea: escribí el mensaje de buenos días. Antes de escribir, pensá: ¿qué
         );
         await saveData(user.user_id, { ...data, reminders: updatedReminders });
       }
+
+      // Notificaciones de eventos según notifyDaysBefore
+      const arToday = arNow();
+      const todayDay = arToday.getDate();
+      const events = data.events || [];
+      for (const ev of events) {
+        if (!ev.day || !ev.notifyDaysBefore) continue;
+        const daysUntil = ev.day - todayDay;
+        if (daysUntil === parseInt(ev.notifyDaysBefore)) {
+          const typeLabel = ev.type === 'vencimiento' ? 'vence' : ev.type === 'pago' ? 'pagás' : 'tenés';
+          await sendWhatsAppMessage(user.phone,
+            `🔔 *Recordatorio de Orbe*\n\nEn ${daysUntil} día${daysUntil !== 1 ? 's' : ''} ${typeLabel} *${ev.title}* (día ${ev.day}).\n\n¿Querés que te recuerde algo más?`
+          );
+        }
+      }
     }
   } catch (err) {
     console.error('❌ Error saludo matutino:', err.message);

@@ -8,9 +8,6 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { loadData, saveData, supabase, BACKEND_URL } from '../constants/supabase';
 
-// ── Notificaciones (opcional) ────────────────────────────────
-let Notifications = null;
-try { Notifications = require('expo-notifications'); } catch {}
 
 // ── Theme ─────────────────────────────────────────────────────
 const ThemeCtx = createContext(null);
@@ -73,36 +70,6 @@ const defaultData = () => ({
 });
 
 // ── Notification helpers ───────────────────────────────────────
-async function setupNotifications() {
-  if (!Notifications) return false;
-  try {
-    Notifications.setNotificationHandler({ handleNotification: async () => ({ shouldShowAlert:true, shouldPlaySound:true, shouldSetBadge:false }) });
-    const { status: existing } = await Notifications.getPermissionsAsync();
-    let finalStatus = existing;
-    if (existing !== 'granted') {
-      const { status } = await Notifications.requestPermissionsAsync();
-      finalStatus = status;
-    }
-    return finalStatus === 'granted';
-  } catch { return false; }
-}
-async function scheduleEventNotification(event, daysBefore = 2) {
-  if (!Notifications) return;
-  try {
-    const now = new Date();
-    let nd = new Date(now.getFullYear(), now.getMonth(), event.day - daysBefore, 9, 0, 0);
-    if (nd <= now) nd.setMonth(nd.getMonth() + 1);
-    await Notifications.scheduleNotificationAsync({
-      content: { title: '🔔 Orbe', body: `Recordatorio: ${event.title} vence el día ${event.day}`, sound: true },
-      trigger: { date: nd },
-      identifier: `event-${event.id}`,
-    });
-  } catch {}
-}
-async function cancelEventNotification(eventId) {
-  if (!Notifications) return;
-  try { await Notifications.cancelScheduledNotificationAsync(`event-${eventId}`); } catch {}
-}
 
 // ── UI Primitives ──────────────────────────────────────────────
 
@@ -1279,21 +1246,17 @@ function Calendario({ data, onSave }) {
   const [modal, setModal]         = useState(false);
   const [editModal, setEditModal] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
-  const [notifEnabled, setNotifEnabled] = useState(false);
   const emptyF = { title:'', day:'', type:'vencimiento', notifyDaysBefore:'2' };
   const [form, setForm]         = useState(emptyF);
   const [editForm, setEditForm] = useState(emptyF);
   const events = data.events || [];
   const today  = new Date().getDate();
 
-  useEffect(() => { setupNotifications().then(setNotifEnabled); }, []);
-
-  const addEvent = async () => {
+  const addEvent = () => {
     if (!form.title||!form.day) return;
     const dayNum = parseInt(form.day);
     if (isNaN(dayNum) || dayNum < 1 || dayNum > 31) return Alert.alert('Día inválido', 'Ingresá un día entre 1 y 31.');
     const ev = { ...form, id:Date.now().toString(), day:dayNum, notifyDaysBefore:parseInt(form.notifyDaysBefore)||2 };
-    if (notifEnabled && ev.notifyDaysBefore) await scheduleEventNotification(ev, ev.notifyDaysBefore);
     onSave({ ...data, events:[...events, ev] });
     setModal(false); setForm(emptyF);
   };
@@ -1302,17 +1265,16 @@ function Calendario({ data, onSave }) {
     setEditForm({ title:ev.title, day:ev.day.toString(), type:ev.type, notifyDaysBefore:(ev.notifyDaysBefore||2).toString() });
     setEditModal(true);
   };
-  const saveEdit = async () => {
+  const saveEdit = () => {
     const dayNum = parseInt(editForm.day);
     if (isNaN(dayNum) || dayNum < 1 || dayNum > 31) return Alert.alert('Día inválido', 'Ingresá un día entre 1 y 31.');
     const ev = { ...editForm, id:editTarget, day:dayNum, notifyDaysBefore:parseInt(editForm.notifyDaysBefore)||2 };
-    if (notifEnabled) { await cancelEventNotification(editTarget); await scheduleEventNotification(ev, ev.notifyDaysBefore); }
     onSave({ ...data, events:events.map(e => e.id===editTarget?ev:e) });
     setEditModal(false);
   };
   const delEvent = (id) => Alert.alert('Eliminar','¿Eliminar este evento?',[
     { text:'Cancelar' },
-    { text:'Eliminar', style:'destructive', onPress: async () => { await cancelEventNotification(id); onSave({ ...data, events:events.filter(e => e.id!==id) }); } },
+    { text:'Eliminar', style:'destructive', onPress: () => onSave({ ...data, events:events.filter(e => e.id!==id) }) },
   ]);
   const byType = EVENT_TYPES.reduce((acc,t) => { acc[t.key]=events.filter(e=>e.type===t.key).sort((a,b)=>a.day-b.day); return acc; }, {});
 
@@ -1326,7 +1288,7 @@ function Calendario({ data, onSave }) {
           <Chip key={t.key} label={t.label} active={frm.type===t.key} onPress={() => setFrm(f => ({ ...f, type:t.key }))}/>
         ))}
       </View>
-      {notifEnabled && <Input label={`Notificar ${frm.notifyDaysBefore} días antes`} value={frm.notifyDaysBefore} onChangeText={v => setFrm(f => ({ ...f, notifyDaysBefore:v }))} placeholder="2" keyboardType="numeric"/>}
+      <Input label="Notificar por WhatsApp (días antes)" value={frm.notifyDaysBefore} onChangeText={v => setFrm(f => ({ ...f, notifyDaysBefore:v }))} placeholder="2" keyboardType="numeric"/>
     </>
   );
 
