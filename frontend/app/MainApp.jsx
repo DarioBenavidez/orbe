@@ -1751,8 +1751,7 @@ function PerfilTab({ user, onLogout, connectWhatsApp, dark, setDark, data }) {
           <Card style={{ marginBottom:14 }}>
             <TouchableOpacity onPress={() => { setEditNombre(nombre); setEditApellido(apellido); setEditNameModal(true); }}
               style={{ flexDirection:'row', alignItems:'center', paddingVertical:14, borderBottomWidth:1, borderBottomColor:C.border }}>
-              <IconCircle icon="👤" bg={C.accent+'22'} size={44}/>
-              <View style={{ flex:1, marginLeft:14 }}>
+              <View style={{ flex:1 }}>
                 <Text style={{ fontSize:15, fontWeight:'600', color:C.text }}>Editar nombre</Text>
                 <Text style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>{fullName}</Text>
               </View>
@@ -1761,8 +1760,7 @@ function PerfilTab({ user, onLogout, connectWhatsApp, dark, setDark, data }) {
 
             <TouchableOpacity onPress={() => setPwModal(true)}
               style={{ flexDirection:'row', alignItems:'center', paddingVertical:14 }}>
-              <IconCircle icon="🔒" bg={C.accent+'22'} size={44}/>
-              <View style={{ flex:1, marginLeft:14 }}>
+              <View style={{ flex:1 }}>
                 <Text style={{ fontSize:15, fontWeight:'600', color:C.text }}>Cambiar contraseña</Text>
                 <Text style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>Actualizá tu contraseña de acceso</Text>
               </View>
@@ -1774,22 +1772,19 @@ function PerfilTab({ user, onLogout, connectWhatsApp, dark, setDark, data }) {
           <Card style={{ marginBottom:14 }}>
             {bioAvailable && (
               <View style={{ flexDirection:'row', alignItems:'center', paddingVertical:14, borderBottomWidth:1, borderBottomColor:C.border }}>
-                <IconCircle icon="👆" bg={C.accent+'22'} size={44}/>
-                <Text style={{ flex:1, fontSize:15, fontWeight:'600', color:C.text, marginLeft:14 }}>Huella / Face ID</Text>
+                <Text style={{ flex:1, fontSize:15, fontWeight:'600', color:C.text }}>Huella / Face ID</Text>
                 <Switch value={bioEnabled} onValueChange={toggleBio}
                   trackColor={{ false:C.border, true:C.accent }} thumbColor="#fff"/>
               </View>
             )}
             <View style={{ flexDirection:'row', alignItems:'center', paddingVertical:14, borderBottomWidth:1, borderBottomColor:C.border }}>
-              <IconCircle icon={dark ? '🌙' : '☀️'} bg={C.accent+'22'} size={44}/>
-              <Text style={{ flex:1, fontSize:15, fontWeight:'600', color:C.text, marginLeft:14 }}>Modo oscuro</Text>
+              <Text style={{ flex:1, fontSize:15, fontWeight:'600', color:C.text }}>Modo oscuro</Text>
               <Switch value={dark} onValueChange={setDark}
                 trackColor={{ false:C.border, true:C.accent }} thumbColor="#fff"/>
             </View>
             <TouchableOpacity onPress={connectWhatsApp}
               style={{ flexDirection:'row', alignItems:'center', paddingVertical:14 }}>
-              <IconCircle icon="💬" bg="#25D36622" size={44}/>
-              <View style={{ flex:1, marginLeft:14 }}>
+              <View style={{ flex:1 }}>
                 <Text style={{ fontSize:15, fontWeight:'600', color:C.text }}>Conectar WhatsApp</Text>
                 <Text style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>Registrá gastos y consultá tu balance por chat</Text>
               </View>
@@ -1801,8 +1796,7 @@ function PerfilTab({ user, onLogout, connectWhatsApp, dark, setDark, data }) {
           <Card>
             <TouchableOpacity onPress={onLogout}
               style={{ flexDirection:'row', alignItems:'center', paddingVertical:6 }}>
-              <IconCircle icon="🚪" bg={C.red+'18'} size={44}/>
-              <Text style={{ flex:1, fontSize:15, fontWeight:'600', color:C.red, marginLeft:14 }}>Cerrar sesión</Text>
+              <Text style={{ flex:1, fontSize:15, fontWeight:'600', color:C.red }}>Cerrar sesión</Text>
               <Text style={{ color:C.red, fontSize:20 }}>›</Text>
             </TouchableOpacity>
           </Card>
