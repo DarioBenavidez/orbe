@@ -338,7 +338,7 @@ function InicioTab({ data, onSave, onMonthPress, nombre, onOpenPanel }) {
       <>
         <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:22 }}>
           <View>
-            <Text style={{ fontSize:13, color:'#ffffff70', fontWeight:'600', letterSpacing:0.3 }}>{(() => { const h=new Date().getHours(); return h<12?'Buenos días ☀️':h<18?'Buenas tardes 🌤️':'Buenas noches 🌙'; })()}</Text>
+            <Text style={{ fontSize:13, color:'#ffffff70', fontWeight:'600', letterSpacing:0.3 }}>{(() => { const h=new Date().getHours(); return h<12?'Buenos días':h<18?'Buenas tardes':'Buenas noches'; })()}</Text>
             <Text style={{ fontSize:24, fontWeight:'800', color:'#fff', letterSpacing:-0.7, marginTop:2 }}>Bienvenido, {nombre}</Text>
             <Text style={{ fontSize:15, fontWeight:'700', color:'#ffffffcc', marginTop:4 }}>Balance mensual</Text>
           </View>
