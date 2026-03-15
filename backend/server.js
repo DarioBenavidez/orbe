@@ -444,7 +444,7 @@ ACCIONES DISPONIBLES:
 {"type":"exportar_csv","scope":"transacciones|ventas|prestamos|todo"}
 {"type":"agendar_turno","description":"Turno médico Dr. García","date":"YYYY-MM-DD","time":"10:30","location":"Av. Corrientes 1234","turnoType":"médico|banco|trámite|veterinario|odontólogo|otro"}
 {"type":"consultar_turnos"}
-{"type":"cancelar_turno","keyword":"dr garcia"}
+{"type":"cancelar_turno","keyword":"dr garcia","date":"2026-03-21"}
 {"type":"conversacion","respuesta":"..."}
 {"type":"unknown"}
 
@@ -530,8 +530,8 @@ REGLAS DE INTERPRETACIÓN:
 - "qué es X / explicame X / no entiendo X / cómo funciona X" donde X es un concepto de administración → educacion_financiera (concepto: el término más cercano de la lista)
 - "exportá mis datos a Excel / pasame en Excel / quiero un CSV / exportar transacciones" → exportar_csv
 - "tengo turno / agendá un turno / tengo cita / tengo que ir al médico/banco/trámite el [fecha]" → agendar_turno (description: descripción del turno, date: fecha resuelta YYYY-MM-DD, time: hora si la menciona, location: lugar si lo menciona, turnoType: inferilo del contexto)
-- "qué turnos tengo / mis turnos / agenda / compromisos / cuántos turnos tengo / tengo algún turno" → consultar_turnos
-- "cancelá el turno de X / borrá el turno del médico / ya no voy al turno de X" → cancelar_turno (keyword: nombre del turno)
+- "qué turnos tengo / mis turnos / agenda / compromisos / cuántos turnos tengo / tengo algún turno / mostrá mis turnos / listá mis turnos" → SIEMPRE consultar_turnos. NUNCA balance ni conversacion para estas frases.
+- "cancelá el turno de X / borrá el turno del médico / ya no voy al turno de X" → cancelar_turno (keyword: nombre del turno, date: fecha YYYY-MM-DD si el usuario la menciona para desambiguar entre turnos con el mismo nombre)
 - "me confundí / era el día X / cambiá el turno de X / el turno del médico es el día X / corregí el turno" → editar_turno (keyword: parte del nombre del turno que ya existe, y los campos a cambiar: date, time, location — solo los que cambian)
 - IMPORTANTE: si el usuario corrige un turno que acaba de agendar (ej: "me confundí, era el 21"), usá editar_turno con el keyword del turno recién creado. NUNCA uses agendar_turno para una corrección.
 - Preguntas sobre Excel (fórmulas, errores, tablas dinámicas, Power Query, atajos, etc.) → conversacion (Orbe responde como experta en Excel con ejemplos concretos)
@@ -2774,11 +2774,19 @@ Sin listas. Máximo 8 líneas. Tono cálido, directo y que inspire confianza en 
     case 'cancelar_turno': {
       const turnos = data.turnos || [];
       const keyword = (action.keyword || '').toLowerCase();
-      const filtered = turnos.filter(t => !t.description.toLowerCase().includes(keyword));
-      if (filtered.length === turnos.length) return `🤔 No encontré ningún turno que coincida con *${action.keyword}*. ¿Cómo se llamaba exactamente?`;
-      const cancelado = turnos.find(t => t.description.toLowerCase().includes(keyword));
-      await saveData(userId, { ...data, turnos: filtered });
-      return `🗑️ Turno de *${cancelado.description}* cancelado. Si lo reagendás, avisame.`;
+      // Si hay fecha, usarla para desambiguar entre turnos con el mismo nombre
+      const matchFn = action.date
+        ? t => t.description.toLowerCase().includes(keyword) && t.date === action.date
+        : t => t.description.toLowerCase().includes(keyword);
+      const cancelado = turnos.find(matchFn);
+      if (!cancelado) {
+        // Si había coincidencia por nombre pero no por fecha, avisar
+        const byName = turnos.filter(t => t.description.toLowerCase().includes(keyword));
+        if (byName.length > 1 && action.date) return `🤔 No encontré un turno de *${action.keyword}* para esa fecha. ¿Querés cancelar el del ${byName.map(t => fmtDate(t.date)).join(' o el del ')}?`;
+        return `🤔 No encontré ningún turno que coincida con *${action.keyword}*. ¿Cómo se llamaba exactamente?`;
+      }
+      await saveData(userId, { ...data, turnos: turnos.filter(t => t.id !== cancelado.id) });
+      return `🗑️ Turno de *${cancelado.description}* del ${fmtDate(cancelado.date)} cancelado. Si lo reagendás, avisame.`;
     }
 
     case 'exportar_csv': {
