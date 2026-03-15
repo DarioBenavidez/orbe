@@ -6,6 +6,7 @@ import {
   KeyboardAvoidingView, Switch, Linking,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { LinearGradient } from 'expo-linear-gradient';
 import { loadData, saveData, supabase, BACKEND_URL } from '../constants/supabase';
 
 
@@ -343,22 +344,34 @@ function InicioTab({ data, onSave, onMonthPress, nombre, onOpenPanel }) {
     }>
       <ScrollView contentContainerStyle={{ padding:16, paddingTop:20 }} showsVerticalScrollIndicator={false}>
         {/* Module strip */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:16 }} contentContainerStyle={{ paddingHorizontal:4 }}>
-          {[
-            { key:'ahorros',    label:'Ahorros',    icon:'🐷' },
-            { key:'deudas',     label:'Deudas',     icon:'💳' },
-            { key:'prestamos',  label:'Préstamos',  icon:'🤝' },
-            { key:'turnos',     label:'Turnos',     icon:'📅' },
-            { key:'calendario', label:'Eventos',    icon:'🗓️' },
-            { key:'proyeccion', label:'Proyección', icon:'📈' },
-          ].map(m => (
-            <TouchableOpacity key={m.key} onPress={() => onOpenPanel(m.key)}
-              style={{ backgroundColor:C.accent, borderWidth:1, borderColor:C.gold, borderRadius:16, padding:14, marginRight:10, alignItems:'center', width:90 }}>
-              <Text style={{ fontSize:24 }}>{m.icon}</Text>
-              <Text style={{ fontSize:11, color:'#fff', fontWeight:'700', marginTop:6, textAlign:'center' }}>{m.label}</Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
+        <View style={{ marginBottom:16, position:'relative' }}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal:16 }}>
+            {[
+              { key:'ahorros',    label:'Ahorros',    icon:'🐷' },
+              { key:'deudas',     label:'Deudas',     icon:'💳' },
+              { key:'prestamos',  label:'Préstamos',  icon:'🤝' },
+              { key:'turnos',     label:'Turnos',     icon:'📅' },
+              { key:'calendario', label:'Eventos',    icon:'🗓️' },
+              { key:'proyeccion', label:'Proyección', icon:'📈' },
+            ].map(m => (
+              <TouchableOpacity key={m.key} onPress={() => onOpenPanel(m.key)}
+                style={{ backgroundColor:C.accent, borderWidth:1, borderColor:C.gold, borderRadius:16, padding:14, marginRight:10, alignItems:'center', width:90 }}>
+                <Text style={{ fontSize:24 }}>{m.icon}</Text>
+                <Text style={{ fontSize:11, color:'#fff', fontWeight:'700', marginTop:6, textAlign:'center' }}>{m.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+          <LinearGradient
+            colors={[C.bg, 'transparent']}
+            start={{ x:0, y:0 }} end={{ x:1, y:0 }}
+            style={{ position:'absolute', left:0, top:0, bottom:0, width:24, pointerEvents:'none' }}
+          />
+          <LinearGradient
+            colors={['transparent', C.bg]}
+            start={{ x:0, y:0 }} end={{ x:1, y:0 }}
+            style={{ position:'absolute', right:0, top:0, bottom:0, width:24, pointerEvents:'none' }}
+          />
+        </View>
 
         {upcomingTurnos.length > 0 && (
           <Card style={{ marginBottom:14, borderLeftWidth:3, borderLeftColor:C.accent }}>
