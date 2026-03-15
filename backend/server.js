@@ -531,7 +531,9 @@ REGLAS DE INTERPRETACIÓN:
 - "exportá mis datos a Excel / pasame en Excel / quiero un CSV / exportar transacciones" → exportar_csv
 - "tengo turno / agendá un turno / tengo cita / tengo que ir al médico/banco/trámite el [fecha]" → agendar_turno (description: descripción del turno, date: fecha resuelta YYYY-MM-DD, time: hora si la menciona, location: lugar si lo menciona, turnoType: inferilo del contexto)
 - "qué turnos tengo / mis turnos / agenda / compromisos / cuántos turnos tengo / tengo algún turno" → consultar_turnos
-- "cancelá el turno de X / borrá el turno del médico / ya no voy al turno de X" → cancelar_turno (scope: "transacciones" por defecto, "ventas" si habla de ventas, "prestamos" si habla de préstamos, "todo" si quiere todo)
+- "cancelá el turno de X / borrá el turno del médico / ya no voy al turno de X" → cancelar_turno (keyword: nombre del turno)
+- "me confundí / era el día X / cambiá el turno de X / el turno del médico es el día X / corregí el turno" → editar_turno (keyword: parte del nombre del turno que ya existe, y los campos a cambiar: date, time, location — solo los que cambian)
+- IMPORTANTE: si el usuario corrige un turno que acaba de agendar (ej: "me confundí, era el 21"), usá editar_turno con el keyword del turno recién creado. NUNCA uses agendar_turno para una corrección.
 - Preguntas sobre Excel (fórmulas, errores, tablas dinámicas, Power Query, atajos, etc.) → conversacion (Orbe responde como experta en Excel con ejemplos concretos)
 
 CONTEXTO EMPRESARIAL:
@@ -2749,6 +2751,24 @@ Sin listas. Máximo 8 líneas. Tono cálido, directo y que inspire confianza en 
         return `${emoji} *${t.description}*\n   ${tag}${t.time ? ` a las ${t.time}hs` : ''}${t.location ? ` — ${t.location}` : ''}`;
       });
       return `📅 *Tus próximos turnos*\n\n${lines.join('\n\n')}`;
+    }
+
+    case 'editar_turno': {
+      const turnos = data.turnos || [];
+      const keyword = (action.keyword || '').toLowerCase();
+      const idx = turnos.findIndex(t => t.description.toLowerCase().includes(keyword));
+      if (idx === -1) return `🤔 No encontré ningún turno que coincida con *${action.keyword}*. ¿Cómo se llama exactamente?`;
+      const updated = { ...turnos[idx] };
+      if (action.date) updated.date = action.date;
+      if (action.time) updated.time = action.time;
+      if (action.location) updated.location = action.location;
+      const newTurnos = turnos.map((t, i) => i === idx ? updated : t);
+      await saveData(userId, { ...data, turnos: newTurnos });
+      const typeEmoji = { médico: '🏥', banco: '🏦', trámite: '📋', veterinario: '🐾', odontólogo: '🦷', otro: '📅' };
+      const emoji = typeEmoji[updated.turnoType] || '📅';
+      const daysUntil = Math.round((new Date(updated.date) - new Date(today())) / (1000 * 60 * 60 * 24));
+      const whenText = daysUntil === 0 ? '¡es hoy!' : daysUntil === 1 ? 'mañana' : daysUntil === 2 ? 'pasado mañana' : `en ${daysUntil} días`;
+      return `${emoji} *Turno actualizado!*\n\n📝 ${updated.description}\n📅 ${fmtDate(updated.date)}${updated.time ? ` a las ${updated.time}hs` : ''}${updated.location ? `\n📍 ${updated.location}` : ''}\n\n⏰ ${whenText}.`;
     }
 
     case 'cancelar_turno': {
