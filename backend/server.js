@@ -2846,8 +2846,6 @@ Tu tarea: escribí el mensaje de buenos días. Antes de escribir, pensá: ¿qué
       }
 
       // Notificaciones de eventos según notifyDaysBefore
-      const arToday = arNow();
-      const todayDay = arToday.getDate();
       const events = data.events || [];
       for (const ev of events) {
         if (!ev.day || !ev.notifyDaysBefore) continue;
