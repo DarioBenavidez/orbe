@@ -1694,22 +1694,6 @@ function PerfilTab({ user, onLogout, connectWhatsApp, dark, setDark, data }) {
       <View style={{ flex:1, backgroundColor:C.bg, borderTopLeftRadius:32, borderTopRightRadius:32, overflow:'hidden' }}>
         <ScrollView contentContainerStyle={{ padding:20 }} showsVerticalScrollIndicator={false}>
 
-          {/* Stats rápidas */}
-          {stats && (
-            <View style={{ flexDirection:'row', gap:10, marginBottom:16 }}>
-              {[
-                { label:'Transacciones', val:stats.txCount, icon:'💳' },
-                { label:'Meses activo', val:stats.months, icon:'📆' },
-                { label:'Categorías', val:stats.catCount, icon:'🏷' },
-              ].map(s => (
-                <Card key={s.label} style={{ flex:1, padding:14, alignItems:'center' }}>
-                  <Text style={{ fontSize:20, marginBottom:4 }}>{s.icon}</Text>
-                  <Text style={{ fontSize:20, fontWeight:'800', color:C.accent }}>{s.val}</Text>
-                  <Text style={{ fontSize:9, color:C.textMuted, fontWeight:'700', textTransform:'uppercase', letterSpacing:0.5, textAlign:'center', marginTop:2 }}>{s.label}</Text>
-                </Card>
-              ))}
-            </View>
-          )}
 
           <Card style={{ marginBottom:14 }}>
             {/* WhatsApp */}
