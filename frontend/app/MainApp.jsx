@@ -755,9 +755,11 @@ function AddTxModal({ visible, onClose, data, onSave, editTx }) {
                 <Chip key={cat} label={`${icon} ${cat}`} active={form.category===cat}
                   onPress={() => setForm(f => ({ ...f, category:cat }))} style={{ marginRight:8 }}/>
               ))}
-              <Chip label="+ Nueva" active={showNewCat} onPress={() => setShowNewCat(s => !s)} style={{ marginRight:8 }}/>
+              {form.type !== 'presupuesto' && (
+                <Chip label="+ Nueva" active={showNewCat} onPress={() => setShowNewCat(s => !s)} style={{ marginRight:8 }}/>
+              )}
             </ScrollView>
-            {showNewCat && (
+            {showNewCat && form.type !== 'presupuesto' && (
               <View style={{ flexDirection:'row', gap:8, marginBottom:14 }}>
                 <TextInput
                   style={{ flex:1, backgroundColor:C.surface2, borderRadius:12, paddingHorizontal:14, paddingVertical:10, fontSize:14, color:C.text }}
