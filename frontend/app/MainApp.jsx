@@ -305,7 +305,7 @@ function ScreenWithHeader({ header, children }) {
 }
 
 // ── Inicio Tab ─────────────────────────────────────────────────
-function InicioTab({ data, onSave, onMonthPress }) {
+function InicioTab({ data, onSave, onMonthPress, nombre, onOpenPanel }) {
   const C = useC();
   const txs = data.transactions.filter(t => {
     const { month, year } = parseDateParts(t.date);
@@ -324,7 +324,6 @@ function InicioTab({ data, onSave, onMonthPress }) {
     : [];
   const totalSavings = data.savings.reduce((a,sv) => a+(sv.current||0), 0);
   const totalDebt    = data.debts.reduce((a,d) => a+(d.remaining||0), 0);
-  const greeting     = () => { const h = new Date().getHours(); return h<12?'Buenos días ☀️':h<18?'Buenas tardes 🌤️':'Buenas noches 🌙'; };
 
   const turnos = (data.turnos || []);
   const today2 = new Date();
@@ -339,12 +338,12 @@ function InicioTab({ data, onSave, onMonthPress }) {
       <>
         <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:22 }}>
           <View>
-            <Text style={{ fontSize:13, color:'#ffffff70', fontWeight:'600', letterSpacing:0.3 }}>{greeting()}</Text>
-            <Text style={{ fontSize:24, fontWeight:'800', color:'#fff', letterSpacing:-0.7, marginTop:2 }}>Tu resumen</Text>
+            <Text style={{ fontSize:24, fontWeight:'800', color:'#fff', letterSpacing:-0.7, marginTop:2 }}>Bienvenido, {nombre}</Text>
+            <Text style={{ fontSize:15, fontWeight:'700', color:'#ffffffcc', marginTop:4 }}>Balance mensual</Text>
           </View>
           <TouchableOpacity onPress={onMonthPress}
             style={{ backgroundColor:'#ffffff15', borderRadius:20, paddingHorizontal:14, paddingVertical:8, borderWidth:1, borderColor:'#ffffff25' }}>
-            <Text style={{ color:'#ffffffcc', fontSize:13, fontWeight:'700' }}>{MONTH_NAMES[data.selectedMonth]} {data.selectedYear} ▾</Text>
+            <Text style={{ color:'#ffffffcc', fontSize:13, fontWeight:'700' }}>{today} / {MONTH_NAMES[data.selectedMonth]} / {data.selectedYear} ▾</Text>
           </TouchableOpacity>
         </View>
         <View style={{ marginBottom:6 }}>
@@ -377,16 +376,34 @@ function InicioTab({ data, onSave, onMonthPress }) {
         {/* Quick stats */}
         <View style={{ flexDirection:'row', gap:10, marginBottom:16 }}>
           {[
-            { label:'Ahorros', val:totalSavings, color:C.accent, icon:'🐷' },
-            { label:'Deudas', val:totalDebt, color:C.red, icon:'💳' },
+            { label:'Ahorros', val:totalSavings, icon:'🐷' },
+            { label:'Deudas', val:totalDebt, icon:'💳' },
           ].map(k => (
-            <Card key={k.label} style={{ flex:1, padding:16 }}>
+            <View key={k.label} style={{ flex:1, backgroundColor:C.accent, borderWidth:1, borderColor:C.gold, borderRadius:16, padding:12 }}>
               <Text style={{ fontSize:20, marginBottom:6 }}>{k.icon}</Text>
-              <Text style={{ fontSize:9, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:1 }}>{k.label}</Text>
-              <Text style={{ fontSize:18, fontWeight:'800', color:k.color, marginTop:4, letterSpacing:-0.5 }}>{fmt(k.val)}</Text>
-            </Card>
+              <Text style={{ fontSize:9, fontWeight:'700', color:C.goldLight, textTransform:'uppercase', letterSpacing:1 }}>{k.label}</Text>
+              <Text style={{ fontSize:18, fontWeight:'800', color:'#FFFFFF', marginTop:4, letterSpacing:-0.5 }}>{fmt(k.val)}</Text>
+            </View>
           ))}
         </View>
+
+        {/* Module strip */}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:16 }}>
+          {[
+            { key:'ahorros',    label:'Ahorros',    icon:'🐷' },
+            { key:'deudas',     label:'Deudas',     icon:'💳' },
+            { key:'prestamos',  label:'Préstamos',  icon:'🤝' },
+            { key:'turnos',     label:'Turnos',     icon:'📅' },
+            { key:'calendario', label:'Eventos',    icon:'🗓️' },
+            { key:'proyeccion', label:'Proyección', icon:'📈' },
+          ].map(m => (
+            <TouchableOpacity key={m.key} onPress={() => onOpenPanel(m.key)}
+              style={{ backgroundColor:C.accent, borderWidth:1, borderColor:C.gold, borderRadius:16, padding:14, marginRight:10, alignItems:'center', width:90 }}>
+              <Text style={{ fontSize:24 }}>{m.icon}</Text>
+              <Text style={{ fontSize:11, color:'#fff', fontWeight:'700', marginTop:6, textAlign:'center' }}>{m.label}</Text>
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
 
         {upcomingTurnos.length > 0 && (
           <Card style={{ marginBottom:14, borderLeftWidth:3, borderLeftColor:C.accent }}>
@@ -688,25 +705,35 @@ function TransaccionesTab({ data, onSave, onAdd }) {
 // ── Add Transaction Modal ──────────────────────────────────────
 function AddTxModal({ visible, onClose, data, onSave, editTx }) {
   const C = useC();
-  const cats = data.categories || DEFAULT_CATEGORIES;
   const isEditing = !!editTx;
   const TYPES = [
     { key:'gasto', label:'Gasto' }, { key:'ingreso', label:'Ingreso' },
     { key:'sueldo', label:'Sueldo 💼' }, { key:'ahorro_meta', label:'Ahorro 🐷' },
   ];
-  const emptyForm = { type:'gasto', description:'', amount:'', category: Object.keys(cats)[0]||'Alimentación', date: new Date().toISOString().split('T')[0], savingsId:'' };
+  const emptyForm = { type:'gasto', description:'', amount:'', category:'', date: new Date().toISOString().split('T')[0], savingsId:'' };
   const [form, setForm] = useState(emptyForm);
+  const [showNewCat, setShowNewCat] = useState(false);
+  const [newCatName, setNewCatName] = useState('');
 
   useEffect(() => {
-    if (editTx) {
-      setForm({ ...editTx, amount: String(editTx.amount) });
-    } else {
-      setForm(emptyForm);
-    }
+    if (editTx) { setForm({ ...editTx, amount: String(editTx.amount) }); }
+    else { setForm(emptyForm); setShowNewCat(false); setNewCatName(''); }
   }, [editTx, visible]);
 
+  const addNewCategory = () => {
+    if (!newCatName.trim()) return;
+    const currentCats = data.categories || DEFAULT_CATEGORIES;
+    const newCats = { ...currentCats, [newCatName.trim()]: '📦' };
+    onSave({ ...data, categories: newCats });
+    setForm(f => ({ ...f, category: newCatName.trim() }));
+    setNewCatName('');
+    setShowNewCat(false);
+  };
+
   const saveTx = () => {
-    if (!form.description || !form.amount) return;
+    if (!form.description.trim()) return Alert.alert('Error', 'Ingresá una descripción');
+    if (!form.amount || parseFloat(form.amount) <= 0) return Alert.alert('Error', 'Ingresá un monto válido');
+    if ((form.type==='gasto'||form.type==='ingreso') && !form.category) return Alert.alert('Categoría requerida', 'Seleccioná una categoría para continuar');
     const amt = parseFloat(form.amount);
     let newData = { ...data };
     if (isEditing) {
@@ -727,33 +754,62 @@ function AddTxModal({ visible, onClose, data, onSave, editTx }) {
     onClose();
     setForm(emptyForm);
   };
+
+  const needsCategory = form.type==='gasto' || form.type==='ingreso';
+  const currentCats = data.categories || DEFAULT_CATEGORIES;
+
   return (
-    <ModalSheet visible={visible} onClose={onClose} title={isEditing ? 'Editar transacción' : 'Nueva transacción'}>
-      <ScrollView showsVerticalScrollIndicator={false}>
+    <ModalSheet visible={visible} onClose={onClose} title={isEditing ? 'Editar movimiento' : 'Nuevo movimiento'}>
+      <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
+        {/* Type chips */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:16 }}>
           {TYPES.map(t => (
             <Chip key={t.key} label={t.label} active={form.type===t.key}
-              onPress={() => setForm(f => ({ ...f, type:t.key }))} style={{ marginRight:8 }}/>
+              onPress={() => setForm(f => ({ ...f, type:t.key, category:'' }))} style={{ marginRight:8 }}/>
           ))}
         </ScrollView>
-        <Input label="Descripción" value={form.description} onChangeText={v => setForm(f => ({ ...f, description:v }))} placeholder="Ej: Supermercado"/>
+
+        {/* Amount - big and prominent */}
         <Input label="Monto" value={form.amount} onChangeText={v => setForm(f => ({ ...f, amount:v }))} placeholder="0" keyboardType="numeric" prefix="$"/>
-        {(form.type==='gasto'||form.type==='ingreso') && (
+
+        {/* Description */}
+        <Input label="Descripción" value={form.description} onChangeText={v => setForm(f => ({ ...f, description:v }))} placeholder="Ej: Supermercado, Netflix..."/>
+
+        {/* Category - only for gasto/ingreso, MANDATORY */}
+        {needsCategory && (
           <>
-            <Text style={{ fontSize:10, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:0.5, marginBottom:8 }}>Categoría</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:14 }}>
-              {Object.entries(cats).map(([cat,icon]) => (
+            <Text style={{ fontSize:10, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:0.5, marginBottom:8 }}>Categoría *</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: showNewCat ? 8 : 14 }}>
+              {Object.entries(currentCats).map(([cat,icon]) => (
                 <Chip key={cat} label={`${icon} ${cat}`} active={form.category===cat}
                   onPress={() => setForm(f => ({ ...f, category:cat }))} style={{ marginRight:8 }}/>
               ))}
+              <Chip label="+ Nueva" active={showNewCat} onPress={() => setShowNewCat(s => !s)} style={{ marginRight:8 }}/>
             </ScrollView>
+            {showNewCat && (
+              <View style={{ flexDirection:'row', gap:8, marginBottom:14 }}>
+                <TextInput
+                  style={{ flex:1, backgroundColor:C.surface2, borderRadius:12, paddingHorizontal:14, paddingVertical:10, fontSize:14, color:C.text }}
+                  placeholder="Nombre de categoría"
+                  placeholderTextColor={C.textMuted}
+                  value={newCatName}
+                  onChangeText={setNewCatName}
+                />
+                <TouchableOpacity onPress={addNewCategory}
+                  style={{ backgroundColor:C.accent, borderRadius:12, paddingHorizontal:16, alignItems:'center', justifyContent:'center' }}>
+                  <Text style={{ color:'#fff', fontWeight:'700', fontSize:13 }}>Agregar</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </>
         )}
+
+        {/* Savings selector */}
         {form.type==='ahorro_meta' && (
           <>
             <Text style={{ fontSize:10, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:0.5, marginBottom:8 }}>Meta de ahorro</Text>
             {data.savings.length===0
-              ? <Text style={{ color:C.textMuted, fontSize:13, marginBottom:14 }}>Primero creá una meta en Planear.</Text>
+              ? <Text style={{ color:C.textMuted, fontSize:13, marginBottom:14 }}>Primero creá una meta de ahorro.</Text>
               : <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:14 }}>
                   {data.savings.map(sv => (
                     <Chip key={sv.id} label={`🐷 ${sv.name}`} active={form.savingsId===sv.id}
@@ -763,6 +819,7 @@ function AddTxModal({ visible, onClose, data, onSave, editTx }) {
             }
           </>
         )}
+
         <View style={{ flexDirection:'row', gap:10, marginTop:4 }}>
           <Btn label="Cancelar" variant="ghost" style={{ flex:1 }} onPress={onClose}/>
           <Btn label="Guardar" style={{ flex:1 }} onPress={saveTx}/>
@@ -1696,11 +1753,11 @@ function PerfilTab({ user, onLogout, connectWhatsApp, dark, setDark, data }) {
 
 // ── Tab Bar ────────────────────────────────────────────────────
 const TABS = [
-  { key:'inicio',       label:'Inicio',    icon:'🏠' },
-  { key:'analisis',     label:'Análisis',  icon:'📊' },
-  { key:'__add__',      label:'',          icon:'+' },
-  { key:'planear',      label:'Planear',   icon:'📅' },
-  { key:'perfil',       label:'Perfil',    icon:'👤' },
+  { key:'inicio',        label:'Inicio',    icon:'🏠' },
+  { key:'analisis',      label:'Análisis',  icon:'📊' },
+  { key:'__add__',       label:'',          icon:'+' },
+  { key:'__whatsapp__',  label:'WhatsApp',  icon:'💬' },
+  { key:'perfil',        label:'Perfil',    icon:'👤' },
 ];
 
 // ── Main ───────────────────────────────────────────────────────
@@ -1711,6 +1768,7 @@ export default function MainApp({ user, onLogout }) {
   const [dark, setDarkState] = useState(false);
   const [monthPicker, setMonthPicker] = useState(false);
   const [addModal, setAddModal] = useState(false);
+  const [panel, setPanel] = useState(null); // null | 'ahorros' | 'deudas' | 'prestamos' | 'turnos' | 'calendario' | 'proyeccion'
 
   const C = mkTheme(dark);
 
@@ -1771,10 +1829,11 @@ export default function MainApp({ user, onLogout }) {
     </View>
   );
 
-  const PICKER_YEARS = [2025, 2026, 2027, 2028, 2029, 2030];
+  const PICKER_YEARS = [2026, 2027, 2028, 2029, 2030];
 
   const handleTab = (key) => {
     if (key === '__add__') { setAddModal(true); return; }
+    if (key === '__whatsapp__') { connectWhatsApp(); return; }
     setTab(key);
   };
 
@@ -1783,11 +1842,32 @@ export default function MainApp({ user, onLogout }) {
       <View style={{ flex:1, backgroundColor:C.bg }}>
         {/* Content */}
         <View style={{ flex:1 }}>
-          {tab==='inicio'   && <InicioTab data={data} onSave={save} onMonthPress={() => setMonthPicker(true)}/>}
+          {tab==='inicio'   && <InicioTab data={data} onSave={save} onMonthPress={() => setMonthPicker(true)} nombre={nombre} onOpenPanel={setPanel}/>}
           {tab==='analisis' && <AnalisisTab data={data} onSave={save}/>}
-          {tab==='planear'  && <PlanearTab data={data} onSave={save}/>}
           {tab==='perfil'   && <PerfilTab user={user} onLogout={onLogout} connectWhatsApp={connectWhatsApp} dark={dark} setDark={setDark} data={data}/>}
         </View>
+
+        {/* Panel Modal */}
+        <Modal visible={!!panel} animationType="slide" onRequestClose={() => setPanel(null)}>
+          <ThemeCtx.Provider value={C}>
+            <View style={{ flex:1, backgroundColor: C.bg }}>
+              <View style={{ backgroundColor: C.accent, paddingTop: 52, paddingBottom: 16, paddingHorizontal: 20, flexDirection:'row', alignItems:'center', gap:12 }}>
+                <TouchableOpacity onPress={() => setPanel(null)}>
+                  <Text style={{ color:'#fff', fontSize:22 }}>←</Text>
+                </TouchableOpacity>
+                <Text style={{ color:'#fff', fontSize:18, fontWeight:'800' }}>
+                  { panel==='ahorros' ? 'Ahorros' : panel==='deudas' ? 'Deudas' : panel==='prestamos' ? 'Préstamos' : panel==='turnos' ? 'Turnos' : panel==='calendario' ? 'Eventos' : 'Proyección' }
+                </Text>
+              </View>
+              { panel==='ahorros'    && <Ahorros    data={data} onSave={save}/> }
+              { panel==='deudas'     && <Deudas     data={data} onSave={save}/> }
+              { panel==='prestamos'  && <Prestamos  data={data} onSave={save}/> }
+              { panel==='turnos'     && <Turnos     data={data} onSave={save}/> }
+              { panel==='calendario' && <Calendario data={data} onSave={save}/> }
+              { panel==='proyeccion' && <Proyeccion data={data} onSave={save}/> }
+            </View>
+          </ThemeCtx.Provider>
+        </Modal>
 
         {/* Bottom Tab Bar */}
         <View style={{
