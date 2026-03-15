@@ -490,6 +490,7 @@ REGLAS DE INTERPRETACIÓN:
 - "modo ahorro X%", "reducí los presupuestos X%", "quiero ahorrar más este mes" → modo_ahorro (porcentaje: número entre 1-50)
 - "si pido X en Y cuotas", "simulá un préstamo de X", "cuánto pago si saco X" → simular_prestamo (amount, cuotas, tna si la menciona sino 0)
 - "qué deuda pago primero", "estrategia para mis deudas", "cómo salgo de las deudas" → estrategia_deudas
+- "hasta cuándo pago/pagaría", "cuándo termino de pagar", "cuándo finaliza/termina cada deuda", "cuándo se acaba cada deuda", "en qué mes termino" → consultar_fin_deudas
 - "puse X en plazo fijo", "hice un plazo fijo de X", "coloqué X en el banco" → agregar_plazo_fijo (amount, tna si menciona, dias si menciona, banco si menciona)
 - "cómo está mi plazo fijo", "cuándo vence el plazo fijo", "mis plazos fijos" → consultar_plazo_fijo
 - "gastos hormiga", "en qué estoy tirando plata sin darme cuenta", "gastos chicos que se acumulan" → gastos_hormiga
@@ -1898,7 +1899,31 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
     case 'consultar_deudas': {
       if (!data.debts.length) return `✅ No tenés deudas registradas${name ? ', ' + name : ''}. ¡Excelente!`;
       const total = data.debts.reduce((s, d) => s + d.remaining, 0);
-      return `💳 *Tus deudas*\n\n${data.debts.map(d => `💳 *${d.name}*: ${fmt(d.remaining)}${d.installment > 0 ? ` · cuota ${fmt(d.installment)}` : ''}`).join('\n')}\n\n📊 Total: ${fmt(total)}`;
+      const arRef = arNow();
+      const lines = data.debts.map(d => {
+        let line = `💳 *${d.name}*: ${fmt(d.remaining)}`;
+        if (d.installment > 0) {
+          const mesesLeft = Math.ceil(d.remaining / d.installment);
+          const finDate = new Date(arRef.getFullYear(), arRef.getMonth() + mesesLeft, 1);
+          const finStr = `${MONTH_NAMES[finDate.getMonth()]} ${finDate.getFullYear()}`;
+          line += ` · cuota ${fmt(d.installment)} · termina ${finStr}`;
+        }
+        return line;
+      });
+      return `💳 *Tus deudas*\n\n${lines.join('\n')}\n\n📊 Total: ${fmt(total)}`;
+    }
+
+    case 'consultar_fin_deudas': {
+      if (!data.debts.length) return `✅ No tenés deudas registradas. ¡Excelente!`;
+      const arRef = arNow();
+      const lines = data.debts.map(d => {
+        if (d.installment <= 0) return `📋 *${d.name}*: sin cuota definida (${fmt(d.remaining)} pendiente)`;
+        const mesesLeft = Math.ceil(d.remaining / d.installment);
+        const finDate = new Date(arRef.getFullYear(), arRef.getMonth() + mesesLeft, 1);
+        const finStr = `${MONTH_NAMES[finDate.getMonth()]} ${finDate.getFullYear()}`;
+        return `📋 *${d.name}*: terminás en ${finStr} (${mesesLeft} cuota${mesesLeft !== 1 ? 's' : ''} de ${fmt(d.installment)})`;
+      });
+      return `🗓️ *Cuándo terminás de pagar*\n\n${lines.join('\n')}\n\n_Calculado en base al saldo actual y cuota mensual._`;
     }
 
     case 'consultar_vencimientos': {
