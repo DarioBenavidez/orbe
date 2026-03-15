@@ -1847,7 +1847,22 @@ export default function MainApp({ user, onLogout }) {
   const nombre   = meta.nombre || user?.email?.split('@')[0] || 'Usuario';
   const fullName = meta.full_name || nombre;
 
-  const connectWhatsApp = async () => {
+  const [waModal, setWaModal] = useState(false);
+  const [waPhone, setWaPhone] = useState('');
+  const [waLoading, setWaLoading] = useState(false);
+
+  const connectWhatsApp = () => {
+    setWaPhone('');
+    setWaModal(true);
+  };
+
+  const doConnectWhatsApp = async () => {
+    const phone = waPhone.replace(/\D/g, '');
+    if (phone.length < 10) {
+      Alert.alert('Número inválido', 'Ingresá tu número de WhatsApp con código de país (ej: 5491112345678).');
+      return;
+    }
+    setWaLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) {
@@ -1857,20 +1872,17 @@ export default function MainApp({ user, onLogout }) {
       const resp = await fetch(`${BACKEND_URL}/api/generate-link-code`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone }),
       });
       if (!resp.ok) throw new Error('Error generando código');
       const { code } = await resp.json();
+      setWaModal(false);
       const waUrl = `https://wa.me/5491125728211?text=${encodeURIComponent(`ORBE:${code}`)}`;
-      Alert.alert(
-        'Conectar WhatsApp',
-        `Tu código de vinculación es:\n\n${code}\n\nSe enviará automáticamente al abrir WhatsApp. El código expira en 10 minutos.`,
-        [
-          { text: 'Cancelar', style: 'cancel' },
-          { text: 'Abrir WhatsApp', onPress: () => Linking.openURL(waUrl).catch(() => Alert.alert('Error', 'No se pudo abrir WhatsApp.')) },
-        ]
-      );
+      Linking.openURL(waUrl).catch(() => Alert.alert('Error', 'No se pudo abrir WhatsApp.'));
     } catch {
       Alert.alert('Error', 'No se pudo generar el código. Verificá tu conexión.');
+    } finally {
+      setWaLoading(false);
     }
   };
 
@@ -1996,6 +2008,24 @@ export default function MainApp({ user, onLogout }) {
             ))}
           </ScrollView>
           <Btn label="Cerrar" variant="ghost" onPress={() => setMonthPicker(false)} style={{ marginTop:8 }}/>
+        </ModalSheet>
+
+        {/* WhatsApp linking modal */}
+        <ModalSheet visible={waModal} onClose={() => setWaModal(false)} title="Conectar WhatsApp">
+          <Text style={{ fontSize:13, color:C.textMuted, marginBottom:16, lineHeight:20 }}>
+            Ingresá tu número de WhatsApp con código de país para que el código de vinculación solo funcione desde ese número.
+          </Text>
+          <Input
+            label="Número de WhatsApp"
+            value={waPhone}
+            onChangeText={setWaPhone}
+            placeholder="Ej: 5491112345678"
+            keyboardType="phone-pad"
+          />
+          <View style={{ flexDirection:'row', gap:10, marginTop:4 }}>
+            <Btn label="Cancelar" variant="ghost" style={{ flex:1 }} onPress={() => setWaModal(false)}/>
+            <Btn label={waLoading ? '...' : 'Continuar'} style={{ flex:1 }} onPress={doConnectWhatsApp} disabled={waLoading}/>
+          </View>
         </ModalSheet>
       </View>
     </ThemeCtx.Provider>

@@ -3203,17 +3203,19 @@ if (process.env.NODE_ENV !== 'test') scheduleDaily();
 
 // ── Seguridad: códigos de vinculación temporales (10 min, uso único) ──
 const linkingCodes = new Map();
-function generateLinkingCode(userId, userName) {
+function generateLinkingCode(userId, userName, expectedPhone) {
   const code = String(Math.floor(100000 + Math.random() * 900000)); // 6 dígitos
   // Limpiar códigos expirados
   const now = Date.now();
   for (const [k, v] of linkingCodes) { if (now > v.expires) linkingCodes.delete(k); }
-  linkingCodes.set(code, { userId, userName, expires: now + 10 * 60_000 });
+  linkingCodes.set(code, { userId, userName, expectedPhone, expires: now + 10 * 60_000 });
   return code;
 }
-function consumeLinkingCode(code) {
+function consumeLinkingCode(code, fromPhone) {
   const entry = linkingCodes.get(code);
   if (!entry || Date.now() > entry.expires) { linkingCodes.delete(code); return null; }
+  // Si se registró un teléfono esperado, verificar que coincida
+  if (entry.expectedPhone && entry.expectedPhone !== fromPhone) return null;
   linkingCodes.delete(code); // uso único
   return entry;
 }
@@ -3264,7 +3266,10 @@ app.post('/api/generate-link-code', async (req, res) => {
     const { data: { user }, error } = await supabase.auth.getUser(token);
     if (error || !user) return res.status(401).json({ error: 'Token inválido' });
     const userName = user.user_metadata?.full_name || user.user_metadata?.nombre || user.email?.split('@')[0] || 'Usuario';
-    const code = generateLinkingCode(user.id, userName);
+    // phone opcional: si el usuario lo provee, el código solo funciona desde ese número
+    const rawPhone = req.body?.phone || '';
+    const expectedPhone = rawPhone.replace(/\D/g, ''); // solo dígitos
+    const code = generateLinkingCode(user.id, userName, expectedPhone || null);
     res.json({ code });
   } catch (err) {
     console.error('❌ Error generando código:', err.message);
@@ -3465,7 +3470,7 @@ Devolvé SOLO el JSON array, sin texto adicional.`;
     // Activación segura con código temporal — formato: ORBE:123456
     if (incomingMsg.startsWith('ORBE:')) {
       const code = incomingMsg.replace('ORBE:', '').trim();
-      const entry = consumeLinkingCode(code);
+      const entry = consumeLinkingCode(code, from);
       if (entry) {
         await linkPhoneToUser(from, entry.userId, entry.userName);
         const greeting  = getGreeting();
