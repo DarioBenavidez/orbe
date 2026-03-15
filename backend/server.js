@@ -3447,6 +3447,9 @@ Devolvé SOLO el JSON array, sin texto adicional.`;
         const firstName = entry.userName ? entry.userName.split(' ')[0] : null;
         const saludo    = firstName ? `${greeting}, ${firstName}` : greeting;
         await sendWhatsAppMessage(from, `✅ *¡${saludo}! Soy Orbe, tu asistente financiero personal* 🌟\n\nYa estamos conectados. Desde ahora podés registrar gastos, consultar tu balance, pedir el precio del dólar y mucho más, todo por acá sin abrir la app.\n\nProbá con:\n• *"hola"*\n• *"balance"*\n• *"gasté $500 en café"*\n• *"¿a cuánto está el dólar?"*`);
+        setTimeout(async () => {
+          await sendWhatsAppMessage(from, `📌 *Un tip rápido:* te recomiendo anclar este chat en WhatsApp para tenerme siempre a mano.\n\nEn Android: mantenés presionado el chat → 📌 Anclar\nEn iPhone: deslizá el chat a la derecha → 📌\n\n¡Así me encontrás al instante cuando necesites registrar algo!`);
+        }, 2000);
       } else {
         await sendWhatsAppMessage(from, `❌ Código inválido o expirado. Abrí la app de Orbe y generá un nuevo código desde *Perfil → Conectar WhatsApp*.`);
       }
