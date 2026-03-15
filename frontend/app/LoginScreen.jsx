@@ -126,7 +126,7 @@ export default function LoginScreen({ onLogin }) {
 
   const handleOAuth = async (provider) => {
     try {
-      const redirectTo = Linking.createURL('auth/callback');
+      const redirectTo = 'orbe://auth/callback';
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
         options: { redirectTo, skipBrowserRedirect: true },
@@ -138,16 +138,18 @@ export default function LoginScreen({ onLogin }) {
       if (result.type !== 'success') return;
 
       // Extraer el code del URL de callback y canjearlo por sesión
-      const parsed = Linking.parse(result.url);
-      const code = parsed.queryParams?.code;
+      const url = result.url;
+      const codeMatch = url.match(/[?&]code=([^&]+)/);
+      const code = codeMatch?.[1];
       if (code) {
         const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
         if (sessionError) throw sessionError;
         if (sessionData?.session?.user) { onLogin(sessionData.session.user); return; }
       }
-      // Fallback: intentar getSession directamente
+      // Fallback
       const { data: fallback } = await supabase.auth.getSession();
       if (fallback?.session?.user) onLogin(fallback.session.user);
+      else setError('No se pudo completar el inicio de sesión. Intentá de nuevo.');
     } catch {
       setError('No se pudo iniciar sesión con Google. Intentá de nuevo.');
     }
