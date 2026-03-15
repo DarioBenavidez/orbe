@@ -1665,15 +1665,67 @@ function PerfilTab({ user, onLogout, connectWhatsApp, dark, setDark, data }) {
   const fullName = meta.full_name || `${nombre} ${apellido}`.trim();
   const initial  = fullName[0]?.toUpperCase() || 'U';
 
-  // Estadísticas del usuario
-  const stats = data ? (() => {
-    const txCount = data.transactions?.length || 0;
-    const months  = data.transactions?.length > 0
-      ? new Set(data.transactions.map(t => t.date?.slice(0,7))).size
-      : 0;
-    const catCount = Object.keys(data.categories || {}).length;
-    return { txCount, months, catCount };
-  })() : null;
+  // Editar nombre/apellido
+  const [editNameModal, setEditNameModal] = useState(false);
+  const [editNombre,    setEditNombre]    = useState(nombre);
+  const [editApellido,  setEditApellido]  = useState(apellido);
+  const [savingName,    setSavingName]    = useState(false);
+
+  const saveNombre = async () => {
+    if (!editNombre.trim()) return;
+    setSavingName(true);
+    try {
+      const { error } = await supabase.auth.updateUser({
+        data: { nombre: editNombre.trim(), apellido: editApellido.trim(), full_name: `${editNombre.trim()} ${editApellido.trim()}`.trim() },
+      });
+      if (error) throw error;
+      setEditNameModal(false);
+    } catch (e) {
+      Alert.alert('Error', e.message || 'No se pudo actualizar el nombre');
+    }
+    setSavingName(false);
+  };
+
+  // Cambiar contraseña
+  const [pwModal,    setPwModal]    = useState(false);
+  const [pwCurrent,  setPwCurrent]  = useState('');
+  const [pwNew,      setPwNew]      = useState('');
+  const [pwConfirm,  setPwConfirm]  = useState('');
+  const [savingPw,   setSavingPw]   = useState(false);
+
+  const changePassword = async () => {
+    if (pwNew.length < 8) return Alert.alert('Error', 'La contraseña debe tener al menos 8 caracteres');
+    if (pwNew !== pwConfirm) return Alert.alert('Error', 'Las contraseñas no coinciden');
+    setSavingPw(true);
+    try {
+      const { error } = await supabase.auth.updateUser({ password: pwNew });
+      if (error) throw error;
+      Alert.alert('Listo', 'Contraseña actualizada correctamente');
+      setPwModal(false); setPwCurrent(''); setPwNew(''); setPwConfirm('');
+    } catch (e) {
+      Alert.alert('Error', e.message || 'No se pudo cambiar la contraseña');
+    }
+    setSavingPw(false);
+  };
+
+  // Biometría
+  const [bioEnabled, setBioEnabled] = useState(false);
+  const [bioAvailable, setBioAvailable] = useState(false);
+  useEffect(() => {
+    let LA;
+    try { LA = require('expo-local-authentication'); } catch { return; }
+    LA.hasHardwareAsync().then(has => {
+      if (!has) return;
+      LA.isEnrolledAsync().then(enrolled => {
+        setBioAvailable(enrolled);
+        AsyncStorage.getItem('orbe_bio').then(v => setBioEnabled(v === '1')).catch(() => {});
+      });
+    });
+  }, []);
+  const toggleBio = async (val) => {
+    setBioEnabled(val);
+    await AsyncStorage.setItem('orbe_bio', val ? '1' : '0');
+  };
 
   return (
     <View style={{ flex:1, backgroundColor:C.header }}>
@@ -1695,10 +1747,47 @@ function PerfilTab({ user, onLogout, connectWhatsApp, dark, setDark, data }) {
         <ScrollView contentContainerStyle={{ padding:20 }} showsVerticalScrollIndicator={false}>
 
 
+          {/* Cuenta */}
           <Card style={{ marginBottom:14 }}>
-            {/* WhatsApp */}
-            <TouchableOpacity onPress={connectWhatsApp}
+            <TouchableOpacity onPress={() => { setEditNombre(nombre); setEditApellido(apellido); setEditNameModal(true); }}
               style={{ flexDirection:'row', alignItems:'center', paddingVertical:14, borderBottomWidth:1, borderBottomColor:C.border }}>
+              <IconCircle icon="👤" bg={C.accent+'22'} size={44}/>
+              <View style={{ flex:1, marginLeft:14 }}>
+                <Text style={{ fontSize:15, fontWeight:'600', color:C.text }}>Editar nombre</Text>
+                <Text style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>{fullName}</Text>
+              </View>
+              <Text style={{ color:C.textMuted, fontSize:20 }}>›</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity onPress={() => setPwModal(true)}
+              style={{ flexDirection:'row', alignItems:'center', paddingVertical:14 }}>
+              <IconCircle icon="🔒" bg={C.accent+'22'} size={44}/>
+              <View style={{ flex:1, marginLeft:14 }}>
+                <Text style={{ fontSize:15, fontWeight:'600', color:C.text }}>Cambiar contraseña</Text>
+                <Text style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>Actualizá tu contraseña de acceso</Text>
+              </View>
+              <Text style={{ color:C.textMuted, fontSize:20 }}>›</Text>
+            </TouchableOpacity>
+          </Card>
+
+          {/* Seguridad y preferencias */}
+          <Card style={{ marginBottom:14 }}>
+            {bioAvailable && (
+              <View style={{ flexDirection:'row', alignItems:'center', paddingVertical:14, borderBottomWidth:1, borderBottomColor:C.border }}>
+                <IconCircle icon="👆" bg={C.accent+'22'} size={44}/>
+                <Text style={{ flex:1, fontSize:15, fontWeight:'600', color:C.text, marginLeft:14 }}>Huella / Face ID</Text>
+                <Switch value={bioEnabled} onValueChange={toggleBio}
+                  trackColor={{ false:C.border, true:C.accent }} thumbColor="#fff"/>
+              </View>
+            )}
+            <View style={{ flexDirection:'row', alignItems:'center', paddingVertical:14, borderBottomWidth:1, borderBottomColor:C.border }}>
+              <IconCircle icon={dark ? '🌙' : '☀️'} bg={C.accent+'22'} size={44}/>
+              <Text style={{ flex:1, fontSize:15, fontWeight:'600', color:C.text, marginLeft:14 }}>Modo oscuro</Text>
+              <Switch value={dark} onValueChange={setDark}
+                trackColor={{ false:C.border, true:C.accent }} thumbColor="#fff"/>
+            </View>
+            <TouchableOpacity onPress={connectWhatsApp}
+              style={{ flexDirection:'row', alignItems:'center', paddingVertical:14 }}>
               <IconCircle icon="💬" bg="#25D36622" size={44}/>
               <View style={{ flex:1, marginLeft:14 }}>
                 <Text style={{ fontSize:15, fontWeight:'600', color:C.text }}>Conectar WhatsApp</Text>
@@ -1706,17 +1795,6 @@ function PerfilTab({ user, onLogout, connectWhatsApp, dark, setDark, data }) {
               </View>
               <Text style={{ color:C.textMuted, fontSize:20 }}>›</Text>
             </TouchableOpacity>
-
-            {/* Dark mode toggle */}
-            <View style={{ flexDirection:'row', alignItems:'center', paddingVertical:14 }}>
-              <IconCircle icon={dark ? '🌙' : '☀️'} bg={C.accent+'22'} size={44}/>
-              <Text style={{ flex:1, fontSize:15, fontWeight:'600', color:C.text, marginLeft:14 }}>Modo oscuro</Text>
-              <Switch
-                value={dark} onValueChange={setDark}
-                trackColor={{ false:C.border, true:C.accent }}
-                thumbColor="#fff"
-              />
-            </View>
           </Card>
 
           {/* Logout */}
@@ -1733,6 +1811,26 @@ function PerfilTab({ user, onLogout, connectWhatsApp, dark, setDark, data }) {
         </ScrollView>
       </View>
     </View>
+
+    {/* Modal: Editar nombre */}
+    <ModalSheet visible={editNameModal} onClose={() => setEditNameModal(false)} title="Editar nombre">
+      <Input label="Nombre" value={editNombre} onChangeText={setEditNombre} placeholder="Tu nombre"/>
+      <Input label="Apellido" value={editApellido} onChangeText={setEditApellido} placeholder="Tu apellido"/>
+      <View style={{ flexDirection:'row', gap:10, marginTop:4 }}>
+        <Btn label="Cancelar" variant="ghost" style={{ flex:1 }} onPress={() => setEditNameModal(false)}/>
+        <Btn label={savingName ? '...' : 'Guardar'} style={{ flex:1 }} onPress={saveNombre}/>
+      </View>
+    </ModalSheet>
+
+    {/* Modal: Cambiar contraseña */}
+    <ModalSheet visible={pwModal} onClose={() => setPwModal(false)} title="Cambiar contraseña">
+      <Input label="Nueva contraseña" value={pwNew} onChangeText={setPwNew} placeholder="Mínimo 8 caracteres" secureTextEntry/>
+      <Input label="Repetir contraseña" value={pwConfirm} onChangeText={setPwConfirm} placeholder="Repetí la contraseña" secureTextEntry/>
+      <View style={{ flexDirection:'row', gap:10, marginTop:4 }}>
+        <Btn label="Cancelar" variant="ghost" style={{ flex:1 }} onPress={() => setPwModal(false)}/>
+        <Btn label={savingPw ? '...' : 'Guardar'} style={{ flex:1 }} onPress={changePassword}/>
+      </View>
+    </ModalSheet>
   );
 }
 
