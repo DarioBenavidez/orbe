@@ -5,6 +5,7 @@ import {
   ScrollView, ActivityIndicator, Image,
 } from 'react-native';
 import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
 import { supabase } from '../constants/supabase';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -125,21 +126,30 @@ export default function LoginScreen({ onLogin }) {
 
   const handleOAuth = async (provider) => {
     try {
-      const redirectTo = 'orbe://auth/callback';
+      const redirectTo = Linking.createURL('auth/callback');
       const { data, error } = await supabase.auth.signInWithOAuth({
         provider,
-        options: { redirectTo },
+        options: { redirectTo, skipBrowserRedirect: true },
       });
       if (error) throw error;
-      if (data?.url) {
-        const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-        if (result.type === 'success') {
-          const { data: sessionData } = await supabase.auth.getSession();
-          if (sessionData?.session?.user) onLogin(sessionData.session.user);
-        }
+      if (!data?.url) return;
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+      if (result.type !== 'success') return;
+
+      // Extraer el code del URL de callback y canjearlo por sesión
+      const parsed = Linking.parse(result.url);
+      const code = parsed.queryParams?.code;
+      if (code) {
+        const { data: sessionData, error: sessionError } = await supabase.auth.exchangeCodeForSession(code);
+        if (sessionError) throw sessionError;
+        if (sessionData?.session?.user) { onLogin(sessionData.session.user); return; }
       }
+      // Fallback: intentar getSession directamente
+      const { data: fallback } = await supabase.auth.getSession();
+      if (fallback?.session?.user) onLogin(fallback.session.user);
     } catch {
-      setError('No se pudo iniciar sesión con ese proveedor.');
+      setError('No se pudo iniciar sesión con Google. Intentá de nuevo.');
     }
   };
 
