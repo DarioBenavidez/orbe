@@ -8,6 +8,7 @@ const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 
 const app = express();
+app.set('trust proxy', 1); // Railway / reverse proxies
 
 // ── Seguridad: headers HTTP ────────────────────────────────
 app.use(helmet());
@@ -3936,10 +3937,22 @@ Devolvé SOLO el JSON array, sin texto adicional.`;
     const esDespedida = despedidas.some(d => msgLower === d || msgLower.endsWith(d) || msgLower.includes(d)) &&
       (despedidas.some(d => msgLower === d) || /gracias|hasta|chau|bye|nos vemos/i.test(msgLower));
 
-    const esSaludo = !esDespedida && saludos.some(s => msgLower === s || msgLower.startsWith(s + ' ') || msgLower.endsWith(' ' + s));
+    // Saludo puro: solo detectar cuando el mensaje NO tiene contenido sustancial después del saludo.
+    // Ej: "hola" ✓, "hola orbe" ✓, "hola orbe, estoy necesitando crear una categoría" ✗ (Claude lo maneja)
+    const esSaludo = !esDespedida && saludos.some(s => {
+      if (msgLower === s) return true;
+      if (msgLower.startsWith(s + ' ') || msgLower.startsWith(s + ',')) {
+        // Quitar el saludo y la mención "orbe" — si queda algo sustancial, NO es saludo puro
+        const rest = msgLower.slice(s.length).replace(/^[\s,]+/, '').replace(/^orbe[\s,!]*/i, '').trim();
+        return rest.length < 6;
+      }
+      if (msgLower.endsWith(' ' + s) && msgLower.length <= s.length + 8) return true;
+      return false;
+    });
 
     const palabrasPago = ['ya pague', 'ya pagué', 'pague el', 'pagué el', 'pague la', 'pagué la', 'abone', 'aboné', 'abonó'];
-    const esPago = palabrasPago.some(s => msgLower.startsWith(s) || msgLower.includes(s));
+    // esPago: solo si el mensaje empieza con la frase de pago (no si aparece en mitad de otro contexto)
+    const esPago = palabrasPago.some(s => msgLower.startsWith(s)) && !/\bno\b.*pagu[eé]|sin.*pagar|borr|elimin|cancel/i.test(incomingMsg);
 
     let action;
     if (esDespedida) {
@@ -3967,13 +3980,13 @@ Devolvé SOLO el JSON array, sin texto adicional.`;
       }
     } else if (/cotizacion|cotización|blue|a cu[aá]nto.*dol|precio.*dol|valor.*dol/i.test(incomingMsg) && !/gast[eé]|pagu[eé]|compr[eé]|us[eé]|sal[ií]/i.test(incomingMsg)) {
       action = { type: 'consultar_dolar' };
-    } else if (/tengo.*eventos|mis eventos|qué.*eventos|cuáles.*eventos|que.*eventos|cuales.*eventos/i.test(incomingMsg)) {
+    } else if (/\bmis eventos\b|\bqué eventos\b|\bque eventos\b|\bcuáles eventos\b|\bcuales eventos\b|\btengo eventos\b/i.test(incomingMsg)) {
       action = { type: 'consultar_eventos' };
-    } else if (/venc[ei]|vence|vencimiento|qué.*pagar|que.*pagar/i.test(incomingMsg)) {
+    } else if (/\bvenc(e|en|imiento|imientos)\b|\bqué\b.*\bpagar\b|\bque\b.*\bpagar\b/i.test(incomingMsg) && !/agregar|registr|añad|anot|deuda|cuota/i.test(incomingMsg)) {
       action = { type: 'consultar_vencimientos' };
-    } else if (/balance|saldo|cuánto.*tengo|cuanto.*tengo/i.test(incomingMsg)) {
+    } else if (/\b(balance|saldo)\b|\bcuánto\s+(me\s+queda|tengo\s+(disponible|ahorrado|guardado))\b|\bcuanto\s+(me\s+queda|tengo\s+(disponible|ahorrado|guardado))\b/i.test(incomingMsg)) {
       action = { type: 'consultar_balance' };
-    } else if (/resumen|cómo.*voy|como.*voy/i.test(incomingMsg)) {
+    } else if (/\bresumen\b|\bc[oó]mo\s+(?:anduve|estoy\s+yendo|voy\s+(?:con|este|el))/i.test(incomingMsg)) {
       action = { type: 'resumen_general' };
 
     // ── Fast-detect ahorros (evita que Claude los confunda con eventos) ──
