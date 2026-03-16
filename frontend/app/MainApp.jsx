@@ -1961,7 +1961,7 @@ export default function MainApp({ user, onLogout }) {
 
   const PICKER_YEARS = [2026, 2027, 2028, 2029, 2030];
 
-  const handleTab = (key) => {
+  const handleTab = async (key) => {
     if (key === '__add__') { setAddModal(true); return; }
     if (key === '__whatsapp__') {
       // Recheck linked status before opening
