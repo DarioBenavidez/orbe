@@ -1913,17 +1913,20 @@ export default function MainApp({ user, onLogout }) {
     setWaLoading(false);
   };
 
+  const checkLinked = async () => {
+    const { data: wa, error } = await supabase.from('whatsapp_users').select('phone').eq('user_id', user.id).single();
+    if (wa?.phone) {
+      if (waPolling) { clearInterval(waPolling); setWaPolling(null); }
+      setWaLinked(wa.phone);
+      setWaModal(false);
+      Alert.alert('¡WhatsApp conectado!', 'Ya podés usar Orbe desde WhatsApp.');
+      return true;
+    }
+    return false;
+  };
+
   const startPolling = () => {
-    const id = setInterval(async () => {
-      const { data: wa } = await supabase.from('whatsapp_users').select('phone').eq('user_id', user.id).single();
-      if (wa?.phone) {
-        clearInterval(id);
-        setWaPolling(null);
-        setWaLinked(wa.phone);
-        setWaModal(false);
-        Alert.alert('¡WhatsApp conectado!', 'Ya podés usar Orbe desde WhatsApp.');
-      }
-    }, 3000);
+    const id = setInterval(async () => { await checkLinked(); }, 3000);
     setWaPolling(id);
   };
 
@@ -2091,13 +2094,16 @@ export default function MainApp({ user, onLogout }) {
               </TouchableOpacity>
 
               {waPolling && (
-                <View style={{ flexDirection:'row', alignItems:'center', justifyContent:'center', gap:8, marginTop:4 }}>
-                  <ActivityIndicator size="small" color={C.accent}/>
-                  <Text style={{ fontSize:12, color:C.textMuted }}>Esperando confirmación...</Text>
+                <View style={{ gap:10, marginTop:8 }}>
+                  <View style={{ flexDirection:'row', alignItems:'center', justifyContent:'center', gap:8 }}>
+                    <ActivityIndicator size="small" color={C.accent}/>
+                    <Text style={{ fontSize:12, color:C.textMuted }}>Esperando confirmación...</Text>
+                  </View>
+                  <Btn label="Ya lo envié, verificar" onPress={checkLinked} style={{ marginTop:4 }}/>
                 </View>
               )}
 
-              <Btn label="Cancelar" variant="ghost" onPress={closeWaModal} style={{ marginTop:16 }}/>
+              <Btn label="Cancelar" variant="ghost" onPress={closeWaModal} style={{ marginTop:12 }}/>
             </>
           )}
         </ModalSheet>
