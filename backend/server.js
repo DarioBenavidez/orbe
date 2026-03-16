@@ -3271,23 +3271,25 @@ function scheduleDaily() {
 }
 if (process.env.NODE_ENV !== 'test') scheduleDaily();
 
-// ── Seguridad: códigos de vinculación temporales (10 min, uso único) ──
-const linkingCodes = new Map();
-function generateLinkingCode(userId, userName, expectedPhone) {
-  const code = String(Math.floor(100000 + Math.random() * 900000)); // 6 dígitos
-  // Limpiar códigos expirados
-  const now = Date.now();
-  for (const [k, v] of linkingCodes) { if (now > v.expires) linkingCodes.delete(k); }
-  linkingCodes.set(code, { userId, userName, expectedPhone, expires: now + 10 * 60_000 });
+// ── Códigos de vinculación persistidos en Supabase ────────
+async function generateLinkingCode(userId, userName, expectedPhone) {
+  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const expires_at = new Date(Date.now() + 10 * 60_000).toISOString();
+  // Borrar códigos anteriores del mismo usuario
+  await supabase.from('linking_codes').delete().eq('user_id', userId);
+  await supabase.from('linking_codes').insert({ code, user_id: userId, user_name: userName, expected_phone: expectedPhone || null, expires_at });
   return code;
 }
-function consumeLinkingCode(code, fromPhone) {
-  const entry = linkingCodes.get(code);
-  if (!entry || Date.now() > entry.expires) { linkingCodes.delete(code); return null; }
-  // Si se registró un teléfono esperado, verificar que coincida
-  if (entry.expectedPhone && entry.expectedPhone !== fromPhone) return null;
-  linkingCodes.delete(code); // uso único
-  return entry;
+async function consumeLinkingCode(code, fromPhone) {
+  const { data: entry } = await supabase.from('linking_codes').select('*').eq('code', code).single();
+  if (!entry) return null;
+  if (new Date(entry.expires_at) < new Date()) {
+    await supabase.from('linking_codes').delete().eq('code', code);
+    return null;
+  }
+  if (entry.expected_phone && entry.expected_phone !== fromPhone) return null;
+  await supabase.from('linking_codes').delete().eq('code', code);
+  return { userId: entry.user_id, userName: entry.user_name };
 }
 
 // ── OTP de verificación de teléfono ───────────────────────
@@ -3349,7 +3351,7 @@ app.post('/api/generate-link-code', async (req, res) => {
     // phone opcional: si el usuario lo provee, el código solo funciona desde ese número
     const rawPhone = req.body?.phone || '';
     const expectedPhone = rawPhone.replace(/\D/g, ''); // solo dígitos
-    const code = generateLinkingCode(user.id, userName, expectedPhone || null);
+    const code = await generateLinkingCode(user.id, userName, expectedPhone || null);
     res.json({ code });
   } catch (err) {
     console.error('❌ Error generando código:', err.message);
@@ -3615,7 +3617,7 @@ Devolvé SOLO el JSON array, sin texto adicional.`;
     // Activación segura con código temporal — formato: ORBE:123456
     if (incomingMsg.startsWith('ORBE:')) {
       const code = incomingMsg.replace('ORBE:', '').trim();
-      const entry = consumeLinkingCode(code, from);
+      const entry = await consumeLinkingCode(code, from);
       if (entry) {
         await linkPhoneToUser(from, entry.userId, entry.userName);
         const greeting  = getGreeting();
