@@ -1883,32 +1883,36 @@ export default function MainApp({ user, onLogout }) {
   const nombre   = meta.nombre || user?.email?.split('@')[0] || 'Usuario';
   const fullName = meta.full_name || nombre;
 
-  const [waLinked, setWaLinked] = useState(null); // null=cargando, false=no vinculado, string=phone vinculado
-  const [waModal, setWaModal] = useState(false);
-  const [waCode, setWaCode]   = useState('');
+  const [waLinked, setWaLinked] = useState(null);
+  const [waModal, setWaModal]   = useState(false);
+  const [waCode, setWaCode]     = useState('');
+  const [waPhone, setWaPhone]   = useState('');
+  const [waStep, setWaStep]     = useState(1); // 1: pedir número, 2: mostrar código
   const [waLoading, setWaLoading] = useState(false);
-  const [waPolling, setWaPolling] = useState(null); // interval id
+  const [waPolling, setWaPolling] = useState(null);
 
   const connectWhatsApp = () => {
     if (waLinked) {
       Linking.openURL('https://wa.me/5491125728211').catch(() => Alert.alert('Error', 'No se pudo abrir WhatsApp.'));
       return;
     }
-    openWaModal();
+    setWaCode(''); setWaPhone(''); setWaStep(1);
+    setWaModal(true);
   };
 
-  const openWaModal = async () => {
-    setWaCode('');
-    setWaModal(true);
+  const generateCode = async () => {
+    const digits = waPhone.replace(/\D/g, '');
+    if (digits.length < 8) { Alert.alert('Número inválido', 'Ingresá tu número de WhatsApp.'); return; }
     setWaLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       const resp = await fetch(`${BACKEND_URL}/api/generate-link-code`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone: digits }),
       });
       const body = await resp.json();
-      if (resp.ok && body.code) setWaCode(body.code);
+      if (resp.ok && body.code) { setWaCode(body.code); setWaStep(2); }
     } catch {}
     setWaLoading(false);
   };
@@ -2065,23 +2069,38 @@ export default function MainApp({ user, onLogout }) {
 
         {/* WhatsApp linking modal */}
         <ModalSheet visible={waModal} onClose={closeWaModal} title="Conectar WhatsApp">
-          {waLoading ? (
-            <ActivityIndicator color={C.accent} style={{ marginVertical: 32 }}/>
+          {waStep === 1 ? (
+            <>
+              <Text style={{ fontSize:13, color:C.textMuted, marginBottom:16, lineHeight:20 }}>
+                Ingresá tu número de WhatsApp. El código solo va a funcionar desde ese número.
+              </Text>
+              <Text style={{ fontSize:10, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:0.5, marginBottom:8 }}>Número de WhatsApp</Text>
+              <TextInput
+                style={{ backgroundColor:C.surface2, borderRadius:14, borderWidth:1, borderColor:C.border, paddingHorizontal:14, paddingVertical:13, fontSize:16, color:C.text, marginBottom:20 }}
+                placeholder="Ej: 5491112345678"
+                placeholderTextColor={C.textMuted}
+                value={waPhone}
+                onChangeText={setWaPhone}
+                keyboardType="phone-pad"
+              />
+              <View style={{ flexDirection:'row', gap:10 }}>
+                <Btn label="Cancelar" variant="ghost" style={{ flex:1 }} onPress={closeWaModal}/>
+                <Btn label={waLoading ? 'Generando...' : 'Generar código'} style={{ flex:1 }} onPress={generateCode} disabled={waLoading}/>
+              </View>
+            </>
           ) : (
             <>
               <Text style={{ fontSize:13, color:C.textMuted, marginBottom:20, lineHeight:20 }}>
-                Enviá este mensaje al chat de Orbe en WhatsApp para vincular tu cuenta. La app detecta la conexión automáticamente.
+                Enviá este mensaje desde tu WhatsApp para vincular tu cuenta.
               </Text>
 
-              {/* Código */}
               <Text style={{ fontSize:10, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:0.5, marginBottom:8 }}>Tu código</Text>
               <View style={{ backgroundColor:C.surface2, borderRadius:14, borderWidth:1, borderColor:C.border, paddingHorizontal:20, paddingVertical:16, alignItems:'center', marginBottom:20 }}>
                 <Text style={{ fontSize:28, fontWeight:'800', color:C.text, letterSpacing:6 }}>
-                  ORBE: {waCode || '------'}
+                  ORBE: {waCode}
                 </Text>
               </View>
 
-              {/* Botón abrir WhatsApp */}
               <TouchableOpacity
                 style={{ flexDirection:'row', alignItems:'center', justifyContent:'center', gap:8, backgroundColor:'#25D366', borderRadius:16, paddingVertical:14, marginBottom:12 }}
                 onPress={() => {
