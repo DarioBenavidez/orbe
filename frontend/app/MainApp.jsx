@@ -1885,109 +1885,51 @@ export default function MainApp({ user, onLogout }) {
 
   const [waLinked, setWaLinked] = useState(null); // null=cargando, false=no vinculado, string=phone vinculado
   const [waModal, setWaModal] = useState(false);
-  const [waPhone, setWaPhone] = useState('');
-  const [waOtp, setWaOtp] = useState('');
-  const [waStep, setWaStep] = useState(1); // 1: número, 2: código
+  const [waCode, setWaCode]   = useState('');
   const [waLoading, setWaLoading] = useState(false);
-  const [waCountry, setWaCountry] = useState({ code: 'ARG', prefix: '549', flag: '🇦🇷' });
-  const [waCountryOpen, setWaCountryOpen] = useState(false);
-
-  const WA_COUNTRIES = [
-    { code: 'ARG', prefix: '549',  flag: '🇦🇷', name: 'Argentina' },
-    { code: 'BOL', prefix: '591',  flag: '🇧🇴', name: 'Bolivia' },
-    { code: 'CHL', prefix: '56',   flag: '🇨🇱', name: 'Chile' },
-    { code: 'COL', prefix: '57',   flag: '🇨🇴', name: 'Colombia' },
-    { code: 'CRI', prefix: '506',  flag: '🇨🇷', name: 'Costa Rica' },
-    { code: 'CUB', prefix: '53',   flag: '🇨🇺', name: 'Cuba' },
-    { code: 'DOM', prefix: '1809', flag: '🇩🇴', name: 'Rep. Dominicana' },
-    { code: 'ECU', prefix: '593',  flag: '🇪🇨', name: 'Ecuador' },
-    { code: 'SLV', prefix: '503',  flag: '🇸🇻', name: 'El Salvador' },
-    { code: 'GTM', prefix: '502',  flag: '🇬🇹', name: 'Guatemala' },
-    { code: 'HND', prefix: '504',  flag: '🇭🇳', name: 'Honduras' },
-    { code: 'MEX', prefix: '52',   flag: '🇲🇽', name: 'México' },
-    { code: 'NIC', prefix: '505',  flag: '🇳🇮', name: 'Nicaragua' },
-    { code: 'PAN', prefix: '507',  flag: '🇵🇦', name: 'Panamá' },
-    { code: 'PRY', prefix: '595',  flag: '🇵🇾', name: 'Paraguay' },
-    { code: 'PER', prefix: '51',   flag: '🇵🇪', name: 'Perú' },
-    { code: 'PRI', prefix: '1787', flag: '🇵🇷', name: 'Puerto Rico' },
-    { code: 'URY', prefix: '598',  flag: '🇺🇾', name: 'Uruguay' },
-    { code: 'VEN', prefix: '58',   flag: '🇻🇪', name: 'Venezuela' },
-  ];
+  const [waPolling, setWaPolling] = useState(null); // interval id
 
   const connectWhatsApp = () => {
     if (waLinked) {
       Linking.openURL('https://wa.me/5491125728211').catch(() => Alert.alert('Error', 'No se pudo abrir WhatsApp.'));
       return;
     }
-    setWaPhone('');
-    setWaOtp('');
-    setWaStep(1);
-    setWaCountryOpen(false);
+    openWaModal();
+  };
+
+  const openWaModal = async () => {
+    setWaCode('');
     setWaModal(true);
-  };
-
-  const doSendOtp = async () => {
-    const phone = waCountry.prefix + waPhone.replace(/\D/g, '');
-    if (waPhone.replace(/\D/g, '').length < 6) {
-      Alert.alert('Número inválido', 'Ingresá tu número sin el código de país.');
-      return;
-    }
     setWaLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) { Alert.alert('Error', 'Sesión no encontrada.'); return; }
-      const resp = await fetch(`${BACKEND_URL}/api/send-phone-otp`, {
+      const resp = await fetch(`${BACKEND_URL}/api/generate-link-code`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone }),
       });
       const body = await resp.json();
-      if (!resp.ok) {
-        if (body.needsFirstMessage) {
-          Alert.alert(
-            'Primero mandá un mensaje',
-            'Para recibir el código necesitás escribirle "Hola" al bot de Orbe en WhatsApp. Después volvé acá y pedí el código de nuevo.',
-            [
-              { text: 'Cancelar', style: 'cancel' },
-              { text: 'Abrir WhatsApp', onPress: () => Linking.openURL('https://wa.me/5491125728211') },
-            ]
-          );
-        } else {
-          Alert.alert('Error', body.error || 'No se pudo enviar el código.');
-        }
-        return;
+      if (resp.ok && body.code) setWaCode(body.code);
+    } catch {}
+    setWaLoading(false);
+  };
+
+  const startPolling = () => {
+    const id = setInterval(async () => {
+      const { data: wa } = await supabase.from('whatsapp_users').select('phone').eq('user_id', user.id).single();
+      if (wa?.phone) {
+        clearInterval(id);
+        setWaPolling(null);
+        setWaLinked(wa.phone);
+        setWaModal(false);
+        Alert.alert('¡WhatsApp conectado!', 'Ya podés usar Orbe desde WhatsApp.');
       }
-      setWaStep(2);
-    } catch {
-      Alert.alert('Error', 'No se pudo enviar el código. Verificá tu conexión.');
-    } finally {
-      setWaLoading(false);
-    }
+    }, 3000);
+    setWaPolling(id);
   };
 
-  const doVerifyOtp = async () => {
-    if (waOtp.length !== 6) { Alert.alert('Código inválido', 'El código tiene 6 dígitos.'); return; }
-    const phone = waCountry.prefix + waPhone.replace(/\D/g, '');
-    setWaLoading(true);
-    try {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) { Alert.alert('Error', 'Sesión no encontrada.'); return; }
-      const resp = await fetch(`${BACKEND_URL}/api/verify-phone-otp`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ phone, otp: waOtp }),
-      });
-      const body = await resp.json();
-      if (!resp.ok) { Alert.alert('Error', body.error || 'Código incorrecto.'); return; }
-      const fullPhone = waCountry.prefix + waPhone.replace(/\D/g, '');
-      setWaLinked(fullPhone);
-      setWaModal(false);
-      Alert.alert('¡Listo!', 'Tu WhatsApp está conectado. Revisá el chat de Orbe.');
-    } catch {
-      Alert.alert('Error', 'No se pudo verificar el código. Intentá de nuevo.');
-    } finally {
-      setWaLoading(false);
-    }
+  const closeWaModal = () => {
+    if (waPolling) { clearInterval(waPolling); setWaPolling(null); }
+    setWaModal(false);
   };
 
   useEffect(() => {
@@ -2119,81 +2061,43 @@ export default function MainApp({ user, onLogout }) {
         </ModalSheet>
 
         {/* WhatsApp linking modal */}
-        <ModalSheet visible={waModal} onClose={() => { setWaModal(false); setWaCountryOpen(false); }} title="Conectar WhatsApp">
-          {waStep === 1 ? (
+        <ModalSheet visible={waModal} onClose={closeWaModal} title="Conectar WhatsApp">
+          {waLoading ? (
+            <ActivityIndicator color={C.accent} style={{ marginVertical: 32 }}/>
+          ) : (
             <>
-              <Text style={{ fontSize:13, color:C.textMuted, marginBottom:16, lineHeight:20 }}>
-                Te vamos a enviar un código de verificación a tu WhatsApp para confirmar que el número es tuyo.
+              <Text style={{ fontSize:13, color:C.textMuted, marginBottom:20, lineHeight:20 }}>
+                Enviá este mensaje al chat de Orbe en WhatsApp para vincular tu cuenta. La app detecta la conexión automáticamente.
               </Text>
 
-              {/* Country selector */}
-              <Text style={{ fontSize:10, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:0.5, marginBottom:8 }}>País</Text>
-              <TouchableOpacity onPress={() => setWaCountryOpen(o => !o)}
-                style={{ flexDirection:'row', alignItems:'center', justifyContent:'space-between', backgroundColor:C.surface2, borderRadius:14, paddingHorizontal:14, paddingVertical:12, marginBottom:4, borderWidth:1, borderColor: waCountryOpen ? C.gold : C.border }}>
-                <Text style={{ fontSize:15 }}>{waCountry.flag}  {waCountry.code}  <Text style={{ color:C.textMuted, fontSize:13 }}>+{waCountry.prefix}</Text></Text>
-                <Text style={{ color:C.textMuted, fontSize:12 }}>{waCountryOpen ? '▲' : '▼'}</Text>
+              {/* Código */}
+              <Text style={{ fontSize:10, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:0.5, marginBottom:8 }}>Tu código</Text>
+              <View style={{ backgroundColor:C.surface2, borderRadius:14, borderWidth:1, borderColor:C.border, paddingHorizontal:20, paddingVertical:16, alignItems:'center', marginBottom:20 }}>
+                <Text style={{ fontSize:28, fontWeight:'800', color:C.text, letterSpacing:6 }}>
+                  ORBE: {waCode || '------'}
+                </Text>
+              </View>
+
+              {/* Botón abrir WhatsApp */}
+              <TouchableOpacity
+                style={{ flexDirection:'row', alignItems:'center', justifyContent:'center', gap:8, backgroundColor:'#25D366', borderRadius:16, paddingVertical:14, marginBottom:12 }}
+                onPress={() => {
+                  Linking.openURL(`https://wa.me/5491125728211?text=ORBE:%20${waCode}`);
+                  if (!waPolling) startPolling();
+                }}
+              >
+                <FontAwesome5 name="whatsapp" size={18} color="#fff" solid/>
+                <Text style={{ color:'#fff', fontWeight:'800', fontSize:15 }}>Abrir WhatsApp y enviar</Text>
               </TouchableOpacity>
-              {waCountryOpen && (
-                <View style={{ backgroundColor:C.surface, borderRadius:14, borderWidth:1, borderColor:C.border, marginBottom:8, maxHeight:200, overflow:'hidden' }}>
-                  <ScrollView showsVerticalScrollIndicator={false}>
-                    {WA_COUNTRIES.map(c => (
-                      <TouchableOpacity key={c.code} onPress={() => { setWaCountry(c); setWaCountryOpen(false); }}
-                        style={{ flexDirection:'row', alignItems:'center', paddingHorizontal:14, paddingVertical:11, borderBottomWidth:1, borderBottomColor:C.border, backgroundColor: waCountry.code === c.code ? C.accentLight : 'transparent' }}>
-                        <Text style={{ fontSize:18, marginRight:10 }}>{c.flag}</Text>
-                        <Text style={{ flex:1, fontSize:14, color:C.text, fontWeight: waCountry.code === c.code ? '700' : '400' }}>{c.name}</Text>
-                        <Text style={{ fontSize:13, color:C.textMuted }}>+{c.prefix}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
+
+              {waPolling && (
+                <View style={{ flexDirection:'row', alignItems:'center', justifyContent:'center', gap:8, marginTop:4 }}>
+                  <ActivityIndicator size="small" color={C.accent}/>
+                  <Text style={{ fontSize:12, color:C.textMuted }}>Esperando confirmación...</Text>
                 </View>
               )}
 
-              {/* Phone input */}
-              <Text style={{ fontSize:10, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:0.5, marginBottom:8, marginTop:8 }}>Número</Text>
-              <View style={{ flexDirection:'row', alignItems:'center', backgroundColor:C.surface2, borderRadius:14, paddingHorizontal:14, borderWidth:1, borderColor:C.border, marginBottom:20 }}>
-                <Text style={{ fontSize:14, color:C.textMuted, marginRight:6 }}>+{waCountry.prefix}</Text>
-                <TextInput
-                  style={{ flex:1, fontSize:15, color:C.text, paddingVertical:12 }}
-                  placeholder="Ej: 1112345678"
-                  placeholderTextColor={C.textMuted}
-                  value={waPhone}
-                  onChangeText={setWaPhone}
-                  keyboardType="phone-pad"
-                />
-              </View>
-
-              <View style={{ flexDirection:'row', gap:10 }}>
-                <Btn label="Cancelar" variant="ghost" style={{ flex:1 }} onPress={() => setWaModal(false)}/>
-                <Btn label={waLoading ? 'Enviando...' : 'Enviar código'} style={{ flex:1 }} onPress={doSendOtp} disabled={waLoading}/>
-              </View>
-            </>
-          ) : (
-            <>
-              <Text style={{ fontSize:13, color:C.textMuted, marginBottom:6, lineHeight:20 }}>
-                Te enviamos un código de 6 dígitos al número:
-              </Text>
-              <Text style={{ fontSize:15, fontWeight:'700', color:C.text, marginBottom:20 }}>
-                {waCountry.flag} +{waCountry.prefix} {waPhone}
-              </Text>
-
-              <Text style={{ fontSize:10, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:0.5, marginBottom:8 }}>Código de verificación</Text>
-              <TextInput
-                style={{ backgroundColor:C.surface2, borderRadius:14, paddingHorizontal:14, paddingVertical:14, fontSize:24, color:C.text, letterSpacing:8, textAlign:'center', borderWidth:1, borderColor:C.border, marginBottom:20 }}
-                placeholder="000000"
-                placeholderTextColor={C.textMuted}
-                value={waOtp}
-                onChangeText={v => setWaOtp(v.replace(/\D/g, '').slice(0, 6))}
-                keyboardType="number-pad"
-                maxLength={6}
-              />
-
-              <View style={{ flexDirection:'row', gap:10 }}>
-                <Btn label="Volver" variant="ghost" style={{ flex:1 }} onPress={() => setWaStep(1)}/>
-                <Btn label={waLoading ? 'Verificando...' : 'Verificar'} style={{ flex:1 }} onPress={doVerifyOtp} disabled={waLoading}/>
-              </View>
-              <TouchableOpacity onPress={doSendOtp} style={{ marginTop:16, alignItems:'center' }}>
-                <Text style={{ fontSize:13, color:C.textMuted }}>¿No te llegó? <Text style={{ color:C.gold, fontWeight:'700' }}>Reenviar</Text></Text>
-              </TouchableOpacity>
+              <Btn label="Cancelar" variant="ghost" onPress={closeWaModal} style={{ marginTop:16 }}/>
             </>
           )}
         </ModalSheet>
