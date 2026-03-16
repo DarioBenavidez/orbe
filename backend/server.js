@@ -382,6 +382,8 @@ ACCIONES DISPONIBLES:
 {"type":"eliminar_evento","keyword":"..."}
 {"type":"resumen_general"}
 {"type":"agregar_ingreso_recurrente","name":"Astrid","amount":150000,"reason":"venta","day":1}
+{"type":"borrar_ingreso_recurrente","keyword":"Astrid"}
+{"type":"borrar_ingreso_recurrente","all":true}
 {"type":"agregar_prestamo","name":"Claudio","amount":4000,"reason":"coca cola"}
 {"type":"registrar_pago_prestamo","name":"Claudio","amount":100}
 {"type":"consultar_prestamo","name":"Claudio"}
@@ -462,6 +464,7 @@ REGLAS DE INTERPRETACIÓN:
 - CRÍTICO — MENSAJES MIXTOS: Si el usuario saluda Y hace una pregunta o pedido en el mismo mensaje (ej: "hola orbe, cuánto está el dólar?"), SIEMPRE ejecutá la acción pedida. El saludo no cancela la acción — podés saludar brevemente y luego responder la pregunta o ejecutar la acción.
 - CRÍTICO — NO DUPLICAR: Si el usuario aclara algo sobre una transacción que YA registraste en esta conversación ("ese era mi sueldo", "te aviso que fue sueldo", "por las dudas era X", "eso fue Y") → usá editar_transaccion para corregir el tipo/descripción. NUNCA volvás a registrar con agregar_transaccion. Si el usuario dice "me duplicaste" o "lo registraste dos veces" → borrá la transacción duplicada con borrar_transaccion y confirmá el balance correcto.
 - CRÍTICO — NO MENTIR: Si el usuario dice que los datos están mal (balance incorrecto, ingreso duplicado, etc.) → NUNCA muestres números inventados en conversacion. Siempre ejecutá la acción real (borrar_transaccion, editar_transaccion) para que los datos queden bien en el sistema.
+- CRÍTICO — NO CONFIRMAR SIN ACTUAR: NUNCA digas "listo, borré X", "eliminado", "ya está hecho" si no ejecutaste la acción JSON correspondiente. Si no existe la acción para algo, decí "no puedo hacerlo todavía" en lugar de fingir que lo hiciste. La confianza del usuario depende de que lo que decís y lo que hacés coincidan exactamente.
 - "me debe/le presté/le fié/fiado" → agregar_prestamo
 - "X me pagó/me devolvió/abonó" → registrar_pago_prestamo
 - "¿a cuánto está el dólar? / cotización / precio del dólar / blue / cuánto está el dólar" → consultar_dolar SIEMPRE que el mensaje mencione el precio del dólar, aunque venga mezclado con un saludo. El saludo NO cancela la acción — respondé la pregunta primero. "quiero comprar dólares / me conviene comprar dólares / qué hago con los dólares" → conversacion (consejo financiero, NO consultar_dolar)
@@ -481,6 +484,7 @@ REGLAS DE INTERPRETACIÓN:
 - "quiero comprar/me quiero comprar/estoy pensando en comprar/cómo llego a/cómo ahorro para" → planear_compra (si el usuario menciona un plazo, usalo en months; si no, omitilo)
 - "gasté X dólares/USD", "pagué X USD", "compré en dólares", "usé mis dólares", "gasté en dólares" → gasto_en_dolares (source: "tarjeta" si menciona tarjeta/crédito/débito, "cuenta" si dice cuenta/efectivo/mis dólares/ahorros)
 - "X me paga/viene pagando Y por mes", "tengo un ingreso mensual de Y de X", "X me debe pagar Y todos los meses", "acuerdo de pago mensual con X" → agregar_ingreso_recurrente (name: quien paga, amount: monto mensual, reason: motivo si se menciona, day: día del mes si se menciona)
+- "borrá el ingreso recurrente de X / eliminá el ingreso fijo de X / sacá el ingreso de X" → borrar_ingreso_recurrente (keyword: nombre a buscar). "borrá todos los ingresos recurrentes / eliminá todos" → borrar_ingreso_recurrente (all: true). NUNCA digas que borraste algo sin ejecutar esta acción primero.
 - "ya pagué mis gastos fijos", "pagué todos los fijos", "este mes pagué los gastos fijos", "ya aboné los gastos del mes" → registrar_gastos_fijos (date: fecha que mencione o today si no dice)
 - "cambiá el día de X al Y", "pasá el gasto fijo X al día Y", "actualizá el monto de X a Y", "el X ahora cuesta Y", "poneles el día Y a todos los gastos fijos" → actualizar_gasto_fijo (keyword: nombre del gasto o "todos" si aplica a todos, day y/o amount solo si se mencionan, omitir los que no cambian)
 - "chau / hasta luego / buenas noches / nos vemos" AL FINAL de una conversación o junto a "gracias" → conversacion con despedida breve. NUNCA disparar el saludo completo en una despedida.
@@ -2261,6 +2265,21 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       const recurringIncomes = [...(data.recurringIncomes || []), ri];
       await saveData(userId, { ...data, recurringIncomes });
       return `💰 *Ingreso mensual registrado!*\n\n👤 ${ri.name}\n💵 ${fmt(ri.amount)}/mes${ri.reason ? `\n📝 Por: ${ri.reason}` : ''}\n📆 Esperado el día ${ri.day} de cada mes\n\nCuando llegue el pago, decime y lo registro como ingreso.`;
+    }
+
+    case 'borrar_ingreso_recurrente': {
+      const keyword = (action.keyword || '').toLowerCase();
+      const all = action.all === true || keyword === 'todos' || keyword === 'all';
+      const prevList = data.recurringIncomes || [];
+      const newList = all
+        ? []
+        : prevList.filter(r => !r.name.toLowerCase().includes(keyword));
+      const removed = prevList.length - newList.length;
+      if (removed === 0) return `🔍 No encontré ningún ingreso recurrente que coincida con "${action.keyword}".`;
+      await saveData(userId, { ...data, recurringIncomes: newList });
+      return all
+        ? `🗑️ Borré todos los ingresos recurrentes (${removed}). Ya no van a aparecer en los estimados.`
+        : `🗑️ Borré el ingreso recurrente *${action.keyword}*. Ya no va a aparecer en los estimados.`;
     }
 
     case 'actualizar_gasto_fijo': {
