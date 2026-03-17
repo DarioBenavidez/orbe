@@ -12,7 +12,7 @@ export default function AnalisisTab({ data, onSave }) {
     return month===data.selectedMonth && year===data.selectedYear;
   });
   const totalIncome  = txs.filter(t => t.type==='ingreso'||t.type==='sueldo').reduce((a,t) => a+t.amount, 0);
-  const totalExpense = txs.filter(t => t.type==='gasto').reduce((a,t) => a+t.amount, 0);
+  const totalExpense = txs.filter(t => t.type==='gasto' || t.type==='ahorro_meta').reduce((a,t) => a+t.amount, 0);
   const expByCat     = txs.filter(t => t.type==='gasto').reduce((acc,t) => { acc[t.category]=(acc[t.category]||0)+t.amount; return acc; }, {});
   const topGastos    = Object.entries(expByCat).sort((a,b) => b[1]-a[1]).slice(0,5);
   const maxG         = topGastos[0]?.[1] || 1;

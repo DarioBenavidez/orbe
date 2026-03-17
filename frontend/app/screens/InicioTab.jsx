@@ -36,7 +36,7 @@ export default function InicioTab({ data, onSave, onMonthPress, nombre, onOpenPa
   })();
 
   const totalIncome  = txs.filter(t => t.type==='ingreso'||t.type==='sueldo').reduce((a,t) => a+t.amount, 0);
-  const totalExpense = txs.filter(t => t.type==='gasto').reduce((a,t) => a+t.amount, 0);
+  const totalExpense = txs.filter(t => t.type==='gasto' || t.type==='ahorro_meta').reduce((a,t) => a+t.amount, 0);
   const totalBudget  = data.budgets.reduce((s,b) => s+b.limit, 0);
   const pct          = totalBudget > 0 ? Math.min((totalExpense/totalBudget)*100, 100) : 0;
   const balance      = totalIncome - totalExpense;
@@ -48,7 +48,7 @@ export default function InicioTab({ data, onSave, onMonthPress, nombre, onOpenPa
     : [];
 
   const today2 = new Date();
-  const todayStr = today2.toISOString().split('T')[0];
+  const todayStr = `${today2.getFullYear()}-${String(today2.getMonth()+1).padStart(2,'0')}-${String(today2.getDate()).padStart(2,'0')}`;
   const upcomingTurnos = (data.turnos || [])
     .filter(t => t.date >= todayStr && !t.cancelled)
     .sort((a, b) => a.date.localeCompare(b.date))

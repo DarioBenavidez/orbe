@@ -122,7 +122,7 @@ Tu tarea: escribí un saludo natural, breve y conversacional. Pensá qué es lo 
         savingsId: '',
         note: action.note || '',
       };
-      // Deduplicación: evitar registrar dos veces el mismo ingreso/sueldo el mismo día
+      // Deduplicación: evitar registrar dos veces la misma transacción
       if (tx.type === 'ingreso' || tx.type === 'sueldo') {
         const duplicate = data.transactions.find(t =>
           Math.abs(t.amount - tx.amount) < 1 &&
@@ -131,6 +131,17 @@ Tu tarea: escribí un saludo natural, breve y conversacional. Pensá qué es lo 
         );
         if (duplicate) {
           return `⚠️ Ya tenés registrado *${duplicate.description}* por ${fmt(duplicate.amount)} el ${duplicate.date}. No lo volví a agregar para evitar duplicados. Si querés modificarlo, decime qué cambiar.`;
+        }
+      }
+      if (tx.type === 'gasto') {
+        const duplicate = data.transactions.find(t =>
+          t.type === 'gasto' &&
+          Math.abs(t.amount - tx.amount) < 1 &&
+          t.date === tx.date &&
+          t.description.toLowerCase() === tx.description.toLowerCase()
+        );
+        if (duplicate) {
+          return `⚠️ Ya registré *${duplicate.description}* por ${fmt(duplicate.amount)} hoy. ¿Lo querés registrar de nuevo o fue un error?`;
         }
       }
 

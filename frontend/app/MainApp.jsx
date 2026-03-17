@@ -97,6 +97,10 @@ export default function MainApp({ user, onLogout }) {
   const startPolling = () => {
     const id = setInterval(async () => { await checkLinked(); }, 3000);
     setWaPolling(id);
+    setTimeout(() => {
+      clearInterval(id);
+      setWaPolling(null);
+    }, 2 * 60 * 1000); // timeout después de 2 minutos
   };
 
   const closeWaModal = () => {

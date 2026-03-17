@@ -54,7 +54,7 @@ export default function AddTxModal({ visible, onClose, data, onSave, editTx }) {
     if (isEditing) {
       newData = { ...newData, transactions: newData.transactions.map(t => t.id===editTx.id ? { ...form, amount:amt } : t) };
     } else {
-      const tx = { ...form, id:Date.now().toString(), amount:amt };
+      const tx = { ...form, id: crypto.randomUUID(), amount:amt };
       if (form.type==='ahorro_meta' && form.savingsId) {
         const savings = data.savings.map(sv =>
           sv.id===form.savingsId
