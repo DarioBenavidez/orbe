@@ -76,15 +76,6 @@ export default function OnboardingScreen({ onDone }) {
   return (
     <View style={s.root}>
 
-      {/* Logo */}
-      <View style={s.logoWrap}>
-        <Image
-          source={require('../assets/images/orbe-logo.png')}
-          style={s.logo}
-          resizeMode="contain"
-        />
-      </View>
-
       {/* Slides */}
       <ScrollView
         ref={scrollRef}
@@ -100,7 +91,7 @@ export default function OnboardingScreen({ onDone }) {
               {slide.whatsapp
                 ? <FontAwesome5 name="whatsapp" size={52} color="#25D366" solid/>
                 : slide.welcome
-                  ? <Image source={require('../assets/images/orbe-logo.png')} style={{ width: 120, height: 48 }} resizeMode="contain"/>
+                  ? <Image source={require('../assets/images/orbe-logo.png')} style={{ width: 160, height: 64 }} resizeMode="contain"/>
                   : <Text style={s.iconText}>{slide.icon}</Text>
               }
             </View>
@@ -163,9 +154,9 @@ const s = StyleSheet.create({
     paddingVertical: 24,
   },
   iconCircle: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
+    width: 160,
+    height: 160,
+    borderRadius: 80,
     borderWidth: 1.5,
     backgroundColor: '#FFFFFF10',
     alignItems: 'center',
