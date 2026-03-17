@@ -1,7 +1,7 @@
 'use strict';
 
 const { anthropic } = require('../lib/whatsapp');
-const { currentMonth, getGreeting, arDay, parseDateParts, fmt, MONTH_NAMES } = require('../lib/helpers');
+const { currentMonth, getGreeting, arDay, parseDateParts, fmt, today, MONTH_NAMES } = require('../lib/helpers');
 
 async function callClaude(systemPrompt, history, userMessage) {
   // Asegurarse de que los mensajes alternen roles correctamente
