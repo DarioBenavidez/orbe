@@ -46,3 +46,15 @@
 ### 2025-03-17 — Import faltante en módulo extraído
 - **Error**: `today` se usaba en ai/interpret.js pero no estaba en la línea de imports → `ReferenceError` en producción
 - **Regla**: Antes de deployar una refactorización de módulos, grep de todas las variables usadas vs importadas en cada nuevo archivo
+
+### 2026-03-17 — Modo plan no aplicado en tareas multistep
+- **Error**: Cambios como la migración de OTPs a Supabase y el nuevo flujo de WhatsApp se implementaron directamente sin entrar en modo plan, saltando verificación de arquitectura y especificación
+- **Regla**: Cualquier tarea que toque más de 2 archivos o implique una decisión de diseño → entrar en modo plan ANTES de escribir código
+
+### 2026-03-17 — lessons.md no actualizado tras correcciones
+- **Error**: Se aplicaron múltiples fixes sin registrar los patrones aprendidos en este archivo
+- **Regla**: Al final de cada bloque de trabajo (no solo al final de la sesión), actualizar lessons.md con errores encontrados y reglas derivadas
+
+### 2026-03-17 — Función eliminada sin actualizar todos los callers
+- **Error**: Se renombró `openWaModal()` por el nuevo flujo OTP pero `handleTab` seguía llamando a la función eliminada → crash en runtime
+- **Regla**: Al eliminar o renombrar una función, hacer grep de todos los callers antes de commitear
