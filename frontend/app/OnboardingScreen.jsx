@@ -87,14 +87,16 @@ export default function OnboardingScreen({ onDone }) {
       >
         {SLIDES.map((slide, i) => (
           <View key={i} style={s.slide}>
-            <View style={[s.iconCircle, { borderColor: slide.accent }]}>
-              {slide.whatsapp
-                ? <FontAwesome5 name="whatsapp" size={52} color="#25D366" solid/>
-                : slide.welcome
-                  ? <Image source={require('../assets/images/orbe-logo.png')} style={{ width: 160, height: 64 }} resizeMode="contain"/>
+            {slide.welcome ? (
+              <Image source={require('../assets/images/orbe-logo.png')} style={{ width: width * 0.7, height: 120, marginBottom: 40 }} resizeMode="contain"/>
+            ) : (
+              <View style={[s.iconCircle, { borderColor: slide.accent }]}>
+                {slide.whatsapp
+                  ? <FontAwesome5 name="whatsapp" size={52} color="#25D366" solid/>
                   : <Text style={s.iconText}>{slide.icon}</Text>
-              }
-            </View>
+                }
+              </View>
+            )}
             <Text style={s.title}>{slide.title}</Text>
             <Text style={s.body}>{slide.body}</Text>
           </View>
