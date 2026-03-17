@@ -4,8 +4,8 @@ const express = require('express');
 const rateLimit = require('express-rate-limit');
 const router = express.Router();
 
-const { supabase } = require('../lib/supabase');
-const { generateLinkingCode, generatePhoneOTP, getPhoneOTP, deletePhoneOTP, linkPhoneToUser } = require('../lib/auth');
+const { supabase, linkPhoneToUser } = require('../lib/supabase');
+const { generateLinkingCode, generatePhoneOTP, getPhoneOTP, deletePhoneOTP } = require('../lib/auth');
 const { sendWhatsAppMessage } = require('../lib/whatsapp');
 const { getGreeting } = require('../lib/helpers');
 
