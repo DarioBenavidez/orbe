@@ -54,31 +54,79 @@ export default function MainApp({ user, onLogout }) {
 
   const [waLinked,  setWaLinked]  = useState(null);
   const [waModal,   setWaModal]   = useState(false);
+  const [waStep,    setWaStep]    = useState('phone'); // 'phone' | 'otp' | 'fallback'
+  const [waPhone,   setWaPhone]   = useState('');
+  const [waOtp,     setWaOtp]     = useState('');
   const [waCode,    setWaCode]    = useState('');
   const [waLoading, setWaLoading] = useState(false);
+  const [waError,   setWaError]   = useState('');
   const [waPolling, setWaPolling] = useState(null);
+
+  const formatWaPhone = (raw) => {
+    const digits = raw.replace(/\D/g, '');
+    if (digits.startsWith('54')) return digits;
+    if (digits.startsWith('0')) return '54' + digits.slice(1);
+    return '54' + digits;
+  };
 
   const connectWhatsApp = () => {
     if (waLinked) {
       Linking.openURL('https://wa.me/5491125728211').catch(() => Alert.alert('Error', 'No se pudo abrir WhatsApp.'));
       return;
     }
-    openWaModal();
+    setWaStep('phone'); setWaPhone(''); setWaOtp(''); setWaCode(''); setWaError('');
+    setWaModal(true);
   };
 
-  const openWaModal = async () => {
-    setWaCode('');
-    setWaModal(true);
-    setWaLoading(true);
+  const sendOtp = async () => {
+    setWaError(''); setWaLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const resp = await fetch(`${BACKEND_URL}/api/generate-link-code`, {
+      const phone = formatWaPhone(waPhone);
+      if (phone.length < 11) { setWaError('Ingresá un número válido'); setWaLoading(false); return; }
+      const resp = await fetch(`${BACKEND_URL}/api/send-phone-otp`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone }),
       });
       const body = await resp.json();
-      if (resp.ok && body.code) setWaCode(body.code);
-    } catch {}
+      if (body.needsFirstMessage) {
+        // fallback: el usuario nunca le escribió al bot, usamos el flujo de código
+        const resp2 = await fetch(`${BACKEND_URL}/api/generate-link-code`, {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ phone }),
+        });
+        const body2 = await resp2.json();
+        if (body2.code) { setWaCode(body2.code); setWaStep('fallback'); }
+        else setWaError('Error generando el código. Intentá de nuevo.');
+      } else if (resp.ok) {
+        setWaStep('otp');
+      } else {
+        setWaError(body.error || 'No se pudo enviar el código.');
+      }
+    } catch { setWaError('Error de conexión. Intentá de nuevo.'); }
+    setWaLoading(false);
+  };
+
+  const verifyOtp = async () => {
+    setWaError(''); setWaLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const phone = formatWaPhone(waPhone);
+      const resp = await fetch(`${BACKEND_URL}/api/verify-phone-otp`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${session.access_token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, otp: waOtp.trim() }),
+      });
+      const body = await resp.json();
+      if (resp.ok) {
+        setWaLinked(phone); setWaModal(false);
+        Alert.alert('¡WhatsApp conectado!', 'Ya podés usar Orbe desde WhatsApp.');
+      } else {
+        setWaError(body.error || 'Código incorrecto.');
+      }
+    } catch { setWaError('Error de conexión. Intentá de nuevo.'); }
     setWaLoading(false);
   };
 
@@ -86,8 +134,7 @@ export default function MainApp({ user, onLogout }) {
     const { data: wa } = await supabase.from('whatsapp_users').select('phone').eq('user_id', user.id).single();
     if (wa?.phone) {
       if (waPolling) { clearInterval(waPolling); setWaPolling(null); }
-      setWaLinked(wa.phone);
-      setWaModal(false);
+      setWaLinked(wa.phone); setWaModal(false);
       Alert.alert('¡WhatsApp conectado!', 'Ya podés usar Orbe desde WhatsApp.');
       return true;
     }
@@ -97,10 +144,7 @@ export default function MainApp({ user, onLogout }) {
   const startPolling = () => {
     const id = setInterval(async () => { await checkLinked(); }, 3000);
     setWaPolling(id);
-    setTimeout(() => {
-      clearInterval(id);
-      setWaPolling(null);
-    }, 2 * 60 * 1000); // timeout después de 2 minutos
+    setTimeout(() => { clearInterval(id); setWaPolling(null); }, 2 * 60 * 1000);
   };
 
   const closeWaModal = () => {
@@ -247,23 +291,54 @@ export default function MainApp({ user, onLogout }) {
         <ModalSheet visible={waModal} onClose={closeWaModal} title="Conectar WhatsApp">
           {waLoading ? (
             <ActivityIndicator color={C.accent} style={{ marginVertical: 32 }}/>
-          ) : (
+          ) : waStep === 'phone' ? (
             <>
               <Text style={{ fontSize:13, color:C.textMuted, marginBottom:20, lineHeight:20 }}>
-                Enviá este mensaje al chat de Orbe en WhatsApp para vincular tu cuenta.
+                Ingresá tu número de WhatsApp y te mandamos un código para verificar tu cuenta.
+              </Text>
+              <Input
+                label="Número de WhatsApp"
+                value={waPhone}
+                onChangeText={setWaPhone}
+                placeholder="9 11 1234 5678"
+                keyboardType="phone-pad"
+                prefix="+54"
+              />
+              {waError ? <Text style={{ color:C.red, fontSize:12, marginBottom:12 }}>{waError}</Text> : null}
+              <Btn label="Enviar código" onPress={sendOtp} style={{ marginBottom:10 }}/>
+              <Btn label="Cancelar" variant="ghost" onPress={closeWaModal}/>
+            </>
+          ) : waStep === 'otp' ? (
+            <>
+              <Text style={{ fontSize:13, color:C.textMuted, marginBottom:20, lineHeight:20 }}>
+                Te enviamos un código por WhatsApp al +{formatWaPhone(waPhone)}. Ingresálo acá.
+              </Text>
+              <Input
+                label="Código de verificación"
+                value={waOtp}
+                onChangeText={v => setWaOtp(v.replace(/\D/g, '').slice(0, 6))}
+                placeholder="123456"
+                keyboardType="number-pad"
+              />
+              {waError ? <Text style={{ color:C.red, fontSize:12, marginBottom:12 }}>{waError}</Text> : null}
+              <Btn label="Verificar" onPress={verifyOtp} style={{ marginBottom:10 }}/>
+              <Btn label="Volver a ingresar número" variant="ghost" onPress={() => { setWaStep('phone'); setWaOtp(''); setWaError(''); }} style={{ marginBottom:10 }}/>
+              <Btn label="Cancelar" variant="ghost" onPress={closeWaModal}/>
+            </>
+          ) : (
+            <>
+              <Text style={{ fontSize:13, color:C.textMuted, marginBottom:12, lineHeight:20 }}>
+                Primero tenés que escribirle al bot de Orbe en WhatsApp. Después enviá este código para vincular tu cuenta.
               </Text>
               <Text style={{ fontSize:10, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:0.5, marginBottom:8 }}>Tu código</Text>
               <View style={{ backgroundColor:C.surface2, borderRadius:14, borderWidth:1, borderColor:C.border, paddingHorizontal:20, paddingVertical:16, alignItems:'center', marginBottom:20 }}>
                 <Text style={{ fontSize:28, fontWeight:'800', color:C.text, letterSpacing:6 }}>
-                  ORBE: {waCode || '------'}
+                  ORBE: {waCode}
                 </Text>
               </View>
               <TouchableOpacity
                 style={{ flexDirection:'row', alignItems:'center', justifyContent:'center', gap:8, backgroundColor:'#25D366', borderRadius:16, paddingVertical:14, marginBottom:12 }}
-                onPress={() => {
-                  Linking.openURL(`https://wa.me/5491125728211?text=ORBE:%20${waCode}`);
-                  if (!waPolling) startPolling();
-                }}
+                onPress={() => { Linking.openURL(`https://wa.me/5491125728211?text=ORBE:%20${waCode}`); if (!waPolling) startPolling(); }}
               >
                 <FontAwesome5 name="whatsapp" size={18} color="#fff" solid/>
                 <Text style={{ color:'#fff', fontWeight:'800', fontSize:15 }}>Abrir WhatsApp y enviar</Text>
