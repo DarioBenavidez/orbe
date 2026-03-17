@@ -180,13 +180,15 @@ export default function MainApp({ user, onLogout }) {
         Linking.openURL('https://wa.me/5491125728211').catch(() => {});
         return;
       }
+      // Verificar en Supabase por si ya vinculó en otra sesión
       const { data: wa } = await supabase.from('whatsapp_users').select('phone').eq('user_id', user.id).single();
       if (wa?.phone) {
         setWaLinked(wa.phone);
         Linking.openURL('https://wa.me/5491125728211').catch(() => {});
       } else {
         setWaLinked(false);
-        openWaModal();
+        setWaStep('phone'); setWaPhone(''); setWaOtp(''); setWaCode(''); setWaError('');
+        setWaModal(true);
       }
       return;
     }
