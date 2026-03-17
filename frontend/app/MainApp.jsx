@@ -6,7 +6,7 @@ import { loadData, saveData, supabase, BACKEND_URL } from '../constants/supabase
 
 import { ThemeCtx, mkTheme } from './lib/theme';
 import { defaultData, MONTH_NAMES } from './lib/constants';
-import { ModalSheet, Chip, Btn } from './components/ui';
+import { ModalSheet, Chip, Btn, Input } from './components/ui';
 import AddTxModal  from './components/AddTxModal';
 import InicioTab   from './screens/InicioTab';
 import AnalisisTab from './screens/AnalisisTab';

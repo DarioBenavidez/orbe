@@ -41,6 +41,12 @@ export const defaultData = () => ({
   savings: [],
   debts: [],
   events: [],
+  turnos: [],
+  vocabulario: [],
+  recurringIncomes: [],
+  salaryOverrides: [],
+  loans: [],
+  credits: {},
   selectedMonth: cMonth,
   selectedYear: cYear,
 });
