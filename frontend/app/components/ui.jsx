@@ -49,13 +49,12 @@ export function Input({ label, value, onChangeText, placeholder, keyboardType, p
   return (
     <View style={{ marginBottom:14 }}>
       {label ? <Text style={{ fontSize:10, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:1, marginBottom:6 }}>{label}</Text> : null}
-      <View style={{ flexDirection:'row', alignItems:'center' }}>
-        {prefix ? <Text style={{ position:'absolute', left:14, color:C.textMuted, zIndex:1, fontSize:15 }}>{prefix}</Text> : null}
+      <View style={{ flexDirection:'row', alignItems:'center', backgroundColor:C.surface2, borderWidth:1, borderColor:C.border, borderRadius:16 }}>
+        {prefix ? <Text style={{ paddingLeft:14, paddingRight:4, color:C.textMuted, fontSize:15 }}>{prefix}</Text> : null}
         <TextInput
           style={{
-            flex:1, backgroundColor:C.surface2, borderWidth:1, borderColor:C.border,
-            borderRadius:16, padding:14, fontSize:14, color:C.text,
-            paddingLeft: prefix ? 28 : 14,
+            flex:1, padding:14, paddingLeft: prefix ? 4 : 14,
+            fontSize:14, color:C.text,
             ...(multiline ? { minHeight:80, textAlignVertical:'top' } : {}),
           }}
           value={value} onChangeText={handleChange}
