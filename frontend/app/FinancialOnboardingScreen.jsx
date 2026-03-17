@@ -56,7 +56,7 @@ export default function FinancialOnboardingScreen({ user, onDone }) {
       const now    = new Date();
       const month  = now.getMonth();
       const year   = now.getFullYear();
-      const amount = parseFloat(sueldo.replace(/[^0-9.]/g, ''));
+      const amount = parseFloat(sueldo.replace(/\./g, ''));
 
       if (amount > 0) {
         let data = await loadData(user.id);
@@ -126,7 +126,7 @@ export default function FinancialOnboardingScreen({ user, onDone }) {
                 <TextInput
                   style={s.amountInput}
                   value={sueldo}
-                  onChangeText={setSueldo}
+                  onChangeText={v => setSueldo(v.replace(/\D/g,'').replace(/\B(?=(\d{3})+(?!\d))/g, '.'))}
                   placeholder="0"
                   placeholderTextColor={C.whiteMuted}
                   keyboardType="numeric"

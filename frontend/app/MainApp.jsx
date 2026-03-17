@@ -56,6 +56,14 @@ const fmt = (n) => {
   const abs = Math.abs(Number(n));
   return (n < 0 ? '-$' : '$') + abs.toLocaleString('es-AR', { maximumFractionDigits: 0 });
 };
+// Formatea un string mientras el usuario escribe: "1000000" → "1.000.000"
+const fmtAmt = (raw) => {
+  const digits = String(raw || '').replace(/\D/g, '');
+  if (!digits) return '';
+  return digits.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+};
+// Parsea un string formateado a número: "1.000.000" → 1000000
+const parseAmt = (v) => parseFloat(String(v || '0').replace(/\./g, '')) || 0;
 const parseDateParts = (s) => {
   const [y, m, d] = s.split('-').map(Number);
   return { year: y, month: m - 1, day: d };
@@ -107,6 +115,14 @@ function Btn({ label, onPress, variant = 'primary', style, disabled }) {
 
 function Input({ label, value, onChangeText, placeholder, keyboardType, prefix, multiline, secureTextEntry }) {
   const C = useC();
+  const isAmount = prefix === '$';
+  const handleChange = (raw) => {
+    if (isAmount) {
+      onChangeText(fmtAmt(raw));
+    } else {
+      onChangeText(raw);
+    }
+  };
   return (
     <View style={{ marginBottom:14 }}>
       {label ? <Text style={{ fontSize:10, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:1, marginBottom:6 }}>{label}</Text> : null}
@@ -119,9 +135,9 @@ function Input({ label, value, onChangeText, placeholder, keyboardType, prefix, 
             paddingLeft: prefix ? 28 : 14,
             ...(multiline ? { minHeight:80, textAlignVertical:'top' } : {}),
           }}
-          value={value} onChangeText={onChangeText}
+          value={value} onChangeText={handleChange}
           placeholder={placeholder} placeholderTextColor={C.textDim}
-          keyboardType={keyboardType||'default'} multiline={multiline}
+          keyboardType={isAmount ? 'numeric' : (keyboardType||'default')} multiline={multiline}
           secureTextEntry={secureTextEntry}
         />
       </View>
@@ -476,7 +492,7 @@ function AnalisisTab({ data, onSave }) {
   const ICON_OPTIONS = ['🏠','🛒','🚗','💊','🎬','👗','📚','💡','💳','📦','🍕','✈️','🐾','🏋️','🎮','💈','🌿','🎁','🏖️','💰'];
 
   const updateLimit = (cat, val) => {
-    const limit = parseFloat(val) || 0;
+    const limit = parseAmt(val) || 0;
     const exists = data.budgets.some(b => b.cat === cat);
     const budgets = exists
       ? data.budgets.map(b => b.cat === cat ? { ...b, limit } : b)
@@ -600,8 +616,8 @@ function AnalisisTab({ data, onSave }) {
                     {editing[b.cat]
                       ? <TextInput
                           style={{ borderWidth:1, borderColor:C.border, borderRadius:8, padding:4, width:80, fontSize:13, color:C.text, textAlign:'right', backgroundColor:C.surface2 }}
-                          value={editingValues[b.cat] ?? b.limit.toString()}
-                          onChangeText={v => setEditingValues(ev => ({ ...ev, [b.cat]:v }))}
+                          value={editingValues[b.cat] ?? fmtAmt(b.limit.toString())}
+                          onChangeText={v => setEditingValues(ev => ({ ...ev, [b.cat]:fmtAmt(v) }))}
                           keyboardType="numeric" autoFocus
                           onBlur={() => {
                             updateLimit(b.cat, editingValues[b.cat] ?? b.limit.toString());
@@ -746,8 +762,8 @@ function AddTxModal({ visible, onClose, data, onSave, editTx }) {
   const saveTx = () => {
     if (form.type === 'presupuesto') {
       if (!form.category) return Alert.alert('Categoría requerida', 'Seleccioná una categoría para el presupuesto');
-      if (!form.amount || parseFloat(form.amount) <= 0) return Alert.alert('Error', 'Ingresá un monto válido');
-      const amt = parseFloat(form.amount);
+      if (!form.amount || parseAmt(form.amount) <= 0) return Alert.alert('Error', 'Ingresá un monto válido');
+      const amt = parseAmt(form.amount);
       const existingBudgets = data.budgets || [];
       const updated = existingBudgets.some(b => b.cat === form.category)
         ? existingBudgets.map(b => b.cat === form.category ? { ...b, limit: amt } : b)
@@ -758,9 +774,9 @@ function AddTxModal({ visible, onClose, data, onSave, editTx }) {
       return;
     }
     if (!form.description.trim()) return Alert.alert('Error', 'Ingresá una descripción');
-    if (!form.amount || parseFloat(form.amount) <= 0) return Alert.alert('Error', 'Ingresá un monto válido');
+    if (!form.amount || parseAmt(form.amount) <= 0) return Alert.alert('Error', 'Ingresá un monto válido');
     if ((form.type==='gasto'||form.type==='ingreso') && !form.category) return Alert.alert('Categoría requerida', 'Seleccioná una categoría para continuar');
-    const amt = parseFloat(form.amount);
+    const amt = parseAmt(form.amount);
     let newData = { ...data };
     if (isEditing) {
       newData = { ...newData, transactions: newData.transactions.map(t => t.id===editTx.id ? { ...form, amount:amt } : t) };
@@ -871,12 +887,12 @@ function Ahorros({ data, onSave }) {
 
   const addAhorro = () => {
     if (!form.name||!form.target) return;
-    onSave({ ...data, savings:[...data.savings, { ...form, id:Date.now().toString(), target:parseFloat(form.target), current:parseFloat(form.current||0), history:[] }] });
+    onSave({ ...data, savings:[...data.savings, { ...form, id:Date.now().toString(), target:parseAmt(form.target), current:parseAmt(form.current||'0'), history:[] }] });
     setModal(false); setForm(emptyF);
   };
   const openEdit = (sv) => { setEditTarget(sv.id); setEditForm({ name:sv.name, target:sv.target.toString(), current:sv.current.toString() }); setEditModal(true); };
   const saveEdit = () => {
-    onSave({ ...data, savings:data.savings.map(sv => sv.id===editTarget ? { ...sv, name:editForm.name, target:parseFloat(editForm.target)||sv.target, current:parseFloat(editForm.current)||0 } : sv) });
+    onSave({ ...data, savings:data.savings.map(sv => sv.id===editTarget ? { ...sv, name:editForm.name, target:parseAmt(editForm.target)||sv.target, current:parseAmt(editForm.current)||0 } : sv) });
     setEditModal(false);
   };
   const delAhorro = (id) => Alert.alert('Eliminar','¿Eliminar este ahorro?',[
@@ -969,8 +985,8 @@ function Deudas({ data, onSave }) {
   const monthlyPayments = data.debts.reduce((s,d) => s+d.installment, 0);
 
   const calcInst = (rem, inst) => {
-    if (!rem||!inst||parseFloat(inst)===0) return '';
-    return Math.ceil(parseFloat(rem)/parseFloat(inst)).toString();
+    if (!rem||!inst||parseAmt(inst)===0) return '';
+    return Math.ceil(parseAmt(rem)/parseAmt(inst)).toString();
   };
   const endMonth = (instStr) => {
     if (!instStr) return '';
@@ -980,9 +996,9 @@ function Deudas({ data, onSave }) {
   };
   const addDeuda = () => {
     if (!form.name||!form.remaining) return;
-    const inst = parseFloat(form.installment)||0;
-    const ri = parseInt(form.remainingInstallments)||(inst>0?Math.ceil(parseFloat(form.remaining)/inst):0);
-    onSave({ ...data, debts:[...data.debts, { name:form.name, total:parseFloat(form.remaining), remaining:parseFloat(form.remaining), installment:inst, remainingInstallments:ri, id:Date.now().toString() }] });
+    const inst = parseAmt(form.installment)||0;
+    const ri = parseInt(form.remainingInstallments)||(inst>0?Math.ceil(parseAmt(form.remaining)/inst):0);
+    onSave({ ...data, debts:[...data.debts, { name:form.name, total:parseAmt(form.remaining), remaining:parseAmt(form.remaining), installment:inst, remainingInstallments:ri, id:Date.now().toString() }] });
     setModal(false); setForm(emptyF);
   };
   const openEdit = (d) => {
@@ -991,13 +1007,13 @@ function Deudas({ data, onSave }) {
     setEditModal(true);
   };
   const saveEdit = () => {
-    const inst = parseFloat(editForm.installment)||0;
-    const ri = parseInt(editForm.remainingInstallments)||(inst>0?Math.ceil(parseFloat(editForm.remaining)/inst):0);
-    onSave({ ...data, debts:data.debts.map(d => d.id===editTarget ? { ...d, name:editForm.name, remaining:parseFloat(editForm.remaining)||d.remaining, installment:inst, remainingInstallments:ri } : d) });
+    const inst = parseAmt(editForm.installment)||0;
+    const ri = parseInt(editForm.remainingInstallments)||(inst>0?Math.ceil(parseAmt(editForm.remaining)/inst):0);
+    onSave({ ...data, debts:data.debts.map(d => d.id===editTarget ? { ...d, name:editForm.name, remaining:parseAmt(editForm.remaining)||d.remaining, installment:inst, remainingInstallments:ri } : d) });
     setEditModal(false);
   };
   const pay = (id) => {
-    const amt = parseFloat(payAmt[id]||0); if (!amt) return;
+    const amt = parseAmt(payAmt[id]||'0'); if (!amt) return;
     const deuda = data.debts.find(d => d.id===id);
     const realAmt = Math.min(amt, deuda.remaining); // no registrar más de lo que se debe
     const debts = data.debts.map(d => d.id===id ? { ...d, remaining:Math.max(0,d.remaining-realAmt), remainingInstallments:Math.max(0,(d.remainingInstallments||0)-1) } : d);
@@ -1069,7 +1085,7 @@ function Deudas({ data, onSave }) {
                   <View style={{ flexDirection:'row', gap:8, alignItems:'center' }}>
                     <TextInput
                       style={{ flex:1, backgroundColor:C.surface2, borderWidth:1, borderColor:C.border, borderRadius:12, padding:10, fontSize:13, color:C.text }}
-                      value={payAmt[d.id]||''} onChangeText={v => setPayAmt(p => ({ ...p, [d.id]:v }))}
+                      value={payAmt[d.id]||''} onChangeText={v => setPayAmt(p => ({ ...p, [d.id]:fmtAmt(v) }))}
                       placeholder="Registrar pago $" keyboardType="numeric" placeholderTextColor={C.textDim}
                     />
                     <Btn label="Pagar" onPress={() => pay(d.id)} style={{ paddingHorizontal:18, paddingVertical:10 }}/>
@@ -1145,7 +1161,7 @@ function Proyeccion({ data, onSave }) {
   });
 
   const saveOverride = () => {
-    const amount = parseFloat(newSalary.replace(/[^0-9.]/g,''));
+    const amount = parseAmt(newSalary);
     if (!amount || amount <= 0) return Alert.alert('Error', 'Ingresá un monto válido');
     const newOverride = { fromMonth, fromYear, amount };
     // Reemplaza si ya existe un override para ese mismo mes/año
@@ -1267,7 +1283,7 @@ function Proyeccion({ data, onSave }) {
               placeholderTextColor={C.textMuted}
               keyboardType="numeric"
               value={newSalary}
-              onChangeText={setNewSalary}
+              onChangeText={v => setNewSalary(fmtAmt(v))}
             />
 
             <Text style={{ fontSize:12, fontWeight:'600', color:C.textMuted, marginBottom:8 }}>DESDE</Text>
@@ -1681,7 +1697,7 @@ function PlanearTab({ data, onSave }) {
 }
 
 // ── Perfil Tab ─────────────────────────────────────────────────
-function PerfilTab({ user, onLogout, connectWhatsApp, dark, setDark, data }) {
+function PerfilTab({ user, onLogout, connectWhatsApp, waLinked, dark, setDark, data }) {
   const C = useC();
   const meta     = user?.user_metadata || {};
   const nombre   = meta.nombre || user?.email?.split('@')[0] || 'Usuario';
@@ -1809,8 +1825,12 @@ function PerfilTab({ user, onLogout, connectWhatsApp, dark, setDark, data }) {
             <TouchableOpacity onPress={connectWhatsApp}
               style={{ flexDirection:'row', alignItems:'center', paddingVertical:14 }}>
               <View style={{ flex:1 }}>
-                <Text style={{ fontSize:15, fontWeight:'600', color:C.text }}>Conectar WhatsApp</Text>
-                <Text style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>Registrá gastos y consultá tu balance por chat</Text>
+                <Text style={{ fontSize:15, fontWeight:'600', color:C.text }}>
+                  {waLinked ? 'WhatsApp conectado ✓' : 'Conectar WhatsApp'}
+                </Text>
+                <Text style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>
+                  {waLinked ? `Vinculado al ${waLinked}` : 'Registrá gastos y consultá tu balance por chat'}
+                </Text>
               </View>
               <Text style={{ color:C.textMuted, fontSize:20 }}>›</Text>
             </TouchableOpacity>
@@ -1964,7 +1984,12 @@ export default function MainApp({ user, onLogout }) {
   const handleTab = async (key) => {
     if (key === '__add__') { setAddModal(true); return; }
     if (key === '__whatsapp__') {
-      // Recheck linked status before opening
+      // Si ya sabemos que está vinculado, abrir WhatsApp directo sin re-consultar
+      if (waLinked) {
+        Linking.openURL('https://wa.me/5491125728211').catch(() => {});
+        return;
+      }
+      // Solo consultar Supabase si el estado es incierto (null) o definitivamente false
       const { data: wa } = await supabase.from('whatsapp_users').select('phone').eq('user_id', user.id).single();
       if (wa?.phone) {
         setWaLinked(wa.phone);
@@ -1985,7 +2010,7 @@ export default function MainApp({ user, onLogout }) {
         <View style={{ flex:1 }}>
           {tab==='inicio'   && <InicioTab data={data} onSave={save} onMonthPress={() => setMonthPicker(true)} nombre={nombre} onOpenPanel={setPanel}/>}
           {tab==='analisis' && <AnalisisTab data={data} onSave={save}/>}
-          {tab==='perfil'   && <PerfilTab user={user} onLogout={onLogout} connectWhatsApp={connectWhatsApp} dark={dark} setDark={setDark} data={data}/>}
+          {tab==='perfil'   && <PerfilTab user={user} onLogout={onLogout} connectWhatsApp={connectWhatsApp} waLinked={waLinked} dark={dark} setDark={setDark} data={data}/>}
         </View>
 
         {/* Panel Modal */}
