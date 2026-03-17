@@ -24,15 +24,26 @@ async function consumeLinkingCode(code, fromPhone) {
   return { userId: entry.user_id, userName: entry.user_name };
 }
 
-// ── OTP de verificación de teléfono (en memoria) ──────────
-const phoneOTPs = new Map();
-
-function generatePhoneOTP(userId, userName, phone) {
+// ── OTP de verificación de teléfono (Supabase) ────────────
+async function generatePhoneOTP(userId, userName, phone) {
   const otp = String(crypto.randomInt(100000, 1000000));
-  const now = Date.now();
-  for (const [k, v] of phoneOTPs) { if (now > v.expires) phoneOTPs.delete(k); }
-  phoneOTPs.set(phone, { otp, userId, userName, expires: now + 5 * 60_000 });
+  const expires_at = new Date(Date.now() + 5 * 60_000).toISOString();
+  await supabase.from('phone_otps').upsert({ phone, otp, user_id: userId, user_name: userName, expires_at });
   return otp;
+}
+
+async function getPhoneOTP(phone) {
+  const { data } = await supabase.from('phone_otps').select('*').eq('phone', phone).single();
+  if (!data) return null;
+  if (new Date(data.expires_at) < new Date()) {
+    await supabase.from('phone_otps').delete().eq('phone', phone);
+    return null;
+  }
+  return { otp: data.otp, userId: data.user_id, userName: data.user_name, expires: new Date(data.expires_at).getTime() };
+}
+
+async function deletePhoneOTP(phone) {
+  await supabase.from('phone_otps').delete().eq('phone', phone);
 }
 
 // ── Rate limit por teléfono (en memoria) ──────────────────
@@ -67,7 +78,7 @@ function verifyMetaSignature(req) {
 
 module.exports = {
   generateLinkingCode, consumeLinkingCode,
-  phoneOTPs, generatePhoneOTP,
+  generatePhoneOTP, getPhoneOTP, deletePhoneOTP,
   isPhoneRateLimited,
   verifyMetaSignature,
 };

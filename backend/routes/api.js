@@ -5,7 +5,7 @@ const rateLimit = require('express-rate-limit');
 const router = express.Router();
 
 const { supabase } = require('../lib/supabase');
-const { generateLinkingCode, phoneOTPs, generatePhoneOTP, linkPhoneToUser } = require('../lib/auth');
+const { generateLinkingCode, generatePhoneOTP, getPhoneOTP, deletePhoneOTP, linkPhoneToUser } = require('../lib/auth');
 const { sendWhatsAppMessage } = require('../lib/whatsapp');
 const { getGreeting } = require('../lib/helpers');
 
@@ -57,12 +57,12 @@ router.post('/send-phone-otp', async (req, res) => {
     if (error || !user) return res.status(401).json({ error: 'Token inválido' });
     const phone = (req.body?.phone || '').replace(/\D/g, '');
     if (phone.length < 10) return res.status(400).json({ error: 'Número inválido' });
-    const existing = phoneOTPs.get(phone);
+    const existing = await getPhoneOTP(phone);
     if (existing && Date.now() < existing.expires - 4.5 * 60_000) {
       return res.status(429).json({ error: 'Esperá unos segundos antes de volver a pedir el código.' });
     }
     const userName = user.user_metadata?.full_name || user.user_metadata?.nombre || user.email?.split('@')[0] || 'Usuario';
-    const otp = generatePhoneOTP(user.id, userName, phone);
+    const otp = await generatePhoneOTP(user.id, userName, phone);
     try {
       await sendWhatsAppMessage(phone, `🔐 *Tu código de verificación de Orbe es:*\n\n*${otp}*\n\nIngresálo en la app. Expira en 5 minutos.\n\n_Si no lo pediste vos, ignorá este mensaje._`, { throwOnError: true });
     } catch (waErr) {
@@ -94,11 +94,11 @@ router.post('/verify-phone-otp', async (req, res) => {
     if (error || !user) return res.status(401).json({ error: 'Token inválido' });
     const phone = (req.body?.phone || '').replace(/\D/g, '');
     const otp   = (req.body?.otp   || '').trim();
-    const entry = phoneOTPs.get(phone);
-    if (!entry || Date.now() > entry.expires) return res.status(400).json({ error: 'Código expirado. Pedí uno nuevo en la app.' });
+    const entry = await getPhoneOTP(phone);
+    if (!entry) return res.status(400).json({ error: 'Código expirado. Pedí uno nuevo en la app.' });
     if (entry.otp !== otp) return res.status(400).json({ error: 'Código incorrecto.' });
     if (entry.userId !== user.id) return res.status(403).json({ error: 'No autorizado.' });
-    phoneOTPs.delete(phone);
+    await deletePhoneOTP(phone);
     await linkPhoneToUser(phone, user.id, entry.userName);
     const firstName = entry.userName ? entry.userName.split(' ')[0] : 'acá';
     await sendWhatsAppMessage(phone, `¡Hola ${firstName}! Bienvenido a Orbe. 🌟\n\nSoy tu asistente financiero personal. Estoy acá para ayudarte a entender a dónde va tu plata, ahorrar con un objetivo claro y no llevarte sorpresas a fin de mes.\n\nDesde este chat podés hacer todo sin abrir la app:\n\n💸 *Registrar gastos e ingresos*\n"Gasté $6000 en el súper" · "Cobré el sueldo"\n\n📊 *Consultar tu situación*\n"¿Cómo voy este mes?" · "¿Cuánto gasté en comida?"\n\n🎯 *Seguir tus metas de ahorro*\n"¿Cuánto me falta para mi meta?" · "Quiero ahorrar para un viaje"\n\n💳 *Controlar tus deudas*\n"¿Cuándo vence mi próxima cuota?"\n\n💵 *Precios del dólar*\n"¿A cuánto está el blue hoy?"\n\n📌 Anclá este chat para tenerme siempre a mano.\n\n¿Cómo arrancaste el mes? 😊`);
