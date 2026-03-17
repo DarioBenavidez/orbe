@@ -12,6 +12,7 @@ const {
 const { sendWhatsAppMessage, transcribeWhatsAppAudio, downloadWhatsAppImage, callClaudeWithImage } = require('../lib/whatsapp');
 const { consumeLinkingCode, linkPhoneToUser, isPhoneRateLimited, verifyMetaSignature } = require('../lib/auth');
 const { today, fmt, currentMonth, parseDateParts, getGreeting } = require('../lib/helpers');
+const { CATEGORIAS } = require('../lib/constants');
 const { callClaude, interpretMessage } = require('../ai/interpret');
 const { processAction } = require('../actions/index');
 
@@ -47,6 +48,7 @@ router.post('/', async (req, res) => {
     if (!message || !['text', 'image', 'audio'].includes(message.type)) return;
 
     const from = message.from;
+    if (!from) return;
 
     // ── Manejo de imagen (factura/recibo) ──────────────────
     if (message.type === 'image') {
@@ -108,7 +110,9 @@ Devolvé SOLO el JSON array, sin texto adicional.`;
 
         // Separar las que tienen categoría clara de las dudosas (Otros)
         const claras = txList.filter(t => t.categoria && t.categoria !== 'Otros');
-        const dudosas = txList.filter(t => !t.categoria || t.categoria === 'Otros');
+        const dudosas = txList
+          .map((t, i) => ({ ...t, _originalIdx: i }))
+          .filter(t => !t.categoria || t.categoria === 'Otros');
 
         // Guardar estado pendiente con toda la lista para categorizar las dudosas
         if (dudosas.length > 0) {
@@ -134,7 +138,7 @@ Devolvé SOLO el JSON array, sin texto adicional.`;
         } else {
           // Todas categorizadas, registrar todo de una
           const newTxs = txList.map(t => ({
-            id: Date.now().toString() + Math.random().toString(36).slice(2),
+            id: crypto.randomUUID(),
             type: t.tipo || 'gasto',
             description: t.descripcion,
             amount: parseFloat(t.monto),
@@ -240,6 +244,16 @@ Devolvé SOLO el JSON array, sin texto adicional.`;
 
     // ── Flujos pendientes ───────────────────────────────────
     const pendingRaw = await getPendingSuggestion(from);
+
+    // ── Comando de escape: cancela cualquier flujo activo ──
+    if (pendingRaw && /^(cancelar|salir|\/cancel|\/salir|stop|dejar|limpiar)$/i.test(incomingMsg.trim())) {
+      await clearPendingSuggestion(from);
+      const escapeMsg = `Ok, cancelado. ¿En qué te puedo ayudar? 😊`;
+      await saveHistory(from, [...history, { role: 'user', content: incomingMsg }, { role: 'assistant', content: escapeMsg }]);
+      await sendWhatsAppMessage(from, escapeMsg);
+      return;
+    }
+
     let pendingUSD = null;
     let pendingVocabConfirm = null;
     let pendingVocabClarify = null;
@@ -256,7 +270,7 @@ Devolvé SOLO el JSON array, sin texto adicional.`;
         else if (parsed.type === 'pending_bank_import') {
           // ── Flujo de categorización de importación bancaria ─
           const { txList, dudosas, dudosaIdx } = parsed;
-          const CATEGORIAS = ['Alimentación','Transporte','Salud','Entretenimiento','Ropa','Vivienda','Educación','Servicios','Otros'];
+
           const msg = incomingMsg.trim().toLowerCase();
 
           let catElegida = 'Otros';
@@ -272,7 +286,9 @@ Devolvé SOLO el JSON array, sin texto adicional.`;
           }
 
           const dudosaActual = dudosas[dudosaIdx];
-          const txIdx = txList.findIndex(t => t.descripcion === dudosaActual.descripcion && t.monto === dudosaActual.monto);
+          const txIdx = dudosaActual._originalIdx !== undefined
+            ? dudosaActual._originalIdx
+            : txList.findIndex(t => t.descripcion === dudosaActual.descripcion && t.monto === dudosaActual.monto);
           if (txIdx >= 0) txList[txIdx].categoria = catElegida;
 
           const nextIdx = dudosaIdx + 1;
@@ -284,7 +300,7 @@ Devolvé SOLO el JSON array, sin texto adicional.`;
           } else {
             await clearPendingSuggestion(from);
             const newTxs = txList.map(t => ({
-              id: Date.now().toString() + Math.random().toString(36).slice(2),
+              id: crypto.randomUUID(),
               type: t.tipo || 'gasto',
               description: t.descripcion,
               amount: parseFloat(t.monto),
@@ -300,7 +316,9 @@ Devolvé SOLO el JSON array, sin texto adicional.`;
           }
           return;
         }
-      } catch {}
+      } catch (err) {
+        console.error('❌ Error procesando pending suggestion:', err.message);
+      }
     }
 
     if (pendingUSD) {
@@ -320,16 +338,20 @@ Devolvé SOLO el JSON array, sin texto adicional.`;
         amountARS = montoEspecifico;
         nota = `USD ${pendingUSD.amountUSD} → ${fmt(amountARS)} al cierre`;
       } else if (quereDolares && !querePesos) {
-        amountARS = pendingUSD.dolarBlue ? Math.round(pendingUSD.amountUSD * pendingUSD.dolarBlue) : 0;
+        amountARS = (pendingUSD.dolarBlue > 0) ? Math.round(pendingUSD.amountUSD * pendingUSD.dolarBlue) : 0;
         nota = `USD ${pendingUSD.amountUSD} (conversión pendiente al cierre)`;
-      } else {
-        amountARS = pendingUSD.dolarBlue ? Math.round(pendingUSD.amountUSD * pendingUSD.dolarBlue) : 0;
+      } else if (pendingUSD.dolarBlue > 0) {
+        amountARS = Math.round(pendingUSD.amountUSD * pendingUSD.dolarBlue);
         nota = `USD ${pendingUSD.amountUSD} al blue ${fmt(pendingUSD.dolarBlue)}`;
+      } else {
+        // Sin cotización disponible — marcar como pendiente
+        amountARS = 0;
+        nota = `USD ${pendingUSD.amountUSD} (sin cotización disponible — pendiente de conversión)`;
       }
 
       const isPending = quereDolares && !querePesos && !montoEspecifico;
       const tx = {
-        id: Date.now().toString(),
+        id: crypto.randomUUID(),
         type: 'gasto',
         description: `${pendingUSD.description}${nota ? ' (' + nota + ')' : ''}`,
         amount: amountARS,
@@ -347,10 +369,12 @@ Devolvé SOLO el JSON array, sin texto adicional.`;
       let confirmMsg;
       if (montoEspecifico) {
         confirmMsg = `✅ Listo, actualicé el monto real: ${fmt(amountARS)} por *${pendingUSD.description}* (eran USD ${pendingUSD.amountUSD}).`;
+      } else if (!pendingUSD.dolarBlue || pendingUSD.dolarBlue <= 0) {
+        confirmMsg = `📌 No pude obtener la cotización del dólar. Registré USD ${pendingUSD.amountUSD} como pendiente de conversión. Cuando tengas el monto en pesos, mandámelo y lo corrijo.`;
       } else if (isPending) {
         confirmMsg = `📌 Lo marqué como pendiente. Registré ${fmt(amountARS)} como aproximación al blue de hoy. Cuando cierre la tarjeta, mandame el monto real y lo corrijo.`;
       } else {
-        confirmMsg = `💸 Anotado: ${fmt(amountARS)} por *${pendingUSD.description}* (USD ${pendingUSD.amountUSD} al blue ${pendingUSD.dolarBlue ? fmt(pendingUSD.dolarBlue) : ''}).`;
+        confirmMsg = `💸 Anotado: ${fmt(amountARS)} por *${pendingUSD.description}* (USD ${pendingUSD.amountUSD} al blue ${fmt(pendingUSD.dolarBlue)}).`;
       }
 
       await saveHistory(from, [...history, { role: 'user', content: incomingMsg }, { role: 'assistant', content: confirmMsg }]);
@@ -361,7 +385,7 @@ Devolvé SOLO el JSON array, sin texto adicional.`;
     // ── Flujo de confirmación de limpiar transacciones ─────
     if (pendingLimpiar) {
       await clearPendingSuggestion(from);
-      const confirmado = /^confirmar$/i.test(incomingMsg.trim());
+      const confirmado = /\b(confirmar|confirmo|sí|si|dale|ok|listo|adelante|borrar)\b/i.test(incomingMsg.trim());
       if (!confirmado) {
         const msg = `Ok, cancelado. Tus transacciones siguen intactas 👍`;
         await saveHistory(from, [...history, { role: 'user', content: incomingMsg }, { role: 'assistant', content: msg }]);
@@ -410,7 +434,7 @@ Devolvé SOLO el JSON array, sin texto adicional.`;
 
       const fecha = pendingGastosFijos.date || today();
       const nuevasTx = gastosARegistrar.map(g => ({
-        id: Date.now().toString() + Math.random().toString(36).slice(2),
+        id: crypto.randomUUID(),
         type: 'gasto',
         description: g.description,
         amount: g.amount,
@@ -436,7 +460,7 @@ Devolvé SOLO el JSON array, sin texto adicional.`;
       if (esAfirmativo) {
         const txRaw = pendingVocabConfirm.tx || {};
         const tx = {
-          id: Date.now().toString(),
+          id: crypto.randomUUID(),
           type: txRaw.txType || 'gasto',
           description: txRaw.description || pendingVocabConfirm.interpretacion,
           amount: parseFloat(txRaw.amount) || 0,
@@ -473,7 +497,7 @@ Devolvé SOLO el JSON array, sin texto adicional.`;
       const expresion = pendingVocabClarify.expresion;
       const txRaw = pendingVocabClarify.tx || {};
       const tx = {
-        id: Date.now().toString(),
+        id: crypto.randomUUID(),
         type: txRaw.txType || 'gasto',
         description: incomingMsg,
         amount: parseFloat(txRaw.amount) || 0,

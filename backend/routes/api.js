@@ -9,8 +9,6 @@ const { generateLinkingCode, phoneOTPs, generatePhoneOTP, linkPhoneToUser } = re
 const { sendWhatsAppMessage } = require('../lib/whatsapp');
 const { getGreeting } = require('../lib/helpers');
 
-// Re-export linkPhoneToUser via supabase module (supabase.js exports it)
-const { linkPhoneToUser: _linkPhone } = require('../lib/supabase');
 
 // ── Rate limit para generación de códigos ─────────────────
 const linkCodeLimiter = rateLimit({
@@ -101,7 +99,7 @@ router.post('/verify-phone-otp', async (req, res) => {
     if (entry.otp !== otp) return res.status(400).json({ error: 'Código incorrecto.' });
     if (entry.userId !== user.id) return res.status(403).json({ error: 'No autorizado.' });
     phoneOTPs.delete(phone);
-    await _linkPhone(phone, user.id, entry.userName);
+    await linkPhoneToUser(phone, user.id, entry.userName);
     const firstName = entry.userName ? entry.userName.split(' ')[0] : 'acá';
     await sendWhatsAppMessage(phone, `¡Hola ${firstName}! Bienvenido a Orbe. 🌟\n\nSoy tu asistente financiero personal. Estoy acá para ayudarte a entender a dónde va tu plata, ahorrar con un objetivo claro y no llevarte sorpresas a fin de mes.\n\nDesde este chat podés hacer todo sin abrir la app:\n\n💸 *Registrar gastos e ingresos*\n"Gasté $6000 en el súper" · "Cobré el sueldo"\n\n📊 *Consultar tu situación*\n"¿Cómo voy este mes?" · "¿Cuánto gasté en comida?"\n\n🎯 *Seguir tus metas de ahorro*\n"¿Cuánto me falta para mi meta?" · "Quiero ahorrar para un viaje"\n\n💳 *Controlar tus deudas*\n"¿Cuándo vence mi próxima cuota?"\n\n💵 *Precios del dólar*\n"¿A cuánto está el blue hoy?"\n\n📌 Anclá este chat para tenerme siempre a mano.\n\n¿Cómo arrancaste el mes? 😊`);
     res.json({ ok: true });

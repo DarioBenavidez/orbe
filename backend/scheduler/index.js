@@ -7,6 +7,18 @@ const { callClaude } = require('../ai/interpret');
 
 let lastWeeklyReportDay = null;
 
+// ── Ejecuta tareas en paralelo con límite de concurrencia ──
+async function runConcurrently(items, fn, limit = 5) {
+  const queue = [...items];
+  const workers = Array.from({ length: Math.min(limit, queue.length) }, async () => {
+    while (queue.length > 0) {
+      const item = queue.shift();
+      if (item !== undefined) await fn(item).catch(err => console.error('❌ Worker error:', err.message));
+    }
+  });
+  await Promise.allSettled(workers);
+}
+
 // ── Saludo matutino ────────────────────────────────────────
 async function sendMorningGreeting() {
   try {
@@ -24,10 +36,10 @@ async function sendMorningGreeting() {
     if (!users || !users.length) return;
     const { month, year } = currentMonth();
 
-    for (const user of users) {
+    await runConcurrently(users, async (user) => {
       const data = await loadData(user.user_id);
-      if (!data) continue;
-      if (data.silencedUntil && data.silencedUntil >= today()) continue;
+      if (!data) return;
+      if (data.silencedUntil && data.silencedUntil >= today()) return;
 
       const txsMes = data.transactions.filter(t => {
         const p = parseDateParts(t.date);
@@ -56,7 +68,8 @@ Tu tarea: escribí el mensaje de buenos días. Antes de escribir, pensá: ¿qué
       try {
         const msg = await callClaude(morningPrompt, [], 'buenos días');
         await sendWhatsAppMessage(user.phone, msg);
-      } catch {
+      } catch (err) {
+        console.error('❌ Claude morning greeting falló:', err.message);
         // fallback si Claude falla
         const fallback = `☀️ Buenos días${name ? ', ' + name : ''}! ¿Cómo arrancaste?\n\n📊 ${MONTH_NAMES[month]}: ${fmt(ingresos)} ingresos, ${fmt(gastos)} gastos. Disponible: ${fmt(balance)}.${proxVenc.length > 0 ? `\n\n⚠️ Vencimientos próximos: ${proxVenc.map(ev => ev.title).join(', ')}` : ''}\n\n¿Tenés algo para registrar? Avisame 💚`;
         await sendWhatsAppMessage(user.phone, fallback);
@@ -87,7 +100,7 @@ Tu tarea: escribí el mensaje de buenos días. Antes de escribir, pensá: ¿qué
           );
         }
       }
-    }
+    }, 5);
   } catch (err) {
     console.error('❌ Error saludo matutino:', err.message);
   }
@@ -111,10 +124,10 @@ async function sendEveningCheckin() {
     const { month, year } = currentMonth();
     const todayStr = today();
 
-    for (const user of users) {
+    await runConcurrently(users, async (user) => {
       const data = await loadData(user.user_id);
-      if (!data) continue;
-      if (data.silencedUntil && data.silencedUntil >= today()) continue;
+      if (!data) return;
+      if (data.silencedUntil && data.silencedUntil >= today()) return;
 
       const txsHoy = data.transactions.filter(t => t.date === todayStr);
       const gastosHoy = txsHoy.filter(t => t.type === 'gasto').reduce((a, t) => a + t.amount, 0);
@@ -140,11 +153,12 @@ Tu tarea: escribí un mensaje nocturno de máximo 3 líneas. Preguntá cómo le 
       try {
         const msg = await callClaude(eveningPrompt, [], 'buenas noches');
         await sendWhatsAppMessage(user.phone, msg);
-      } catch {
+      } catch (err) {
+        console.error('❌ Claude evening checkin falló:', err.message);
         const fallback = `Buenas noches${name ? ', ' + name : ''}! ¿Cómo te fue hoy? ¿Tenés algo para registrar antes de que cierre el día? 🌙`;
         await sendWhatsAppMessage(user.phone, fallback);
       }
-    }
+    }, 5);
   } catch (err) {
     console.error('❌ Error check-in nocturno:', err.message);
   }
@@ -156,9 +170,9 @@ async function checkAndSendNotifications() {
     const { data: users } = await supabase.from('whatsapp_users').select('phone, user_id');
     if (!users) return;
     const todayDay = arDay();
-    for (const user of users) {
+    await runConcurrently(users, async (user) => {
       const data = await loadData(user.user_id);
-      if (!data || !data.events) continue;
+      if (!data) return;
       for (const ev of data.events) {
         if (ev.notifyDaysBefore && ev.notifyDaysBefore > 0) {
           const daysUntil = ev.day - todayDay;
@@ -215,7 +229,7 @@ async function checkAndSendNotifications() {
           await sendWhatsAppMessage(user.phone, `${emoji} *¡Hoy tenés turno!*\n\n*${turno.description}*${timeStr}\n\n¡Éxitos!`);
         }
       }
-    }
+    }, 10);
   } catch (err) {
     console.error('❌ Error notificaciones:', err.message);
   }
@@ -231,15 +245,15 @@ async function sendMonthlyFinancialReport() {
     const prevMonth = month === 0 ? 11 : month - 1;
     const prevYear  = month === 0 ? year - 1 : year;
 
-    for (const user of users) {
+    await runConcurrently(users, async (user) => {
       const data = await loadData(user.user_id);
-      if (!data) continue;
+      if (!data) return;
 
       const txsPrev = data.transactions.filter(t => {
         const p = parseDateParts(t.date);
         return p.month === prevMonth && p.year === prevYear;
       });
-      if (!txsPrev.length) continue;
+      if (!txsPrev.length) return;
 
       const ingresos = txsPrev.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((s, t) => s + t.amount, 0);
       const gastos   = txsPrev.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
@@ -265,11 +279,12 @@ Mencioná 1 cosa destacada del mes (positiva o a mejorar) y un breve aliento par
       try {
         const msg = await callClaude(reportPrompt, [], 'reporte mensual');
         await sendWhatsAppMessage(user.phone, `📅 *Resumen de ${MONTH_NAMES[prevMonth]} ${prevYear}*\n\n${msg}`);
-      } catch {
+      } catch (err) {
+        console.error('❌ Claude reporte mensual falló:', err.message);
         const balanceMsg = balance >= 0 ? `Cerraste con ${fmt(balance)} a favor 💚` : `El mes cerró en rojo: ${fmt(balance)} 😬`;
         await sendWhatsAppMessage(user.phone, `📅 *Resumen de ${MONTH_NAMES[prevMonth]} ${prevYear}*\n\n💰 Ingresos: ${fmt(ingresos)}\n💸 Gastos: ${fmt(gastos)}\n${balanceMsg}`);
       }
-    }
+    }, 5);
   } catch (err) {
     console.error('❌ Error reporte financiero mensual:', err.message);
   }
@@ -356,13 +371,13 @@ async function sendWeeklyReport() {
     const todayStr = today();
     const weekAgo = (() => { const d = new Date(todayStr); d.setDate(d.getDate() - 7); return d.toISOString().slice(0, 10); })();
 
-    for (const user of users) {
+    await runConcurrently(users, async (user) => {
       const data = await loadData(user.user_id);
-      if (!data) continue;
-      if (data.silencedUntil && data.silencedUntil >= todayStr) continue;
+      if (!data) return;
+      if (data.silencedUntil && data.silencedUntil >= todayStr) return;
 
       const txsSemana = data.transactions.filter(t => t.date >= weekAgo && t.date <= todayStr);
-      if (!txsSemana.length) continue;
+      if (!txsSemana.length) return;
 
       const ingresos = txsSemana.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((s, t) => s + t.amount, 0);
       const gastos = txsSemana.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
@@ -373,7 +388,7 @@ async function sendWeeklyReport() {
 
       const msg = `📊 *Resumen de la semana${name ? ', ' + name : ''}*\n\n💰 Ingresos: ${fmt(ingresos)}\n💸 Gastos: ${fmt(gastos)}\n✅ Balance: ${fmt(ingresos - gastos)}${topCat ? `\n\n🏆 Mayor gasto: *${topCat[0]}* (${fmt(topCat[1])})` : ''}\n\n¿Cómo arrancamos la semana? 💪`;
       await sendWhatsAppMessage(user.phone, msg);
-    }
+    }, 10);
   } catch (err) {
     console.error('❌ Error reporte semanal:', err.message);
   }

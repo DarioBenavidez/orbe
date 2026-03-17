@@ -94,8 +94,13 @@ async function saveHistory(phone, messages) {
 
 // ── Sugerencias / estados pendientes ──────────────────────
 async function getPendingSuggestion(phone) {
-  const { data, error } = await supabase.from('pending_suggestions').select('original_message').eq('phone', phone).single();
+  const { data, error } = await supabase.from('pending_suggestions').select('original_message, created_at').eq('phone', phone).single();
   if (error || !data) return null;
+  // Auto-expirar estados de más de 30 minutos
+  if (data.created_at && Date.now() - new Date(data.created_at).getTime() > 30 * 60 * 1000) {
+    await supabase.from('pending_suggestions').delete().eq('phone', phone);
+    return null;
+  }
   return data.original_message;
 }
 

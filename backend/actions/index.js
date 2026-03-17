@@ -113,7 +113,7 @@ Tu tarea: escribí un saludo natural, breve y conversacional. Pensá qué es lo 
 
     case 'agregar_transaccion': {
       const tx = {
-        id: Date.now().toString(),
+        id: crypto.randomUUID(),
         type: action.txType || 'gasto',
         description: action.description,
         amount: parseFloat(action.amount),
@@ -209,7 +209,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       const items = Array.isArray(action.transacciones) ? action.transacciones : [];
       if (!items.length) return `🤔 No encontré transacciones para registrar.`;
       const nuevas = items.map(t => ({
-        id: Date.now().toString() + Math.random().toString(36).slice(2),
+        id: crypto.randomUUID(),
         type: t.txType || 'gasto',
         description: t.description || 'Sin descripción',
         amount: parseFloat(t.amount) || 0,
@@ -318,7 +318,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
 
     case 'agregar_plazo_fijo': {
       const pf = {
-        id: Date.now().toString(),
+        id: crypto.randomUUID(),
         amount: parseFloat(action.amount) || 0,
         tna: parseFloat(action.tna) || 0,
         dias: parseInt(action.dias) || 30,
@@ -422,7 +422,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
 
     case 'agregar_suscripcion': {
       const sub = {
-        id: Date.now().toString(),
+        id: crypto.randomUUID(),
         name: action.name || 'Suscripción',
         amount: parseFloat(action.amount) || 0,
         day: parseInt(action.day) || 1,
@@ -598,7 +598,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
 
     case 'agregar_recordatorio': {
       const reminder = {
-        id: Date.now().toString(),
+        id: crypto.randomUUID(),
         description: action.description || 'Recordatorio',
         date: action.date || today(),
         notified: false,
@@ -611,7 +611,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
     case 'gasto_compartido': {
       const mitad = parseFloat(action.amount) / 2;
       const tx = {
-        id: Date.now().toString(),
+        id: crypto.randomUUID(),
         type: 'gasto',
         description: `${action.description || 'Gasto'} (compartido con ${action.sharedWith || 'otra persona'})`,
         amount: mitad,
@@ -747,7 +747,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
     }
 
     case 'agregar_evento': {
-      const ev = { id: Date.now().toString(), title: action.title, day: parseInt(action.day), type: action.eventType || 'recordatorio', notifyDaysBefore: action.notify ? 3 : 0 };
+      const ev = { id: crypto.randomUUID(), title: action.title, day: parseInt(action.day), type: action.eventType || 'recordatorio', notifyDaysBefore: action.notify ? 3 : 0 };
       await saveData(userId, { ...data, events: [...(data.events || []), ev] });
       return `📅 *Evento agregado!*\n\n📝 ${ev.title}\n📆 Día ${ev.day} de cada mes${action.notify ? '\n🔔 Te aviso 3 días antes.' : ''}`;
     }
@@ -781,7 +781,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
         }
       }
 
-      const loan = { id: Date.now().toString(), name: action.name, reason: action.reason || '', amount: remaining, remaining, payments: [], createdAt: today() };
+      const loan = { id: crypto.randomUUID(), name: action.name, reason: action.reason || '', amount: remaining, remaining, payments: [], createdAt: today() };
       await saveData(userId, { ...data, loans: [...loans, loan], credits });
       return `📋 *Préstamo registrado!*\n\n👤 ${action.name} te debe ${fmt(remaining)}${action.reason ? `\n📝 Por: ${action.reason}` : ''}\n📅 ${today()}${creditNote}\n\nCuando pague algo, avisame y lo registro.`;
     }
@@ -927,7 +927,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       const totalOriginal  = matching.reduce((s, l) => s + (l.amount || l.remaining), 0);
       const reasons = matching.map(l => l.reason).filter(Boolean).join(', ');
       const consolidated = {
-        id: Date.now().toString(),
+        id: crypto.randomUUID(),
         name: matching[0].name,
         reason: reasons || '',
         amount: totalOriginal,
@@ -943,7 +943,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
     case 'agregar_ahorro': {
       const savings = data.savings || [];
       const sv = {
-        id: Date.now().toString(),
+        id: crypto.randomUUID(),
         name: action.name,
         target: parseFloat(action.target),
         current: parseFloat(action.current || 0),
@@ -963,7 +963,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       sv.history = [...(sv.history || []), { date: today(), amount: monto }];
       savings[idx] = sv;
       const pct = Math.round((sv.current / sv.target) * 100);
-      const tx = { id: Date.now().toString(), type: 'ahorro_meta', description: `Ahorro: ${sv.name}`, amount: monto, category: 'Ahorro', date: today(), savingsId: sv.id };
+      const tx = { id: crypto.randomUUID(), type: 'ahorro_meta', description: `Ahorro: ${sv.name}`, amount: monto, category: 'Ahorro', date: today(), savingsId: sv.id };
       await saveData(userId, { ...data, savings, transactions: [...data.transactions, tx] });
       if (sv.current >= sv.target) return `🎉 *¡Meta cumplida!*\n\n🐷 ${sv.name}: ${fmt(sv.current)} / ${fmt(sv.target)} (100%)\n\n¡Llegaste a tu objetivo! ¿Querés crear una nueva meta?`;
       const baseMsg = `🐷 *Depósito registrado!*\n\n📝 ${sv.name}\n💰 Depositaste: ${fmt(monto)}\n📊 Acumulado: ${fmt(sv.current)} / ${fmt(sv.target)} (${pct}%)\n${pct >= 80 ? '¡Ya casi llegás! 🔥' : `Falta ${fmt(sv.target - sv.current)} para la meta.`}`;
@@ -976,7 +976,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       const remaining = parseFloat(action.remaining);
       const ri = installment > 0 ? Math.ceil(remaining / installment) : 0;
       const deuda = {
-        id: Date.now().toString(),
+        id: crypto.randomUUID(),
         name: action.name,
         total: remaining,
         remaining,
@@ -1006,7 +1006,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       deuda.remaining = Math.max(0, deuda.remaining - monto);
       deuda.remainingInstallments = Math.max(0, (deuda.remainingInstallments || 0) - 1);
       debts[idx] = deuda;
-      const tx = { id: Date.now().toString(), type: 'gasto', description: `Pago: ${deuda.name}`, amount: monto, category: 'Préstamo tarjeta', date: today(), savingsId: '' };
+      const tx = { id: crypto.randomUUID(), type: 'gasto', description: `Pago: ${deuda.name}`, amount: monto, category: 'Préstamo tarjeta', date: today(), savingsId: '' };
       await saveData(userId, { ...data, debts, transactions: [...data.transactions, tx] });
       if (deuda.remaining === 0) return `🎉 *¡Deuda saldada!*\n\n✅ *${deuda.name}* quedó en cero. Pagaste ${fmt(monto)} y cerramos esa deuda. ¡Una menos!`;
       return `💳 *Pago registrado!*\n\n📝 ${deuda.name}\n💵 Pagaste: ${fmt(monto)}\n⏳ Queda: ${fmt(deuda.remaining)}${deuda.remainingInstallments > 0 ? `\n📆 Cuotas restantes: ${deuda.remainingInstallments}` : ''}`;
@@ -1029,14 +1029,14 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
 
     case 'agregar_gasto_fijo': {
       const recurringExpenses = data.recurringExpenses || [];
-      const gasto = { id: Date.now().toString(), description: action.description, amount: parseFloat(action.amount), category: action.category || 'Otros', day: parseInt(action.day) || 1, active: true };
+      const gasto = { id: crypto.randomUUID(), description: action.description, amount: parseFloat(action.amount), category: action.category || 'Otros', day: parseInt(action.day) || 1, active: true };
       await saveData(userId, { ...data, recurringExpenses: [...recurringExpenses, gasto] });
       return `🔄 *Gasto fijo agregado!*\n\n📝 ${gasto.description}: ${fmt(gasto.amount)}/mes\n📆 Se registra el día ${gasto.day} automáticamente.`;
     }
 
     case 'agregar_ingreso_recurrente': {
       const ri = {
-        id: Date.now().toString(),
+        id: crypto.randomUUID(),
         name: action.name,
         amount: parseFloat(action.amount),
         reason: action.reason || '',
@@ -1098,7 +1098,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       const extras = [];
 
       const tx = {
-        id: Date.now().toString(),
+        id: crypto.randomUUID(),
         type: 'gasto',
         description: action.description || 'Pago',
         amount,
@@ -1354,7 +1354,7 @@ Sin listas. Máximo 8 líneas. Tono cálido, directo y que inspire confianza en 
     case 'agregar_activo': {
       const activos = data.activos || [];
       const activo = {
-        id: Date.now().toString(),
+        id: crypto.randomUUID(),
         name: action.name,
         value: parseFloat(action.value),
         residualValue: parseFloat(action.residualValue || 0),
@@ -1388,7 +1388,7 @@ Sin listas. Máximo 8 líneas. Tono cálido, directo y que inspire confianza en 
       const productos = data.productos || [];
       const existing = productos.findIndex(p => p.name.toLowerCase() === action.name.toLowerCase());
       const producto = {
-        id: existing >= 0 ? productos[existing].id : Date.now().toString(),
+        id: existing >= 0 ? productos[existing].id : crypto.randomUUID(),
         name: action.name,
         cost: parseFloat(action.cost),
         price: parseFloat(action.price),
@@ -1437,7 +1437,7 @@ Sin listas. Máximo 8 líneas. Tono cálido, directo y que inspire confianza en 
         return { name: prod?.name || item.name, quantity: qty, unitPrice, subtotal: unitPrice * qty };
       });
       if (!items.length) return `🤔 No entendí qué vendiste. Decime el producto y cantidad.`;
-      const venta = { id: Date.now().toString(), date: action.date || today(), items, total, paymentMethod: action.paymentMethod || 'efectivo' };
+      const venta = { id: crypto.randomUUID(), date: action.date || today(), items, total, paymentMethod: action.paymentMethod || 'efectivo' };
       await saveData(userId, { ...data, ventas: [...ventas, venta] });
       const itemLines = items.map(i => `• ${i.name} x${i.quantity} = ${fmt(i.subtotal)}`).join('\n');
       return `💵 *Venta registrada!*\n\n${itemLines}\n\n💰 Total: *${fmt(total)}*\n💳 ${venta.paymentMethod}`;
@@ -1526,7 +1526,7 @@ Sin listas. Máximo 8 líneas. Tono cálido, directo y que inspire confianza en 
     case 'agendar_turno': {
       const turnos = data.turnos || [];
       const turno = {
-        id: Date.now().toString(),
+        id: crypto.randomUUID(),
         description: action.description,
         date: action.date,
         time: action.time || null,

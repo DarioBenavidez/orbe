@@ -5,7 +5,7 @@ const { supabase } = require('./supabase');
 
 // ── Códigos de vinculación (Supabase) ─────────────────────
 async function generateLinkingCode(userId, userName, expectedPhone) {
-  const code = String(Math.floor(100000 + Math.random() * 900000));
+  const code = String(crypto.randomInt(100000, 1000000));
   const expires_at = new Date(Date.now() + 10 * 60_000).toISOString();
   await supabase.from('linking_codes').delete().eq('user_id', userId);
   await supabase.from('linking_codes').insert({ code, user_id: userId, user_name: userName, expected_phone: expectedPhone || null, expires_at });
@@ -28,7 +28,7 @@ async function consumeLinkingCode(code, fromPhone) {
 const phoneOTPs = new Map();
 
 function generatePhoneOTP(userId, userName, phone) {
-  const otp = String(Math.floor(100000 + Math.random() * 900000));
+  const otp = String(crypto.randomInt(100000, 1000000));
   const now = Date.now();
   for (const [k, v] of phoneOTPs) { if (now > v.expires) phoneOTPs.delete(k); }
   phoneOTPs.set(phone, { otp, userId, userName, expires: now + 5 * 60_000 });
@@ -58,7 +58,7 @@ setInterval(() => {
 // ── Verificar firma X-Hub-Signature-256 de Meta ───────────
 function verifyMetaSignature(req) {
   const appSecret = process.env.WHATSAPP_APP_SECRET;
-  if (!appSecret) return true;
+  if (!appSecret) return false;
   const sig = req.headers['x-hub-signature-256'];
   if (!sig) return false;
   const expected = 'sha256=' + crypto.createHmac('sha256', appSecret).update(req.rawBody || '').digest('hex');
