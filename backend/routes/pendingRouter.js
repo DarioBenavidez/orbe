@@ -259,6 +259,34 @@ async function handlePending(pendingRaw, incomingMsg, data, userId, history, fro
       return true;
     }
 
+    case 'confirm_ticket': {
+      await clearPendingSuggestion(from);
+      const esNegativo = /\b(no\b|nope|cancel|no quiero|no gracias)\b/i.test(incomingMsg);
+
+      if (esNegativo) {
+        const msg = `Ok, no lo registré. Avisame si querés cambiarlo.`;
+        await saveHistory(from, [...history, { role: 'user', content: incomingMsg }, { role: 'assistant', content: msg }]);
+        await sendWhatsAppMessage(from, msg);
+        return true;
+      }
+
+      const tx = {
+        id: crypto.randomUUID(),
+        type: 'gasto',
+        description: parsed.tienda,
+        amount: parsed.total,
+        category: parsed.categoria || 'Otros',
+        date: parsed.fecha || today(),
+        savingsId: '',
+        note: 'Registrado por foto de ticket',
+      };
+      await saveData(userId, { ...data, transactions: [...data.transactions, tx] });
+      const msg = `✅ Anotado: *${tx.description}* — ${fmt(tx.amount)} (${tx.category})`;
+      await saveHistory(from, [...history, { role: 'user', content: incomingMsg }, { role: 'assistant', content: msg }]);
+      await sendWhatsAppMessage(from, msg);
+      return true;
+    }
+
     default:
       return false;
   }

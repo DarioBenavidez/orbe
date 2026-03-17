@@ -67,44 +67,74 @@ router.post('/', async (req, res) => {
         const { user_id: userId, user_name: userName } = userInfo;
         const data = await loadData(userId);
 
-        const imageSystemPrompt = `Analizá esta imagen. Puede ser un resumen bancario, estado de cuenta, comprobante único, o extracto de Mercado Pago/tarjeta.
-Extraé TODAS las transacciones que veas y respondé SOLO con un JSON array:
+        const imageSystemPrompt = `Analizá esta imagen financiera y determiná qué tipo es.
+
+TIPO A — TICKET DE COMPRA: un solo recibo/ticket de un comercio (supermercado, farmacia, restaurante, etc.) con ítems y un total.
+Respondé con este JSON:
+{"tipo":"ticket","tienda":"Supermercado Día","total":12450,"fecha":"${today()}","categoria":"Supermercado"}
+Categorías posibles: Alimentación, Supermercado, Salud, Entretenimiento, Ropa, Transporte, Servicios, Otros.
+
+TIPO B — RESUMEN/EXTRACTO BANCARIO: múltiples movimientos de distintas fechas (tarjeta, banco, Mercado Pago).
+Respondé con un JSON array:
 [
   {"descripcion":"Supermercado Día","monto":15000,"fecha":"${today()}","categoria":"Supermercado","tipo":"gasto"},
   {"descripcion":"Transferencia recibida","monto":50000,"fecha":"${today()}","categoria":"Otros","tipo":"ingreso"}
 ]
-Reglas:
+Reglas para el array:
 - descripcion: nombre del comercio o descripción tal como aparece
 - monto: número sin $ ni puntos de miles (ej: 15000, no $15.000)
 - fecha: YYYY-MM-DD (si no figura usá hoy: ${today()})
-- categoria: una de estas EXACTAS según lo que parezca: Alimentación, Transporte, Salud, Entretenimiento, Ropa, Vivienda, Educación, Supermercado, Servicios, Otros. Si no estás seguro usá "Otros".
+- categoria: Alimentación, Transporte, Salud, Entretenimiento, Ropa, Vivienda, Educación, Supermercado, Servicios, Otros
 - tipo: "gasto" o "ingreso"
-Si no es imagen financiera: [{"error":"no_financiero"}]
-Si no se puede leer: [{"error":"ilegible"}]
-Devolvé SOLO el JSON array, sin texto adicional.`;
+
+Si no es imagen financiera: {"error":"no_financiero"}
+Si no se puede leer: {"error":"ilegible"}
+Devolvé SOLO el JSON, sin texto adicional.`;
 
         const extractedText = await callClaudeWithImage(imageSystemPrompt, base64, mimeType,
-          caption ? `Imagen adjunta. Nota del usuario: "${caption}"` : 'Extraé todas las transacciones.');
+          caption ? `Imagen adjunta. Nota del usuario: "${caption}"` : 'Analizá la imagen.');
 
-        let txList;
+        let parsed;
         try {
-          const jsonMatch = extractedText.match(/\[[\s\S]*\]/);
-          txList = JSON.parse(jsonMatch?.[0] || extractedText);
+          const jsonMatch = extractedText.match(/[\[{][\s\S]*[\]}]/);
+          parsed = JSON.parse(jsonMatch?.[0] || extractedText);
         } catch {
           await sendWhatsAppMessage(from, `😅 No pude leer la imagen. ¿Podés decirme los datos manualmente?`);
           return;
         }
 
-        if (!Array.isArray(txList) || !txList.length) {
-          await sendWhatsAppMessage(from, `😅 No encontré transacciones en la imagen. ¿Es un resumen bancario o extracto?`);
+        // Errores
+        if (parsed?.error === 'no_financiero') {
+          await sendWhatsAppMessage(from, `🤔 Eso no parece un comprobante financiero. Si querés registrar un gasto, mandame los datos: *"gasté $X en Y"*.`);
           return;
         }
-        if (txList[0]?.error === 'no_financiero') {
-          await sendWhatsAppMessage(from, `🤔 Eso no parece un resumen bancario. Si querés registrar un gasto, mandame los datos: *"gasté $X en Y"*.`);
-          return;
-        }
-        if (txList[0]?.error === 'ilegible') {
+        if (parsed?.error === 'ilegible') {
           await sendWhatsAppMessage(from, `😓 La imagen está borrosa. ¿Podés mandarla más clara o pasarme los datos a mano?`);
+          return;
+        }
+
+        // ── TICKET SIMPLE ──────────────────────────────────────
+        if (parsed?.tipo === 'ticket') {
+          const { tienda, total, fecha, categoria } = parsed;
+          if (!total || total <= 0) {
+            await sendWhatsAppMessage(from, `😅 Vi el ticket pero no pude leer el total. ¿Cuánto fue?`);
+            return;
+          }
+          await savePendingSuggestion(from, JSON.stringify({
+            type: 'confirm_ticket',
+            tienda: tienda || 'Comercio',
+            total: parseFloat(total),
+            fecha: fecha || today(),
+            categoria: categoria || 'Otros',
+          }));
+          await sendWhatsAppMessage(from, `🧾 *${tienda || 'Comercio'}* — ${fmt(parseFloat(total))}\n📂 ${categoria || 'Otros'} · 📅 ${fecha || today()}\n\n¿Lo registro? (Sí / No)`);
+          return;
+        }
+
+        // ── EXTRACTO BANCARIO ──────────────────────────────────
+        const txList = Array.isArray(parsed) ? parsed : null;
+        if (!txList || !txList.length) {
+          await sendWhatsAppMessage(from, `😅 No encontré transacciones en la imagen. ¿Es un resumen bancario o extracto?`);
           return;
         }
 
@@ -123,7 +153,6 @@ Devolvé SOLO el JSON array, sin texto adicional.`;
             dudosaIdx: 0,
           }));
 
-          // Mostrar resumen de lo encontrado
           const resumen = txList.map((t, i) => {
             const emoji = t.tipo === 'ingreso' ? '💰' : '💸';
             const cat = t.categoria !== 'Otros' ? ` (${t.categoria})` : ' ❓';
@@ -132,7 +161,6 @@ Devolvé SOLO el JSON array, sin texto adicional.`;
 
           await sendWhatsAppMessage(from, `📊 Encontré *${txList.length} transacciones*:\n\n${resumen}\n\n✅ ${claras.length} categorizadas automáticamente.\n❓ ${dudosas.length} necesitan categoría.\n\nVoy a preguntarte de a una. Empecemos:`);
 
-          // Preguntar por la primera dudosa
           const primera = dudosas[0];
           await sendWhatsAppMessage(from, `❓ *"${primera.descripcion}"* — ${fmt(primera.monto)}\n\n¿En qué categoría va?\n\n1. Alimentación\n2. Transporte\n3. Salud\n4. Entretenimiento\n5. Ropa\n6. Vivienda\n7. Educación\n8. Servicios\n9. Otros\n\nRespondé con el número o el nombre. Si no sabés, decí *"no sé"* o *"otros"*.`);
         } else {
