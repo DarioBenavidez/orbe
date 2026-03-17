@@ -66,3 +66,15 @@
 ### 2026-03-17 — RLS sin policies bloquea todas las operaciones
 - **Error**: Tabla `phone_otps` creada con RLS habilitado pero sin policies → anon key no podía leer ni escribir → "Error interno"
 - **Regla**: Al crear una tabla con RLS, siempre agregar las policies necesarias en el mismo paso
+
+### 2026-03-17 — RLS bloquea lectura del frontend en tablas existentes
+- **Error**: `whatsapp_users` tenía RLS sin policy de SELECT para el usuario → frontend siempre recibía vacío → `waLinked = false` en cada apertura
+- **Regla**: Cuando el frontend lee datos del usuario directamente desde Supabase, verificar que existe policy `FOR SELECT USING (auth.uid()::text = user_id)`
+
+### 2026-03-17 — Formato de teléfono argentino en WhatsApp
+- **Error**: `formatWaPhone` no agregaba el `9` requerido para móviles argentinos → número guardado con 12 dígitos en vez de 13 → bot no reconocía al usuario
+- **Regla**: Números móviles argentinos en WhatsApp siempre deben tener formato `549` + código de área + número = 13 dígitos
+
+### 2026-03-17 — .single() falla con múltiples filas
+- **Error**: `.single()` en Supabase lanza error si devuelve más de una fila → catch setea `waLinked = false`
+- **Regla**: Usar array query + `.order() + [0]` en vez de `.single()` cuando puede haber duplicados
