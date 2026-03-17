@@ -58,3 +58,11 @@
 ### 2026-03-17 — Función eliminada sin actualizar todos los callers
 - **Error**: Se renombró `openWaModal()` por el nuevo flujo OTP pero `handleTab` seguía llamando a la función eliminada → crash en runtime
 - **Regla**: Al eliminar o renombrar una función, hacer grep de todos los callers antes de commitear
+
+### 2026-03-17 — Import de función desde módulo incorrecto
+- **Error**: `linkPhoneToUser` estaba en `lib/supabase.js` pero se importó desde `lib/auth.js` → "linkPhoneToUser is not a function" en runtime
+- **Regla**: Antes de commitear, verificar que cada función importada existe en el módulo correcto con grep
+
+### 2026-03-17 — RLS sin policies bloquea todas las operaciones
+- **Error**: Tabla `phone_otps` creada con RLS habilitado pero sin policies → anon key no podía leer ni escribir → "Error interno"
+- **Regla**: Al crear una tabla con RLS, siempre agregar las policies necesarias en el mismo paso
