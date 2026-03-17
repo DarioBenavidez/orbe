@@ -74,7 +74,7 @@ function OAuthBtn({ icon, label, color, onPress }) {
 
 // ── Main ───────────────────────────────────────────────────────
 export default function LoginScreen({ onLogin }) {
-  const [mode, setMode]           = useState('login'); // login | register | reset
+  const [mode, setMode]           = useState('login'); // login | register | reset | phone | phone_otp
   const [nombre, setNombre]       = useState('');
   const [apellido, setApellido]   = useState('');
   const [email, setEmail]         = useState('');
@@ -86,6 +86,8 @@ export default function LoginScreen({ onLogin }) {
   const [success, setSuccess]     = useState('');
   const [loading, setLoading]     = useState(false);
   const [pwFocused, setPwFocused] = useState(false);
+  const [phone, setPhone]         = useState('');
+  const [otp, setOtp]             = useState('');
 
 
   const pwRules    = validatePassword(password);
@@ -154,9 +156,52 @@ export default function LoginScreen({ onLogin }) {
     }
   };
 
+  const formatPhone = (raw) => {
+    const digits = raw.replace(/\D/g, '');
+    // Si empieza con 0, reemplazar por prefijo Argentina
+    if (digits.startsWith('0')) return '+54' + digits.slice(1);
+    // Si ya tiene 54 al principio
+    if (digits.startsWith('54')) return '+' + digits;
+    return '+54' + digits;
+  };
+
+  const handleSendOtp = async () => {
+    clear(); setLoading(true);
+    try {
+      const formatted = formatPhone(phone);
+      if (formatted.length < 12) throw new Error('Ingresá un número válido (ej: 1134567890)');
+      const { error } = await supabase.auth.signInWithOtp({ phone: formatted });
+      if (error) throw error;
+      setMode('phone_otp');
+      setSuccess(`Código enviado al ${formatted}`);
+    } catch (e) {
+      setError(e.message || 'Error al enviar el código');
+    }
+    setLoading(false);
+  };
+
+  const handleVerifyOtp = async () => {
+    clear(); setLoading(true);
+    try {
+      const formatted = formatPhone(phone);
+      const { data, error } = await supabase.auth.verifyOtp({
+        phone: formatted,
+        token: otp.trim(),
+        type: 'sms',
+      });
+      if (error) throw error;
+      onLogin(data.user);
+    } catch (e) {
+      setError(e.message || 'Código incorrecto. Revisá e intentá de nuevo.');
+    }
+    setLoading(false);
+  };
+
   const isLogin    = mode === 'login';
   const isRegister = mode === 'register';
   const isReset    = mode === 'reset';
+  const isPhone    = mode === 'phone';
+  const isPhoneOtp = mode === 'phone_otp';
 
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
@@ -175,70 +220,114 @@ export default function LoginScreen({ onLogin }) {
         {/* ── Card blanca ── */}
         <View style={styles.card}>
 
-          {(isRegister || isReset) && (
-            <Text style={styles.greeting}>
-              {isRegister ? '¡Creá tu cuenta!' : 'Recuperar contraseña'}
-            </Text>
-          )}
-
-          {/* Nombre + Apellido */}
-          {isRegister && (
-            <View style={{ flexDirection: 'row', gap: 10 }}>
-              <View style={{ flex: 1 }}>
-                <Field placeholder="Nombre" value={nombre} onChangeText={setNombre} autoCapitalize="words"/>
-              </View>
-              <View style={{ flex: 1 }}>
-                <Field placeholder="Apellido" value={apellido} onChangeText={setApellido} autoCapitalize="words"/>
-              </View>
-            </View>
-          )}
-
-          {/* Email */}
-          <Field placeholder="Email" value={email} onChangeText={setEmail} keyboardType="email-address"/>
-
-          {/* Password */}
-          {!isReset && (
-            <View>
-              <Field
-                placeholder="Contraseña"
-                value={password}
-                onChangeText={v => { setPassword(v); if (!pwFocused) setPwFocused(true); }}
-                secureTextEntry={!showPw}
-                showToggle
-                onToggle={() => setShowPw(p => !p)}
-              />
-              {/* Reglas de contraseña (solo en registro) */}
-              {isRegister && password.length > 0 && (
-                <View style={styles.pwRules}>
-                  {pwRules.map((r, i) => (
-                    <View key={i} style={styles.pwRule}>
-                      <Text style={{ fontSize: 11, color: r.ok ? C.gold : C.textMuted }}>
-                        {r.ok ? '✓' : '○'} {r.label}
-                      </Text>
+          {/* ── Flujo celular ── */}
+          {(isPhone || isPhoneOtp) && (
+            <>
+              <Text style={styles.greeting}>
+                {isPhone ? '📱 Entrá con tu celular' : '🔐 Verificá tu número'}
+              </Text>
+              {isPhone && (
+                <>
+                  <Text style={{ fontSize: 13, color: C.textMuted, marginBottom: 14, textAlign: 'center' }}>
+                    Te enviamos un código por SMS para ingresar.
+                  </Text>
+                  <View style={[styles.fieldRow, { paddingLeft: 0 }]}>
+                    <View style={{ backgroundColor: C.cream, paddingHorizontal: 14, paddingVertical: 15, borderRightWidth: 1, borderRightColor: C.border, borderTopLeftRadius: 16, borderBottomLeftRadius: 16 }}>
+                      <Text style={{ fontSize: 15, color: C.text, fontWeight: '600' }}>+54</Text>
                     </View>
-                  ))}
-                </View>
+                    <TextInput
+                      style={[styles.fieldInput, { paddingLeft: 12 }]}
+                      placeholder="9 11 1234 5678"
+                      placeholderTextColor={C.textMuted}
+                      value={phone}
+                      onChangeText={setPhone}
+                      keyboardType="phone-pad"
+                      autoComplete="tel"
+                    />
+                  </View>
+                </>
               )}
-            </View>
+              {isPhoneOtp && (
+                <>
+                  <Text style={{ fontSize: 13, color: C.textMuted, marginBottom: 14, textAlign: 'center' }}>
+                    Ingresá el código de 6 dígitos que recibiste por SMS.
+                  </Text>
+                  <Field
+                    placeholder="123456"
+                    value={otp}
+                    onChangeText={v => setOtp(v.replace(/\D/g, '').slice(0, 6))}
+                    keyboardType="number-pad"
+                    autoCapitalize="none"
+                  />
+                </>
+              )}
+            </>
           )}
 
-          {/* Confirmar contraseña */}
-          {isRegister && (
-            <View>
-              <Field
-                placeholder="Repetir contraseña"
-                value={confirm}
-                onChangeText={setConfirm}
-                secureTextEntry={!showCf}
-                showToggle
-                onToggle={() => setShowCf(p => !p)}
-              />
-              {confirm.length > 0 && (
-                <Text style={{ fontSize: 11, color: confirmOk ? C.gold : C.red, marginTop: -8, marginBottom: 10, marginLeft: 4 }}>
-                  {confirmOk ? '✓ Las contraseñas coinciden' : '✗ No coinciden'}
+          {/* ── Flujo email ── */}
+          {!isPhone && !isPhoneOtp && (
+            <>
+              {(isRegister || isReset) && (
+                <Text style={styles.greeting}>
+                  {isRegister ? '¡Creá tu cuenta!' : 'Recuperar contraseña'}
                 </Text>
               )}
-            </View>
+
+              {isRegister && (
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Field placeholder="Nombre" value={nombre} onChangeText={setNombre} autoCapitalize="words"/>
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Field placeholder="Apellido" value={apellido} onChangeText={setApellido} autoCapitalize="words"/>
+                  </View>
+                </View>
+              )}
+
+              <Field placeholder="Email" value={email} onChangeText={setEmail} keyboardType="email-address"/>
+
+              {!isReset && (
+                <View>
+                  <Field
+                    placeholder="Contraseña"
+                    value={password}
+                    onChangeText={v => { setPassword(v); if (!pwFocused) setPwFocused(true); }}
+                    secureTextEntry={!showPw}
+                    showToggle
+                    onToggle={() => setShowPw(p => !p)}
+                  />
+                  {isRegister && password.length > 0 && (
+                    <View style={styles.pwRules}>
+                      {pwRules.map((r, i) => (
+                        <View key={i} style={styles.pwRule}>
+                          <Text style={{ fontSize: 11, color: r.ok ? C.gold : C.textMuted }}>
+                            {r.ok ? '✓' : '○'} {r.label}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {isRegister && (
+                <View>
+                  <Field
+                    placeholder="Repetir contraseña"
+                    value={confirm}
+                    onChangeText={setConfirm}
+                    secureTextEntry={!showCf}
+                    showToggle
+                    onToggle={() => setShowCf(p => !p)}
+                  />
+                  {confirm.length > 0 && (
+                    <Text style={{ fontSize: 11, color: confirmOk ? C.gold : C.red, marginTop: -8, marginBottom: 10, marginLeft: 4 }}>
+                      {confirmOk ? '✓ Las contraseñas coinciden' : '✗ No coinciden'}
+                    </Text>
+                  )}
+                </View>
+              )}
+            </>
           )}
 
           {/* Error / Success */}
@@ -248,13 +337,13 @@ export default function LoginScreen({ onLogin }) {
           {/* Botón principal */}
           <TouchableOpacity
             style={[styles.mainBtn, loading && { opacity: 0.7 }]}
-            onPress={handleSubmit}
+            onPress={isPhone ? handleSendOtp : isPhoneOtp ? handleVerifyOtp : handleSubmit}
             disabled={loading}
           >
             {loading
               ? <ActivityIndicator color={C.goldLight}/>
               : <Text style={styles.mainBtnText}>
-                  {isLogin ? 'Iniciar sesión' : isRegister ? 'Crear cuenta' : 'Enviar email'}
+                  {isPhone ? 'Enviar código SMS' : isPhoneOtp ? 'Verificar código' : isLogin ? 'Iniciar sesión' : isRegister ? 'Crear cuenta' : 'Enviar email'}
                 </Text>
             }
           </TouchableOpacity>
@@ -274,20 +363,50 @@ export default function LoginScreen({ onLogin }) {
 
           {/* Links de modo */}
           <View style={styles.links}>
-            {!isLogin && (
-              <TouchableOpacity onPress={() => { setMode('login'); clear(); }}>
-                <Text style={styles.link}>¿Ya tenés cuenta? <Text style={styles.linkBold}>Iniciá sesión</Text></Text>
-              </TouchableOpacity>
-            )}
-            {!isRegister && (
-              <TouchableOpacity onPress={() => { setMode('register'); clear(); }}>
-                <Text style={styles.link}>¿No tenés cuenta? <Text style={styles.linkBold}>Registrate</Text></Text>
-              </TouchableOpacity>
-            )}
-            {!isReset && (
-              <TouchableOpacity onPress={() => { setMode('reset'); clear(); }}>
-                <Text style={[styles.link, { marginTop: 4 }]}>¿Olvidaste tu contraseña?</Text>
-              </TouchableOpacity>
+            {(isPhone || isPhoneOtp) ? (
+              <>
+                {isPhoneOtp && (
+                  <TouchableOpacity onPress={() => { setMode('phone'); setOtp(''); clear(); }}>
+                    <Text style={styles.link}>¿No recibiste el código? <Text style={styles.linkBold}>Reenviar</Text></Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity onPress={() => { setMode('login'); setPhone(''); setOtp(''); clear(); }}>
+                  <Text style={[styles.link, { marginTop: 4 }]}>Volver al login con email</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <>
+                {!isLogin && (
+                  <TouchableOpacity onPress={() => { setMode('login'); clear(); }}>
+                    <Text style={styles.link}>¿Ya tenés cuenta? <Text style={styles.linkBold}>Iniciá sesión</Text></Text>
+                  </TouchableOpacity>
+                )}
+                {!isRegister && (
+                  <TouchableOpacity onPress={() => { setMode('register'); clear(); }}>
+                    <Text style={styles.link}>¿No tenés cuenta? <Text style={styles.linkBold}>Registrate</Text></Text>
+                  </TouchableOpacity>
+                )}
+                {!isReset && (
+                  <TouchableOpacity onPress={() => { setMode('reset'); clear(); }}>
+                    <Text style={[styles.link, { marginTop: 4 }]}>¿Olvidaste tu contraseña?</Text>
+                  </TouchableOpacity>
+                )}
+                {isLogin && (
+                  <>
+                    <View style={[styles.divider, { marginVertical: 14 }]}>
+                      <View style={styles.dividerLine}/>
+                      <Text style={styles.dividerText}>o</Text>
+                      <View style={styles.dividerLine}/>
+                    </View>
+                    <TouchableOpacity
+                      style={[styles.mainBtn, { backgroundColor: C.greenDark, marginTop: 0 }]}
+                      onPress={() => { setMode('phone'); clear(); }}
+                    >
+                      <Text style={styles.mainBtnText}>📱 Entrá con tu celular</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+              </>
             )}
           </View>
 
