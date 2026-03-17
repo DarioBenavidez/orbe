@@ -63,10 +63,12 @@ export default function MainApp({ user, onLogout }) {
   const [waPolling, setWaPolling] = useState(null);
 
   const formatWaPhone = (raw) => {
-    const digits = raw.replace(/\D/g, '');
-    if (digits.startsWith('54')) return digits;
-    if (digits.startsWith('0')) return '54' + digits.slice(1);
-    return '54' + digits;
+    let digits = raw.replace(/\D/g, '');
+    if (digits.startsWith('549')) digits = digits.slice(3);
+    else if (digits.startsWith('54')) digits = digits.slice(2);
+    if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1);
+    if (digits.length === 11 && digits.startsWith('9')) digits = digits.slice(1);
+    return '549' + digits;
   };
 
   const connectWhatsApp = () => {
@@ -131,7 +133,8 @@ export default function MainApp({ user, onLogout }) {
   };
 
   const checkLinked = async () => {
-    const { data: wa } = await supabase.from('whatsapp_users').select('phone').eq('user_id', user.id).single();
+    const { data: waRows } = await supabase.from('whatsapp_users').select('phone, linked_at').eq('user_id', user.id).order('linked_at', { ascending: false });
+    const wa = waRows?.[0];
     if (wa?.phone) {
       if (waPolling) { clearInterval(waPolling); setWaPolling(null); }
       setWaLinked(wa.phone); setWaModal(false);
@@ -157,8 +160,8 @@ export default function MainApp({ user, onLogout }) {
     loadData(user.id)
       .then(d => { setData(d || defaultData()); setLoading(false); })
       .catch(() => { setData(defaultData()); setLoading(false); });
-    supabase.from('whatsapp_users').select('phone').eq('user_id', user.id).single()
-      .then(({ data: wa }) => setWaLinked(wa?.phone || false))
+    supabase.from('whatsapp_users').select('phone, linked_at').eq('user_id', user.id).order('linked_at', { ascending: false })
+      .then(({ data: waRows }) => setWaLinked(waRows?.[0]?.phone || false))
       .catch(() => setWaLinked(false));
   }, [user]);
 
@@ -181,7 +184,8 @@ export default function MainApp({ user, onLogout }) {
         return;
       }
       // Verificar en Supabase por si ya vinculó en otra sesión
-      const { data: wa } = await supabase.from('whatsapp_users').select('phone').eq('user_id', user.id).single();
+      const { data: waRows } = await supabase.from('whatsapp_users').select('phone, linked_at').eq('user_id', user.id).order('linked_at', { ascending: false });
+      const wa = waRows?.[0];
       if (wa?.phone) {
         setWaLinked(wa.phone);
         Linking.openURL('https://wa.me/5491125728211').catch(() => {});
