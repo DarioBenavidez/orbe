@@ -65,7 +65,7 @@ export default function Index() {
         setLocked(false);
       }
     } catch (e) {
-      console.log('Bio error:', e);
+      // error silencioso — fallo de biometría es esperado en dispositivos sin sensor
     }
   };
 

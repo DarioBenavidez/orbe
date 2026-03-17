@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView } from 'react-native';
-import { useC } from '../lib/theme';
-import { ScreenWithHeader, Chip } from '../components/ui';
+import { useC } from '../_lib/theme';
+import { ScreenWithHeader, Chip } from '../_components/ui';
 import Ahorros    from '../panels/Ahorros';
 import Deudas     from '../panels/Deudas';
 import Prestamos  from '../panels/Prestamos';

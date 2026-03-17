@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert, TextInput } from 'react-native';
-import { useC } from '../lib/theme';
-import { fmt, fmtAmt, parseAmt, MONTH_NAMES } from '../lib/constants';
-import { Card, Btn, Input, FAB, ModalSheet, IconCircle } from '../components/ui';
+import { useC } from '../_lib/theme';
+import { fmt, fmtAmt, parseAmt, MONTH_NAMES } from '../_lib/constants';
+import { Card, Btn, Input, FAB, ModalSheet, IconCircle } from '../_components/ui';
 
 export default function Deudas({ data, onSave }) {
   const C = useC();
