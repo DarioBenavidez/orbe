@@ -338,7 +338,8 @@ Devolvé SOLO el JSON, sin texto adicional.`;
       await savePendingSuggestion(from, incomingMsg);
     }
 
-    await saveHistory(from, [...history, { role: 'user', content: incomingMsg }, { role: 'assistant', content: respuesta }]);
+    const updatedHistory = [...history, { role: 'user', content: incomingMsg }, { role: 'assistant', content: respuesta }];
+    await saveHistory(from, updatedHistory.slice(-40)); // mantener últimos 40 mensajes (20 intercambios)
     await sendWhatsAppMessage(from, respuesta);
 
   } catch (err) {

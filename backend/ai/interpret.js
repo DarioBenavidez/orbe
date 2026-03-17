@@ -6,7 +6,7 @@ const { getRelevantExpertise } = require('./expertise');
 
 async function callClaude(systemPrompt, history, userMessage) {
   // Asegurarse de que los mensajes alternen roles correctamente
-  const rawMessages = [...history.slice(-10), { role: 'user', content: userMessage }];
+  const rawMessages = [...history.slice(-20), { role: 'user', content: userMessage }];
   const messages = [];
   for (const msg of rawMessages) {
     if (messages.length > 0 && messages[messages.length - 1].role === msg.role) continue;

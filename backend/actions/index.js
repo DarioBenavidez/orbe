@@ -62,19 +62,18 @@ Tu tarea: escribí un saludo natural, breve y conversacional. Pensá qué es lo 
       const realIdx = idx !== -1 ? txs.length - 1 - idx : -1;
       if (realIdx === -1) return `🤔 No encontré ninguna transacción de este mes que coincida con *"${action.keyword}"*.`;
       const original = txs[realIdx];
-      const updated = {
-        ...original,
-        ...(action.newAmount    ? { amount:      parseFloat(action.newAmount) }   : {}),
-        ...(action.newDescription ? { description: action.newDescription }         : {}),
-        ...(action.newCategory  ? { category:    action.newCategory }             : {}),
-      };
-      const newTxs = txs.map((t, i) => i === realIdx ? updated : t);
-      await saveData(userId, { ...data, transactions: newTxs });
       const cambios = [];
-      if (action.newAmount)      cambios.push(`monto: ${fmt(original.amount)} → ${fmt(updated.amount)}`);
-      if (action.newDescription) cambios.push(`descripción: "${original.description}" → "${updated.description}"`);
-      if (action.newCategory)    cambios.push(`categoría: ${original.category} → ${updated.category}`);
-      return `✏️ *Transacción actualizada*\n\n📝 ${updated.description}\n${cambios.join('\n')}`;
+      if (action.newAmount)      cambios.push(`monto: ${fmt(original.amount)} → ${fmt(parseFloat(action.newAmount))}`);
+      if (action.newDescription) cambios.push(`descripción: "${original.description}" → "${action.newDescription}"`);
+      if (action.newCategory)    cambios.push(`categoría: ${original.category} → ${action.newCategory}`);
+      await savePendingSuggestion(phone, JSON.stringify({
+        type: 'confirm_edit',
+        txIndex: realIdx,
+        newAmount: action.newAmount || null,
+        newDescription: action.newDescription || null,
+        newCategory: action.newCategory || null,
+      }));
+      return `✏️ Encontré esto:\n\n📝 *${original.description}* — ${fmt(original.amount)} (${original.date})\n\n${cambios.join('\n')}\n\n¿Lo actualizo? (Sí / No)`;
     }
 
     case 'guardar_vocabulario': {

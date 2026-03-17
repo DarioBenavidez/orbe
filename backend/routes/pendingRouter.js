@@ -259,6 +259,41 @@ async function handlePending(pendingRaw, incomingMsg, data, userId, history, fro
       return true;
     }
 
+    case 'confirm_edit': {
+      await clearPendingSuggestion(from);
+      const esNegativo = /\b(no\b|nope|cancel|no quiero|no gracias)\b/i.test(incomingMsg);
+
+      if (esNegativo) {
+        const msg = `Ok, no cambié nada.`;
+        await saveHistory(from, [...history, { role: 'user', content: incomingMsg }, { role: 'assistant', content: msg }]);
+        await sendWhatsAppMessage(from, msg);
+        return true;
+      }
+
+      const txs = [...data.transactions];
+      const original = txs[parsed.txIndex];
+      if (!original) {
+        await sendWhatsAppMessage(from, `😅 No encontré la transacción para actualizar.`);
+        return true;
+      }
+      const updated = {
+        ...original,
+        ...(parsed.newAmount      ? { amount:      parseFloat(parsed.newAmount) }   : {}),
+        ...(parsed.newDescription ? { description: parsed.newDescription }           : {}),
+        ...(parsed.newCategory    ? { category:    parsed.newCategory }              : {}),
+      };
+      txs[parsed.txIndex] = updated;
+      await saveData(userId, { ...data, transactions: txs });
+      const cambios = [];
+      if (parsed.newAmount)      cambios.push(`${fmt(original.amount)} → ${fmt(updated.amount)}`);
+      if (parsed.newDescription) cambios.push(`"${original.description}" → "${updated.description}"`);
+      if (parsed.newCategory)    cambios.push(`${original.category} → ${updated.category}`);
+      const msg = `✅ Actualizado: *${updated.description}* — ${cambios.join(', ')}.`;
+      await saveHistory(from, [...history, { role: 'user', content: incomingMsg }, { role: 'assistant', content: msg }]);
+      await sendWhatsAppMessage(from, msg);
+      return true;
+    }
+
     case 'confirm_ticket': {
       await clearPendingSuggestion(from);
       const esNegativo = /\b(no\b|nope|cancel|no quiero|no gracias)\b/i.test(incomingMsg);
