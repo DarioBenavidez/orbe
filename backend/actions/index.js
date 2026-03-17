@@ -4,6 +4,7 @@ const { supabase, loadData, saveData, getPendingSuggestion, savePendingSuggestio
 const { sendWhatsAppMessage, callClaudeWithImage } = require('../lib/whatsapp');
 const { fmt, fmtSigned, fmtDate, today, currentMonth, arDay, arNow, parseDateParts, getDolarPrice, MONTH_NAMES, getGreeting } = require('../lib/helpers');
 const { callClaude } = require('../ai/interpret');
+const { filterByMonth, monthlyTotals } = require('./helpers');
 
 async function processAction(action, data, userId, userName, history = [], phone = null) {
   const { month, year } = currentMonth();
@@ -15,12 +16,7 @@ async function processAction(action, data, userId, userName, history = [], phone
       const greeting = getGreeting();
       const todayStr = today();
       const txsHoy = data.transactions.filter(t => t.date === todayStr);
-      const txsMes2 = data.transactions.filter(t => {
-        const p = parseDateParts(t.date);
-        return p.month === month && p.year === year;
-      });
-      const ingresosMes = txsMes2.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((a, t) => a + t.amount, 0);
-      const gastosMes = txsMes2.filter(t => t.type === 'gasto').reduce((a, t) => a + t.amount, 0);
+      const { ingresos: ingresosMes, gastos: gastosMes } = monthlyTotals(data.transactions, month, year);
       const balanceMes = ingresosMes - gastosMes;
       const todayDay = arDay();
       const proxVenc2 = (data.events || []).filter(ev => ev.day >= todayDay && ev.day <= todayDay + 3);
@@ -151,10 +147,7 @@ Tu tarea: escribí un saludo natural, breve y conversacional. Pensá qué es lo 
       // Bienvenida especial cuando llega el sueldo
       if (tx.type === 'sueldo') {
         const gastosFijos = (data.recurringExpenses || []).filter(g => g.active).reduce((a, g) => a + g.amount, 0);
-        const gastosMes = allTxs.filter(t => {
-          const p = parseDateParts(t.date);
-          return p.month === month && p.year === year && t.type === 'gasto';
-        }).reduce((a, t) => a + t.amount, 0);
+        const gastosMes = monthlyTotals(allTxs, month, year).gastos;
         const disponible = tx.amount - gastosMes;
         const sueldoPrompt = `Sos Orbe, asistente financiero de ${name || 'tu usuario'}. Hablás en español rioplatense informal. El usuario acaba de registrar su sueldo — es el momento más importante del mes. Felicitálo con calidez y decile lo que le queda disponible después de los gastos. Si tiene gastos fijos configurados, mencioná cuánto absorben. Si tiene metas de ahorro activas (${data.savings?.length || 0}), sugerí separar algo. Sin listas ni asteriscos. Máximo 4 líneas.
 Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} | gastos fijos mensuales ${fmt(gastosFijos)} | disponible real ${fmt(disponible)}`;
@@ -174,10 +167,9 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       if (tx.type === 'gasto') {
         const budget = (data.budgets || []).find(b => b.cat.toLowerCase() === tx.category.toLowerCase());
         if (budget && budget.limit > 0) {
-          const spentCat = allTxs.filter(t => {
-            const p = parseDateParts(t.date);
-            return p.month === month && p.year === year && t.type === 'gasto' && t.category.toLowerCase() === tx.category.toLowerCase();
-          }).reduce((a, t) => a + t.amount, 0);
+          const spentCat = filterByMonth(allTxs, month, year)
+            .filter(t => t.type === 'gasto' && t.category.toLowerCase() === tx.category.toLowerCase())
+            .reduce((a, t) => a + t.amount, 0);
           const pct = Math.round((spentCat / budget.limit) * 100);
           if (pct >= 100) {
             respuesta += `\n\n🔴 Pasaste el presupuesto de *${tx.category}* (${pct}% usado). Te fuiste ${fmt(spentCat - budget.limit)} del límite.`;
@@ -187,14 +179,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
         }
 
         // Aviso si el balance queda justo después del gasto
-        const ingMes = allTxs.filter(t => {
-          const p = parseDateParts(t.date);
-          return p.month === month && p.year === year && (t.type === 'ingreso' || t.type === 'sueldo');
-        }).reduce((a, t) => a + t.amount, 0);
-        const gastMes = allTxs.filter(t => {
-          const p = parseDateParts(t.date);
-          return p.month === month && p.year === year && t.type === 'gasto';
-        }).reduce((a, t) => a + t.amount, 0);
+        const { ingresos: ingMes, gastos: gastMes } = monthlyTotals(allTxs, month, year);
         const balanceNuevo = ingMes - gastMes;
         if (balanceNuevo < 0) {
           respuesta += `\n\n⚠️ Con esto el mes quedó en rojo: ${fmtSigned(balanceNuevo)}.`;
@@ -203,13 +188,8 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
         }
 
         // Alerta de balance bajo
-        if (data.balanceAlert > 0) {
-          const newIngresos = allTxs.filter(t => { const p = parseDateParts(t.date); return p.month === month && p.year === year && (t.type === 'ingreso' || t.type === 'sueldo'); }).reduce((s, t) => s + t.amount, 0);
-          const newGastos = allTxs.filter(t => { const p = parseDateParts(t.date); return p.month === month && p.year === year && t.type === 'gasto'; }).reduce((s, t) => s + t.amount, 0);
-          const newBalance = newIngresos - newGastos;
-          if (newBalance < data.balanceAlert) {
-            respuesta += `\n\n⚠️ *Alerta:* tu balance bajó a ${fmt(newBalance)}, por debajo del límite que configuraste (${fmt(data.balanceAlert)}).`;
-          }
+        if (data.balanceAlert > 0 && balanceNuevo < data.balanceAlert) {
+          respuesta += `\n\n⚠️ *Alerta:* tu balance bajó a ${fmt(balanceNuevo)}, por debajo del límite que configuraste (${fmt(data.balanceAlert)}).`;
         }
       }
 
@@ -282,9 +262,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       const daysInMonth = new Date(cy, cm + 1, 0).getDate();
       const dayOfMonth = arDay();
       const daysLeft = daysInMonth - dayOfMonth;
-      const txsMes = data.transactions.filter(t => { const p = parseDateParts(t.date); return p.month === cm && p.year === cy; });
-      const ingresos = txsMes.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((s, t) => s + t.amount, 0);
-      const gastos = txsMes.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
+      const { ingresos, gastos } = monthlyTotals(data.transactions, cm, cy);
       const balance = ingresos - gastos;
       const gastosFijosRest = (data.recurringExpenses || []).filter(g => g.active && g.day > dayOfMonth).reduce((s, g) => s + g.amount, 0);
       const disponible = balance - gastosFijosRest;
@@ -358,7 +336,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
 
     case 'gastos_hormiga': {
       const { month: cm, year: cy } = currentMonth();
-      const txsMes = data.transactions.filter(t => { const p = parseDateParts(t.date); return p.month === cm && p.year === cy && t.type === 'gasto'; });
+      const txsMes = filterByMonth(data.transactions, cm, cy).filter(t => t.type === 'gasto');
       const UMBRAL = 5000;
       const hormiga = txsMes.filter(t => t.amount <= UMBRAL);
       if (!hormiga.length) return `✅ No detecté gastos hormiga este mes.`;
@@ -372,10 +350,8 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
 
     case 'regla_50_30_20': {
       const { month: cm, year: cy } = currentMonth();
-      const txsMes = data.transactions.filter(t => { const p = parseDateParts(t.date); return p.month === cm && p.year === cy; });
-      const ingresos = txsMes.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((s, t) => s + t.amount, 0);
+      const { txs: txsMes, ingresos, gastos } = monthlyTotals(data.transactions, cm, cy);
       if (!ingresos) return `📭 Todavía no registraste ingresos este mes. Registrá tu sueldo primero.`;
-      const gastos = txsMes.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
       const ahorros = (data.savings || []).reduce((s, sv) => s + (sv.current || 0), 0);
       const NECESIDADES_CATS = ['Vivienda', 'Alimentación', 'Transporte', 'Salud', 'Servicios'];
       const necesidades = txsMes.filter(t => t.type === 'gasto' && NECESIDADES_CATS.includes(t.category)).reduce((s, t) => s + t.amount, 0);
@@ -390,9 +366,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
 
     case 'ratio_ahorro': {
       const { month: cm, year: cy } = currentMonth();
-      const txsMes = data.transactions.filter(t => { const p = parseDateParts(t.date); return p.month === cm && p.year === cy; });
-      const ingresos = txsMes.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((s, t) => s + t.amount, 0);
-      const gastos = txsMes.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
+      const { ingresos, gastos } = monthlyTotals(data.transactions, cm, cy);
       if (!ingresos) return `📭 No hay ingresos registrados este mes todavía.`;
       const ahorro = ingresos - gastos;
       const ratio = Math.round(ahorro / ingresos * 100);
@@ -409,7 +383,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       for (let i = 0; i < 3; i++) {
         const mm = ((cm - i) + 12) % 12;
         const yy = cm - i < 0 ? cy - 1 : cy;
-        const g = data.transactions.filter(t => { const p = parseDateParts(t.date); return p.month === mm && p.year === yy && t.type === 'gasto'; }).reduce((s, t) => s + t.amount, 0);
+        const g = filterByMonth(data.transactions, mm, yy).filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
         if (g > 0) { totalGastos += g; meses++; }
       }
       const avgMensual = meses > 0 ? totalGastos / meses : 0;
@@ -422,7 +396,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
 
     case 'top_categorias_ahorro': {
       const { month: cm, year: cy } = currentMonth();
-      const txsMes = data.transactions.filter(t => { const p = parseDateParts(t.date); return p.month === cm && p.year === cy && t.type === 'gasto'; });
+      const txsMes = filterByMonth(data.transactions, cm, cy).filter(t => t.type === 'gasto');
       if (!txsMes.length) return `📭 No hay gastos registrados este mes.`;
       const porCat = {};
       txsMes.forEach(t => { porCat[t.category] = (porCat[t.category] || 0) + t.amount; });
@@ -508,7 +482,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       const { month: cm, year: cy } = currentMonth();
       const count = scope === 'todo'
         ? data.transactions.length
-        : data.transactions.filter(t => { const p = parseDateParts(t.date); return p.month === cm && p.year === cy; }).length;
+        : filterByMonth(data.transactions, cm, cy).length;
       if (count === 0) return `📭 No hay transacciones${scope === 'mes' ? ' este mes' : ''} para borrar.`;
       // Guardar pending para confirmar
       await savePendingSuggestion(phone, JSON.stringify({ type: 'confirm_limpiar', scope }));
@@ -521,12 +495,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       const daysInMonth = new Date(cy, cm + 1, 0).getDate();
       const dayOfMonth = arDay();
       const daysLeft = daysInMonth - dayOfMonth;
-      const txsMes = data.transactions.filter(t => {
-        const p = parseDateParts(t.date);
-        return p.month === cm && p.year === cy;
-      });
-      const ingresos = txsMes.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((s, t) => s + t.amount, 0);
-      const gastos = txsMes.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
+      const { ingresos, gastos } = monthlyTotals(data.transactions, cm, cy);
       const balance = ingresos - gastos;
       const avgDailySpend = dayOfMonth > 0 ? gastos / dayOfMonth : 0;
       const proyectedGastos = gastos + (avgDailySpend * daysLeft);
@@ -540,13 +509,8 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
     case 'resumen_mes': {
       const targetMonth = (parseInt(action.month) - 1 + 12) % 12;
       const targetYear = parseInt(action.year) || currentMonth().year;
-      const txs = data.transactions.filter(t => {
-        const p = parseDateParts(t.date);
-        return p.month === targetMonth && p.year === targetYear;
-      });
+      const { txs, ingresos, gastos } = monthlyTotals(data.transactions, targetMonth, targetYear);
       if (!txs.length) return `📭 No hay transacciones registradas en ${MONTH_NAMES[targetMonth]} ${targetYear}.`;
-      const ingresos = txs.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((s, t) => s + t.amount, 0);
-      const gastos = txs.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
       const balance = ingresos - gastos;
       const porCat = {};
       txs.filter(t => t.type === 'gasto').forEach(t => { porCat[t.category] = (porCat[t.category] || 0) + t.amount; });
@@ -560,12 +524,8 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       const y1 = parseInt(action.year1) || currentMonth().year;
       const m2 = (parseInt(action.month2) - 1 + 12) % 12;
       const y2 = parseInt(action.year2) || currentMonth().year;
-      const txs1 = data.transactions.filter(t => { const p = parseDateParts(t.date); return p.month === m1 && p.year === y1; });
-      const txs2 = data.transactions.filter(t => { const p = parseDateParts(t.date); return p.month === m2 && p.year === y2; });
-      const ing1 = txs1.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((s, t) => s + t.amount, 0);
-      const gst1 = txs1.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
-      const ing2 = txs2.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((s, t) => s + t.amount, 0);
-      const gst2 = txs2.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
+      const { ingresos: ing1, gastos: gst1 } = monthlyTotals(data.transactions, m1, y1);
+      const { ingresos: ing2, gastos: gst2 } = monthlyTotals(data.transactions, m2, y2);
       const diffGst = gst2 - gst1;
       const diffIng = ing2 - ing1;
       const arrow = (n) => n > 0 ? `↑ ${fmt(Math.abs(n))} más` : n < 0 ? `↓ ${fmt(Math.abs(n))} menos` : 'igual';
@@ -648,10 +608,8 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
     }
 
     case 'consultar_presupuesto_categoria': {
-      const txs = data.transactions.filter(t => {
-        const { month: m, year: y } = parseDateParts(t.date);
-        return m === month && y === year && t.type === 'gasto' && t.category.toLowerCase() === action.category.toLowerCase();
-      });
+      const txs = filterByMonth(data.transactions, month, year)
+        .filter(t => t.type === 'gasto' && t.category.toLowerCase() === action.category.toLowerCase());
       const spent = txs.reduce((a, t) => a + t.amount, 0);
       const budget = data.budgets.find(b => b.cat.toLowerCase() === action.category.toLowerCase());
       if (!budget || !budget.limit) return `📭 No tenés presupuesto configurado para *${action.category}*.\n\n¿Querés que te agregue uno? Decime el monto.`;
@@ -660,9 +618,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
     }
 
     case 'consultar_balance': {
-      const txs = data.transactions.filter(t => { const { month: m, year: y } = parseDateParts(t.date); return m === month && y === year; });
-      const ingresos = txs.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((a, t) => a + t.amount, 0);
-      const gastos = txs.filter(t => t.type === 'gasto').reduce((a, t) => a + t.amount, 0);
+      const { txs, ingresos, gastos } = monthlyTotals(data.transactions, month, year);
       const gastosFijos = (data.recurringExpenses || []).filter(g => g.active).reduce((a, g) => a + g.amount, 0);
       const ingFijosNoRecibidos = (data.recurringIncomes || []).filter(r => r.active).reduce((a, r) => {
         const yaRecibido = txs.some(t => (t.type === 'ingreso' || t.type === 'sueldo') && t.description?.toLowerCase().includes(r.name.toLowerCase()));
@@ -685,13 +641,13 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
     }
 
     case 'ultimas_transacciones': {
-      const txs = data.transactions.filter(t => { const { month: m, year: y } = parseDateParts(t.date); return m === month && y === year; }).slice(-5).reverse();
+      const txs = filterByMonth(data.transactions, month, year).slice(-5).reverse();
       if (!txs.length) return `📭 No hay transacciones este mes todavía${name ? ', ' + name : ''}. ¡Empezá registrando algo!`;
       return `🕐 *Últimas transacciones*\n\n${txs.map(t => `${t.type === 'gasto' ? '💸' : '💰'} ${t.description} — ${fmt(t.amount)} (${t.date})`).join('\n')}`;
     }
 
     case 'consultar_presupuesto': {
-      const txs = data.transactions.filter(t => { const { month: m, year: y } = parseDateParts(t.date); return m === month && y === year && t.type === 'gasto'; });
+      const txs = filterByMonth(data.transactions, month, year).filter(t => t.type === 'gasto');
       const expByCat = txs.reduce((acc, t) => { acc[t.category] = (acc[t.category] || 0) + t.amount; return acc; }, {});
       const cats = data.categories || {};
       const lines = data.budgets.filter(b => b.limit > 0).map(b => {
@@ -1151,9 +1107,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
     }
 
     case 'resumen_general': {
-      const txs = data.transactions.filter(t => { const { month: m, year: y } = parseDateParts(t.date); return m === month && y === year; });
-      const ingresos = txs.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((a, t) => a + t.amount, 0);
-      const gastos = txs.filter(t => t.type === 'gasto').reduce((a, t) => a + t.amount, 0);
+      const { txs, ingresos, gastos } = monthlyTotals(data.transactions, month, year);
       const balance = ingresos - gastos;
       const gastosFijos = (data.recurringExpenses || []).filter(g => g.active).reduce((a, g) => a + g.amount, 0);
       // Ingresos fijos: solo los que NO llegaron todavía este mes (no están en transacciones)
@@ -1203,13 +1157,8 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
         for (let i = 0; i < 3; i++) {
           const mm = ((m - i) + 12) % 12;
           const yy = m - i < 0 ? y - 1 : y;
-          const total = data.transactions
-            .filter(t => {
-              const p = parseDateParts(t.date);
-              return p.month === mm && p.year === yy &&
-                t.type === 'gasto' &&
-                t.description.toLowerCase().includes(keyword);
-            })
+          const total = filterByMonth(data.transactions, mm, yy)
+            .filter(t => t.type === 'gasto' && t.description.toLowerCase().includes(keyword))
             .reduce((s, t) => s + t.amount, 0);
           if (total > 0) meses3.push(total);
         }
@@ -1225,11 +1174,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       for (let i = 0; i < 3; i++) {
         const mm = ((curM - i) + 12) % 12;
         const yy = curM - i < 0 ? curY - 1 : curY;
-        const txs = data.transactions.filter(t => {
-          const p = parseDateParts(t.date); return p.month === mm && p.year === yy;
-        });
-        const ing = txs.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((s, t) => s + t.amount, 0);
-        const gst = txs.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
+        const { ingresos: ing, gastos: gst } = monthlyTotals(data.transactions, mm, yy);
         if (ing > 0 || gst > 0) { totalIng += ing; totalGst += gst; mesesConDatos++; }
       }
       const ingMedio = mesesConDatos > 0 ? Math.round(totalIng / mesesConDatos) : 0;
@@ -1271,11 +1216,7 @@ Sin listas. Máximo 6 líneas. Tono cálido y directo.`;
       for (let i = 0; i < 3; i++) {
         const mm = ((pM - i) + 12) % 12;
         const yy = pM - i < 0 ? pY - 1 : pY;
-        const txs = data.transactions.filter(t => {
-          const p = parseDateParts(t.date); return p.month === mm && p.year === yy;
-        });
-        const ing = txs.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((s, t) => s + t.amount, 0);
-        const gst = txs.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
+        const { ingresos: ing, gastos: gst } = monthlyTotals(data.transactions, mm, yy);
         if (ing > 0 || gst > 0) { pTotalIng += ing; pTotalGst += gst; pMeses++; }
       }
       const ingMedio = pMeses > 0 ? Math.round(pTotalIng / pMeses) : 0;
@@ -1456,7 +1397,7 @@ Sin listas. Máximo 8 líneas. Tono cálido, directo y que inspire confianza en 
 
     case 'consultar_ventas_negocio': {
       const ventas = data.ventas || [];
-      const ventasMes = ventas.filter(v => { const p = parseDateParts(v.date); return p.month === month && p.year === year; });
+      const ventasMes = filterByMonth(ventas, month, year);
       if (!ventasMes.length) return `📭 No hay ventas registradas este mes${name ? ', ' + name : ''}.\n\nPodés registrar una: *"vendí 3 Coca Colas"*`;
       const totalVentas = ventasMes.reduce((s, v) => s + v.total, 0);
       const productos = data.productos || [];
@@ -1510,12 +1451,10 @@ Sin listas. Máximo 8 líneas. Tono cálido, directo y que inspire confianza en 
     }
 
     case 'estado_de_resultados': {
-      const txsMes = data.transactions.filter(t => { const p = parseDateParts(t.date); return p.month === month && p.year === year; });
-      const ingresosTotales = txsMes.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((s, t) => s + t.amount, 0);
-      const ventasMes = (data.ventas || []).filter(v => { const p = parseDateParts(v.date); return p.month === month && p.year === year; });
+      const { ingresos: ingresosTotales, gastos: gastosTotales } = monthlyTotals(data.transactions, month, year);
+      const ventasMes = filterByMonth(data.ventas || [], month, year);
       const ingresoVentas = ventasMes.reduce((s, v) => s + v.total, 0);
       const ingresoTotal = ingresosTotales + ingresoVentas;
-      const gastosTotales = txsMes.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
       const gastosFijos = (data.recurringExpenses || []).filter(g => g.active).reduce((s, g) => s + g.amount, 0);
       const amortizacion = (data.activos || []).reduce((s, a) => s + (a.value - a.residualValue) / a.usefulLifeYears / 12, 0);
       const resultadoOperativo = ingresoTotal - gastosTotales;
@@ -1524,11 +1463,9 @@ Sin listas. Máximo 8 líneas. Tono cálido, directo y que inspire confianza en 
     }
 
     case 'flujo_de_caja_negocio': {
-      const txsMes = data.transactions.filter(t => { const p = parseDateParts(t.date); return p.month === month && p.year === year; });
-      const entradas = txsMes.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((s, t) => s + t.amount, 0);
-      const ventasMes = (data.ventas || []).filter(v => { const p = parseDateParts(v.date); return p.month === month && p.year === year; });
+      const { ingresos: entradas, gastos: salidas } = monthlyTotals(data.transactions, month, year);
+      const ventasMes = filterByMonth(data.ventas || [], month, year);
       const entradasVentas = ventasMes.reduce((s, v) => s + v.total, 0);
-      const salidas = txsMes.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
       const flujoOperativo = (entradas + entradasVentas) - salidas;
       const prestamosAFavor = (data.loans || []).filter(l => l.remaining > 0).reduce((s, l) => s + l.remaining, 0);
       return `💧 *Flujo de Caja — ${MONTH_NAMES[month]} ${year}*\n\n📥 *ENTRADAS*\n   Ingresos: ${fmt(entradas)}${entradasVentas > 0 ? `\n   Ventas: ${fmt(entradasVentas)}` : ''}\n   *Total entradas: ${fmt(entradas + entradasVentas)}*\n\n📤 *SALIDAS*\n   Gastos: ${fmt(salidas)}\n   *Total salidas: ${fmt(salidas)}*\n\n${flujoOperativo >= 0 ? '✅' : '⚠️'} *Flujo operativo: ${fmtSigned(flujoOperativo)}*${prestamosAFavor > 0 ? `\n\n📋 Dinero en la calle (préstamos): ${fmt(prestamosAFavor)}` : ''}\n\n_El flujo de caja refleja el movimiento real de dinero — distinto a la ganancia contable._`;
