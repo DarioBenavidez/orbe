@@ -1,7 +1,7 @@
 'use strict';
 
 const crypto = require('crypto');
-const { supabase, supabaseAdmin } = require('./supabase');
+const { supabase } = require('./supabase');
 
 // ── Códigos de vinculación (Supabase) ─────────────────────
 async function generateLinkingCode(userId, userName, expectedPhone) {
@@ -28,22 +28,22 @@ async function consumeLinkingCode(code, fromPhone) {
 async function generatePhoneOTP(userId, userName, phone) {
   const otp = String(crypto.randomInt(100000, 1000000));
   const expires_at = new Date(Date.now() + 5 * 60_000).toISOString();
-  await supabaseAdmin.from('phone_otps').upsert({ phone, otp, user_id: userId, user_name: userName, expires_at });
+  await supabase.from('phone_otps').upsert({ phone, otp, user_id: userId, user_name: userName, expires_at });
   return otp;
 }
 
 async function getPhoneOTP(phone) {
-  const { data } = await supabaseAdmin.from('phone_otps').select('*').eq('phone', phone).single();
+  const { data } = await supabase.from('phone_otps').select('*').eq('phone', phone).single();
   if (!data) return null;
   if (new Date(data.expires_at) < new Date()) {
-    await supabaseAdmin.from('phone_otps').delete().eq('phone', phone);
+    await supabase.from('phone_otps').delete().eq('phone', phone);
     return null;
   }
   return { otp: data.otp, userId: data.user_id, userName: data.user_name, expires: new Date(data.expires_at).getTime() };
 }
 
 async function deletePhoneOTP(phone) {
-  await supabaseAdmin.from('phone_otps').delete().eq('phone', phone);
+  await supabase.from('phone_otps').delete().eq('phone', phone);
 }
 
 // ── Rate limit por teléfono (en memoria) ──────────────────
