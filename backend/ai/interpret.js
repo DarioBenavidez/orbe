@@ -36,7 +36,7 @@ async function callClaude(systemPrompt, history, userMessage) {
     max_tokens: 600,
     system: systemPrompt,
     messages,
-  });
+  }, { timeout: 25_000 });
   const text = response.content?.[0]?.text;
   if (!text) throw new Error('Claude devolvió respuesta vacía');
   return text.trim();
@@ -97,6 +97,7 @@ CONTEXTO ACTUAL:
 - Mes anterior (${MONTH_NAMES[prevMonth]}): ingresos ${fmt(ingresosPrev)}, gastos ${fmt(gastosPrev)}${gastosPrev > 0 && gastos > gastosPrev ? ' ← este mes está gastando más que el anterior' : gastosPrev > 0 && gastos < gastosPrev * 0.8 ? ' ← este mes está gastando menos, buen dato' : ''}
 ${proxVenc.length > 0 ? `- Vencimientos próximos (7 días): ${proxVenc.map(ev => ev.title).join(', ')} ← mencionálos si viene al caso` : ''}
 - Tareas pendientes: ${(data.tasks || data.tareas || []).filter(t => t.status === 'pendiente').length}${(data.tasks || data.tareas || []).filter(t => t.status === 'pendiente').length > 0 ? ' — ' + (data.tasks || data.tareas || []).filter(t => t.status === 'pendiente').map(t => `"${t.description}"${t.dueDate ? ' (vence ' + t.dueDate + ')' : ''}`).join(', ') : ''}
+- Patrones y preferencias aprendidos: ${(data.memoria || []).length > 0 ? (data.memoria || []).map(m => `[${m.type === 'feedback' ? '⛔' : '💡'}] ${m.text}`).join(' | ') : 'ninguno aún'}
 ${data.balanceAlert > 0 ? `- Alerta de balance configurada: avisa cuando baje de ${fmt(data.balanceAlert)}` : ''}
 ${(data.reminders || []).filter(r => !r.notified).length > 0 ? `- Recordatorios pendientes: ${(data.reminders || []).filter(r => !r.notified).map(r => `"${r.description}" el ${r.date}`).join(', ')}` : ''}
 
@@ -197,6 +198,8 @@ ACCIONES DISPONIBLES:
 {"type":"agendar_turno","description":"Turno médico Dr. García","date":"YYYY-MM-DD","time":"10:30","location":"Av. Corrientes 1234","turnoType":"médico|banco|trámite|veterinario|odontólogo|otro"}
 {"type":"consultar_turnos"}
 {"type":"cancelar_turno","keyword":"dr garcia","date":"2026-03-21"}
+{"type":"guardar_memoria","text":"el usuario prefiere no agrupar gastos del trabajo en Alimentación"}
+{"type":"registrar_feedback_negativo","text":"registré el mismo gasto dos veces sin que lo pidiera"}
 {"type":"conversacion","respuesta":"..."}
 {"type":"unknown"}
 
@@ -298,6 +301,9 @@ REGLAS DE INTERPRETACIÓN:
 - "hice X", "ya llamé al X", "terminé con X", "listo el X", "completé X", "ya X" cuando X es una tarea registrada → completar_tarea (keyword: parte de la descripción)
 - "borrá la tarea de X", "eliminá el pendiente de X", "sacá X de mis tareas" → borrar_tarea (keyword: parte de la descripción)
 - "qué podés hacer", "qué más podés hacer", "para qué servís", "cómo me podés ayudar", "qué hacés", "en qué me ayudás" → conversacion. Respondé como una persona, no como una app. NUNCA hagas una lista de funciones o features. Mencioná una o dos cosas concretas que sean relevantes para la situación actual del usuario, y preguntá qué necesita. Ejemplo: "Puedo ayudarte con lo que necesites de tus finanzas — cómo vas este mes, si te alcanza para algo que tenés en mente, lo que sea. ¿Qué tenés en mente?"
+- APRENDIZAJE — preferencias y patrones: "acordate que X", "guardá que X", "aprendé que cuando digo X es Y", "de ahora en adelante X", "prefiero que X", "no quiero que X" → guardar_memoria (text: el patrón o preferencia en primera persona desde la perspectiva de Orbe, claro y aplicable)
+- APRENDIZAJE — feedback negativo: "te equivocaste", "eso estuvo mal", "no lo vuelvas a hacer", "la cagaste con X", "eso fue un error", "no hagas más X", "dejá de hacer X" → registrar_feedback_negativo (text: descripción concisa del error que no debe repetirse, en formato "no debo [acción]")
+- IMPORTANTE sobre patrones aprendidos: si hay "Patrones y preferencias aprendidos" en el contexto, TENELOS EN CUENTA SIEMPRE. Los ⛔ son errores a evitar. Los 💡 son preferencias del usuario a aplicar.
 
 CONTEXTO EMPRESARIAL:
 ${data.negocio ? `- Negocio registrado: ${data.negocio.nombre} (${data.negocio.tipo})` : '- Sin negocio registrado aún'}

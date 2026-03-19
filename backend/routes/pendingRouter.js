@@ -21,54 +21,6 @@ async function handlePending(pendingRaw, incomingMsg, data, userId, history, fro
 
   switch (type) {
 
-    case 'pending_bank_import': {
-      const { txList, dudosas, dudosaIdx } = parsed;
-      const msg = incomingMsg.trim().toLowerCase();
-
-      let catElegida = 'Otros';
-      const numMatch = incomingMsg.match(/^\s*(\d)\s*$/);
-      if (numMatch) {
-        const idx = parseInt(numMatch[1]) - 1;
-        catElegida = CATEGORIAS[idx] || 'Otros';
-      } else if (msg === 'no sé' || msg === 'no se' || msg === 'otros' || msg === '9') {
-        catElegida = 'Otros';
-      } else {
-        const found = CATEGORIAS.find(c => c.toLowerCase().includes(msg) || msg.includes(c.toLowerCase()));
-        if (found) catElegida = found;
-      }
-
-      const dudosaActual = dudosas[dudosaIdx];
-      const txIdx = dudosaActual._originalIdx !== undefined
-        ? dudosaActual._originalIdx
-        : txList.findIndex(t => t.descripcion === dudosaActual.descripcion && t.monto === dudosaActual.monto);
-      if (txIdx >= 0) txList[txIdx].categoria = catElegida;
-
-      const nextIdx = dudosaIdx + 1;
-
-      if (nextIdx < dudosas.length) {
-        await savePendingSuggestion(from, JSON.stringify({ type: 'pending_bank_import', txList, dudosas, dudosaIdx: nextIdx }));
-        const siguiente = dudosas[nextIdx];
-        await sendWhatsAppMessage(from, `✅ *${dudosaActual.descripcion}* → ${catElegida}\n\n❓ *"${siguiente.descripcion}"* — ${fmt(siguiente.monto)}\n\n¿En qué categoría va?\n\n1. Alimentación\n2. Transporte\n3. Salud\n4. Entretenimiento\n5. Ropa\n6. Vivienda\n7. Educación\n8. Servicios\n9. Otros`);
-      } else {
-        await clearPendingSuggestion(from);
-        const newTxs = txList.map(t => ({
-          id: crypto.randomUUID(),
-          type: t.tipo || 'gasto',
-          description: t.descripcion,
-          amount: parseFloat(t.monto),
-          category: t.categoria || 'Otros',
-          date: t.fecha || today(),
-          savingsId: '',
-          note: 'Importado por foto',
-        }));
-        await saveData(userId, { ...data, transactions: [...data.transactions, ...newTxs] });
-        const totalGastos = newTxs.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
-        const totalIngresos = newTxs.filter(t => t.type !== 'gasto').reduce((s, t) => s + t.amount, 0);
-        await sendWhatsAppMessage(from, `✅ *¡Listo! ${newTxs.length} transacciones importadas.*\n\n${newTxs.map(t => `${t.type === 'gasto' ? '💸' : '💰'} ${t.description} — ${fmt(t.amount)} (${t.category})`).join('\n')}${totalGastos > 0 ? `\n\n💸 Total gastos: ${fmt(totalGastos)}` : ''}${totalIngresos > 0 ? `\n💰 Total ingresos: ${fmt(totalIngresos)}` : ''}`);
-      }
-      return true;
-    }
-
     case 'usd_tx': {
       await clearPendingSuggestion(from);
       const montoMatch = incomingMsg.match(/\$\s*([\d.,]+)/);
@@ -92,8 +44,11 @@ async function handlePending(pendingRaw, incomingMsg, data, userId, history, fro
         amountARS = Math.round(parsed.amountUSD * parsed.dolarBlue);
         nota = `USD ${parsed.amountUSD} al blue ${fmt(parsed.dolarBlue)}`;
       } else {
-        amountARS = 0;
-        nota = `USD ${parsed.amountUSD} (sin cotización disponible — pendiente de conversión)`;
+        // Sin cotización y sin monto explícito: no registrar $0, pedir el monto
+        const msg = `😓 No pude obtener el precio del dólar en este momento. ¿Cuánto fue en pesos? Mandame el monto y lo registro.`;
+        await saveHistory(from, [...history, { role: 'user', content: incomingMsg }, { role: 'assistant', content: msg }]);
+        await sendWhatsAppMessage(from, msg);
+        return true;
       }
 
       const isPending = quereDolares && !querePesos && !montoEspecifico;
@@ -271,18 +226,19 @@ async function handlePending(pendingRaw, incomingMsg, data, userId, history, fro
       }
 
       const txs = [...data.transactions];
-      const original = txs[parsed.txIndex];
-      if (!original) {
+      const txIdx = txs.findIndex(t => t.id === parsed.txId);
+      if (txIdx === -1) {
         await sendWhatsAppMessage(from, `😅 No encontré la transacción para actualizar.`);
         return true;
       }
+      const original = txs[txIdx];
       const updated = {
         ...original,
         ...(parsed.newAmount      ? { amount:      parseFloat(parsed.newAmount) }   : {}),
         ...(parsed.newDescription ? { description: parsed.newDescription }           : {}),
         ...(parsed.newCategory    ? { category:    parsed.newCategory }              : {}),
       };
-      txs[parsed.txIndex] = updated;
+      txs[txIdx] = updated;
       await saveData(userId, { ...data, transactions: txs });
       const cambios = [];
       if (parsed.newAmount)      cambios.push(`${fmt(original.amount)} → ${fmt(updated.amount)}`);
@@ -294,29 +250,24 @@ async function handlePending(pendingRaw, incomingMsg, data, userId, history, fro
       return true;
     }
 
-    case 'confirm_ticket': {
+    case 'confirm_borrar_todos': {
       await clearPendingSuggestion(from);
-      const esNegativo = /\b(no\b|nope|cancel|no quiero|no gracias)\b/i.test(incomingMsg);
-
-      if (esNegativo) {
-        const msg = `Ok, no lo registré. Avisame si querés cambiarlo.`;
+      const confirmado = /\b(confirmar|confirmo|sí|si|dale|ok|listo|adelante|borrar)\b/i.test(incomingMsg.trim());
+      if (!confirmado) {
+        const msg = `Ok, cancelado. No borré nada 👍`;
         await saveHistory(from, [...history, { role: 'user', content: incomingMsg }, { role: 'assistant', content: msg }]);
         await sendWhatsAppMessage(from, msg);
         return true;
       }
-
-      const tx = {
-        id: crypto.randomUUID(),
-        type: 'gasto',
-        description: parsed.tienda,
-        amount: parsed.total,
-        category: parsed.categoria || 'Otros',
-        date: parsed.fecha || today(),
-        savingsId: '',
-        note: 'Registrado por foto de ticket',
-      };
-      await saveData(userId, { ...data, transactions: [...data.transactions, tx] });
-      const msg = `✅ Anotado: *${tx.description}* — ${fmt(tx.amount)} (${tx.category})`;
+      const idsToRemove = new Set(parsed.idsToRemove || []);
+      if (!idsToRemove.size) {
+        await sendWhatsAppMessage(from, `😅 No encontré las transacciones para borrar. Intentá de nuevo.`);
+        return true;
+      }
+      const newTxs = data.transactions.filter(t => !idsToRemove.has(t.id));
+      const borrados = data.transactions.length - newTxs.length;
+      await saveData(userId, { ...data, transactions: newTxs });
+      const msg = `🗑️ Listo, eliminé *${borrados} transacciones* de *"${parsed.keyword}"*.`;
       await saveHistory(from, [...history, { role: 'user', content: incomingMsg }, { role: 'assistant', content: msg }]);
       await sendWhatsAppMessage(from, msg);
       return true;

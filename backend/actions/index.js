@@ -1,8 +1,8 @@
 'use strict';
 
 const { supabase, loadData, saveData, getPendingSuggestion, savePendingSuggestion, clearPendingSuggestion } = require('../lib/supabase');
-const { sendWhatsAppMessage, callClaudeWithImage } = require('../lib/whatsapp');
-const { fmt, fmtSigned, fmtDate, today, currentMonth, arDay, arNow, parseDateParts, getDolarPrice, MONTH_NAMES, getGreeting } = require('../lib/helpers');
+const { sendWhatsAppMessage } = require('../lib/whatsapp');
+const { fmt, fmtSigned, fmtDate, today, currentMonth, arDay, arNow, parseDateParts, getDolarPrice, MONTH_NAMES, getGreeting, truncate } = require('../lib/helpers');
 const { callClaude } = require('../ai/interpret');
 const { filterByMonth, monthlyTotals } = require('./helpers');
 
@@ -68,7 +68,7 @@ Tu tarea: escribí un saludo natural, breve y conversacional. Pensá qué es lo 
       if (action.newCategory)    cambios.push(`categoría: ${original.category} → ${action.newCategory}`);
       await savePendingSuggestion(phone, JSON.stringify({
         type: 'confirm_edit',
-        txIndex: realIdx,
+        txId: original.id,
         newAmount: action.newAmount || null,
         newDescription: action.newDescription || null,
         newCategory: action.newCategory || null,
@@ -107,11 +107,13 @@ Tu tarea: escribí un saludo natural, breve y conversacional. Pensá qué es lo 
     }
 
     case 'agregar_transaccion': {
+      const txAmount = parseFloat(action.amount);
+      if (!txAmount || txAmount <= 0) return `🤔 No entendí el monto. ¿Cuánto fue exactamente?`;
       const tx = {
         id: crypto.randomUUID(),
         type: action.txType || 'gasto',
-        description: action.description,
-        amount: parseFloat(action.amount),
+        description: truncate(action.description, 200),
+        amount: txAmount,
         category: action.category || 'Otros',
         date: action.date || today(),
         savingsId: '',
@@ -198,15 +200,18 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
     case 'agregar_multiples_transacciones': {
       const items = Array.isArray(action.transacciones) ? action.transacciones : [];
       if (!items.length) return `🤔 No encontré transacciones para registrar.`;
-      const nuevas = items.map(t => ({
-        id: crypto.randomUUID(),
-        type: t.txType || 'gasto',
-        description: t.description || 'Sin descripción',
-        amount: parseFloat(t.amount) || 0,
-        category: t.category || 'Otros',
-        date: t.date || today(),
-        savingsId: '',
-      }));
+      const nuevas = items
+        .filter(t => parseFloat(t.amount) > 0)
+        .map(t => ({
+          id: crypto.randomUUID(),
+          type: t.txType || 'gasto',
+          description: truncate(t.description, 200) || 'Sin descripción',
+          amount: parseFloat(t.amount),
+          category: t.category || 'Otros',
+          date: t.date || today(),
+          savingsId: '',
+        }));
+      if (!nuevas.length) return `🤔 No pude leer los montos. ¿Podés pasarme cada gasto por separado?`;
       await saveData(userId, { ...data, transactions: [...data.transactions, ...nuevas] });
       const totalGastos = nuevas.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
       const lineas = nuevas.map(t => `${t.type === 'gasto' ? '💸' : '💰'} ${t.description}: ${fmt(t.amount)}`).join('\n');
@@ -248,12 +253,17 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
         if (targetAmount > 0) return Math.abs(t.amount - targetAmount) < 1;
         return true;
       };
-      // all:true → borrar todas las que coincidan
+      // all:true → pedir confirmación antes de borrar todas
       if (action.all) {
         const toDelete = data.transactions.filter(matchFn);
         if (!toDelete.length) return `🤔 No encontré transacciones de este mes que coincidan con *"${action.keyword}"*.`;
-        await saveData(userId, { ...data, transactions: data.transactions.filter(t => !matchFn(t)) });
-        return `🗑️ Eliminé *${toDelete.length} transacciones* de ${toDelete[0].description}.`;
+        await savePendingSuggestion(phone, JSON.stringify({
+          type: 'confirm_borrar_todos',
+          keyword: action.keyword,
+          idsToRemove: toDelete.map(t => t.id),
+        }));
+        const total = toDelete.reduce((s, t) => s + t.amount, 0);
+        return `⚠️ Estoy por eliminar *${toDelete.length} transacciones* de *"${action.keyword}"* (${fmt(total)} en total).\n\nRespondé *CONFIRMAR* para continuar, o cualquier otra cosa para cancelar.`;
       }
       // Por defecto: borrar solo la más reciente
       const txsRev = [...data.transactions].reverse();
@@ -1025,16 +1035,20 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
 
     case 'agregar_gasto_fijo': {
       const recurringExpenses = data.recurringExpenses || [];
-      const gasto = { id: crypto.randomUUID(), description: action.description, amount: parseFloat(action.amount), category: action.category || 'Otros', day: parseInt(action.day) || 1, active: true };
+      const gastoAmount = parseFloat(action.amount);
+      if (!gastoAmount || gastoAmount <= 0) return `🤔 No entendí el monto del gasto fijo. ¿Cuánto es por mes?`;
+      const gasto = { id: crypto.randomUUID(), description: truncate(action.description, 100), amount: gastoAmount, category: action.category || 'Otros', day: parseInt(action.day) || 1, active: true };
       await saveData(userId, { ...data, recurringExpenses: [...recurringExpenses, gasto] });
       return `🔄 *Gasto fijo agregado!*\n\n📝 ${gasto.description}: ${fmt(gasto.amount)}/mes\n📆 Se registra el día ${gasto.day} automáticamente.`;
     }
 
     case 'agregar_ingreso_recurrente': {
+      const riAmount = parseFloat(action.amount);
+      if (!riAmount || riAmount <= 0) return `🤔 No entendí el monto del ingreso. ¿Cuánto es por mes?`;
       const ri = {
         id: crypto.randomUUID(),
-        name: action.name,
-        amount: parseFloat(action.amount),
+        name: truncate(action.name, 100),
+        amount: riAmount,
         reason: action.reason || '',
         day: parseInt(action.day) || 1,
         active: true,
@@ -1368,11 +1382,14 @@ Sin listas. Máximo 8 líneas. Tono cálido, directo y que inspire confianza en 
     case 'agregar_producto': {
       const productos = data.productos || [];
       const existing = productos.findIndex(p => p.name.toLowerCase() === action.name.toLowerCase());
+      const prodCost = parseFloat(action.cost);
+      const prodPrice = parseFloat(action.price);
+      if (!prodCost || prodCost <= 0 || !prodPrice || prodPrice <= 0) return `🤔 Necesito el costo y el precio de venta para agregar el producto.`;
       const producto = {
         id: existing >= 0 ? productos[existing].id : crypto.randomUUID(),
-        name: action.name,
-        cost: parseFloat(action.cost),
-        price: parseFloat(action.price),
+        name: truncate(action.name, 100),
+        cost: prodCost,
+        price: prodPrice,
         unit: action.unit || 'unidad',
       };
       const margen = ((producto.price - producto.cost) / producto.price * 100).toFixed(1);
@@ -1622,7 +1639,7 @@ Sin listas. Máximo 8 líneas. Tono cálido, directo y que inspire confianza en 
       const tareas = data.tareas || [];
       const nueva = {
         id: Date.now(),
-        description: action.description,
+        description: truncate(action.description, 200),
         dueDate: action.dueDate || null,
         status: 'pendiente',
         createdAt: today(),
@@ -1678,6 +1695,20 @@ Sin listas. Máximo 8 líneas. Tono cálido, directo y que inspire confianza en 
       if (!tarea) return `🤔 No encontré ninguna tarea que coincida con *${action.keyword}*.`;
       await saveData(userId, { ...data, tareas: tareas.filter(t => t.id !== tarea.id) });
       return `🗑️ Tarea *${tarea.description}* eliminada.`;
+    }
+
+    case 'guardar_memoria': {
+      const memoria = data.memoria || [];
+      const nueva = { id: Date.now(), text: truncate(action.text, 300), type: 'patron', date: today() };
+      await saveData(userId, { ...data, memoria: [...memoria, nueva] });
+      return `🧠 Anotado${name ? ', ' + name : ''}: "${action.text}"`;
+    }
+
+    case 'registrar_feedback_negativo': {
+      const memoria = data.memoria || [];
+      const nueva = { id: Date.now(), text: truncate(action.text, 300), type: 'feedback', date: today() };
+      await saveData(userId, { ...data, memoria: [...memoria, nueva] });
+      return `Anotado${name ? ', ' + name : ''}. No lo vuelvo a hacer. 🙏`;
     }
 
     case 'conversacion':

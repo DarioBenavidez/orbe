@@ -4,11 +4,29 @@ const crypto = require('crypto');
 const express = require('express');
 const router = express.Router();
 
-// ── Deduplicación de webhooks (message.id) ─────────────────
-const processedMessages = new Map(); // id → timestamp
+// ── Deduplicación de webhooks (memoria + Supabase) ─────────
+const processedMessages = new Map(); // id → timestamp (caché en memoria)
+
+async function isAlreadyProcessed(msgId) {
+  if (processedMessages.has(msgId)) return true;
+  // Fallback a Supabase tras reinicio del servidor
+  try {
+    const { data } = await supabaseAdmin.from('processed_messages').select('msg_id').eq('msg_id', msgId).single();
+    if (data) { processedMessages.set(msgId, Date.now()); return true; }
+  } catch {}
+  return false;
+}
+
+function markAsProcessed(msgId) {
+  processedMessages.set(msgId, Date.now());
+  supabaseAdmin.from('processed_messages').upsert({ msg_id: msgId, processed_at: new Date().toISOString() }).catch(() => {});
+}
+
+// Limpiar registros viejos cada hora
 setInterval(() => {
   const cutoff = Date.now() - 24 * 60 * 60 * 1000;
   for (const [id, ts] of processedMessages) if (ts < cutoff) processedMessages.delete(id);
+  supabaseAdmin.from('processed_messages').delete().lt('processed_at', new Date(cutoff).toISOString()).catch(() => {});
 }, 60 * 60_000);
 
 // ── Sanitizar texto de usuario antes de meterlo en prompts ─
@@ -17,12 +35,13 @@ function sanitizeForPrompt(str, maxLen = 200) {
 }
 
 const {
+  supabaseAdmin,
   getUserIdByPhone, loadData, saveData,
   loadHistory, saveHistory,
   getPendingSuggestion, savePendingSuggestion, clearPendingSuggestion,
   saveFeatureRequest,
 } = require('../lib/supabase');
-const { sendWhatsAppMessage, transcribeWhatsAppAudio, downloadWhatsAppImage, callClaudeWithImage } = require('../lib/whatsapp');
+const { sendWhatsAppMessage, transcribeWhatsAppAudio } = require('../lib/whatsapp');
 const { consumeLinkingCode, linkPhoneToUser, isPhoneRateLimited, verifyMetaSignature } = require('../lib/auth');
 const { today, fmt } = require('../lib/helpers');
 const { callClaude, interpretMessage, isClaudeRateLimited } = require('../ai/interpret');
@@ -63,146 +82,16 @@ router.post('/', async (req, res) => {
     // Deduplicar: ignorar mensajes ya procesados (Meta puede reintentar)
     const msgId = message.id;
     if (msgId) {
-      if (processedMessages.has(msgId)) return;
-      processedMessages.set(msgId, Date.now());
+      if (await isAlreadyProcessed(msgId)) return;
+      markAsProcessed(msgId);
     }
 
     const from = message.from;
     if (!from) return;
 
-    // ── Manejo de imagen (factura/recibo) ──────────────────
+    // ── Imágenes: no soportado ─────────────────────────────
     if (message.type === 'image') {
-      const userInfo = await getUserIdByPhone(from);
-      if (!userInfo) {
-        await sendWhatsAppMessage(from, `Para procesar tu imagen primero tenés que vincular tu cuenta. Escribime tu email de Orbe.`);
-        return;
-      }
-      const mediaId = message.image?.id;
-      const caption = sanitizeForPrompt(message.image?.caption?.trim() || '');
-      if (!mediaId) return;
-
-      try {
-        await sendWhatsAppMessage(from, `📸 Recibí la imagen, analizando...`);
-        const { base64, mimeType } = await downloadWhatsAppImage(mediaId);
-        const { user_id: userId, user_name: userName } = userInfo;
-        const data = await loadData(userId);
-
-        const imageSystemPrompt = `Analizá esta imagen financiera y determiná qué tipo es.
-
-TIPO A — TICKET DE COMPRA: un solo recibo/ticket de un comercio (supermercado, farmacia, restaurante, etc.) con ítems y un total.
-Respondé con este JSON:
-{"tipo":"ticket","tienda":"Supermercado Día","total":12450,"fecha":"${today()}","categoria":"Supermercado"}
-Categorías posibles: Alimentación, Supermercado, Salud, Entretenimiento, Ropa, Transporte, Servicios, Otros.
-
-TIPO B — RESUMEN/EXTRACTO BANCARIO: múltiples movimientos de distintas fechas (tarjeta, banco, Mercado Pago).
-Respondé con un JSON array:
-[
-  {"descripcion":"Supermercado Día","monto":15000,"fecha":"${today()}","categoria":"Supermercado","tipo":"gasto"},
-  {"descripcion":"Transferencia recibida","monto":50000,"fecha":"${today()}","categoria":"Otros","tipo":"ingreso"}
-]
-Reglas para el array:
-- descripcion: nombre del comercio o descripción tal como aparece
-- monto: número sin $ ni puntos de miles (ej: 15000, no $15.000)
-- fecha: YYYY-MM-DD (si no figura usá hoy: ${today()})
-- categoria: Alimentación, Transporte, Salud, Entretenimiento, Ropa, Vivienda, Educación, Supermercado, Servicios, Otros
-- tipo: "gasto" o "ingreso"
-
-Si no es imagen financiera: {"error":"no_financiero"}
-Si no se puede leer: {"error":"ilegible"}
-Devolvé SOLO el JSON, sin texto adicional.`;
-
-        const extractedText = await callClaudeWithImage(imageSystemPrompt, base64, mimeType,
-          caption ? `Imagen adjunta. Nota del usuario: "${caption}"` : 'Analizá la imagen.');
-
-        let parsed;
-        try {
-          const jsonMatch = extractedText.match(/[\[{][\s\S]*[\]}]/);
-          parsed = JSON.parse(jsonMatch?.[0] || extractedText);
-        } catch {
-          await sendWhatsAppMessage(from, `😅 No pude leer la imagen. ¿Podés decirme los datos manualmente?`);
-          return;
-        }
-
-        // Errores
-        if (parsed?.error === 'no_financiero') {
-          await sendWhatsAppMessage(from, `🤔 Eso no parece un comprobante financiero. Si querés registrar un gasto, mandame los datos: *"gasté $X en Y"*.`);
-          return;
-        }
-        if (parsed?.error === 'ilegible') {
-          await sendWhatsAppMessage(from, `😓 La imagen está borrosa. ¿Podés mandarla más clara o pasarme los datos a mano?`);
-          return;
-        }
-
-        // ── TICKET SIMPLE ──────────────────────────────────────
-        if (parsed?.tipo === 'ticket') {
-          const { tienda, total, fecha, categoria } = parsed;
-          if (!total || total <= 0) {
-            await sendWhatsAppMessage(from, `😅 Vi el ticket pero no pude leer el total. ¿Cuánto fue?`);
-            return;
-          }
-          await savePendingSuggestion(from, JSON.stringify({
-            type: 'confirm_ticket',
-            tienda: tienda || 'Comercio',
-            total: parseFloat(total),
-            fecha: fecha || today(),
-            categoria: categoria || 'Otros',
-          }));
-          await sendWhatsAppMessage(from, `🧾 *${tienda || 'Comercio'}* — ${fmt(parseFloat(total))}\n📂 ${categoria || 'Otros'} · 📅 ${fecha || today()}\n\n¿Lo registro? (Sí / No)`);
-          return;
-        }
-
-        // ── EXTRACTO BANCARIO ──────────────────────────────────
-        const txList = Array.isArray(parsed) ? parsed : null;
-        if (!txList || !txList.length) {
-          await sendWhatsAppMessage(from, `😅 No encontré transacciones en la imagen. ¿Es un resumen bancario o extracto?`);
-          return;
-        }
-
-        // Separar las que tienen categoría clara de las dudosas (Otros)
-        const claras = txList.filter(t => t.categoria && t.categoria !== 'Otros');
-        const dudosas = txList
-          .map((t, i) => ({ ...t, _originalIdx: i }))
-          .filter(t => !t.categoria || t.categoria === 'Otros');
-
-        // Guardar estado pendiente con toda la lista para categorizar las dudosas
-        if (dudosas.length > 0) {
-          await savePendingSuggestion(from, JSON.stringify({
-            type: 'pending_bank_import',
-            txList,
-            dudosas,
-            dudosaIdx: 0,
-          }));
-
-          const resumen = txList.map((t, i) => {
-            const emoji = t.tipo === 'ingreso' ? '💰' : '💸';
-            const cat = t.categoria !== 'Otros' ? ` (${t.categoria})` : ' ❓';
-            return `${i + 1}. ${emoji} ${t.descripcion} — ${fmt(t.monto)}${cat}`;
-          }).join('\n');
-
-          await sendWhatsAppMessage(from, `📊 Encontré *${txList.length} transacciones*:\n\n${resumen}\n\n✅ ${claras.length} categorizadas automáticamente.\n❓ ${dudosas.length} necesitan categoría.\n\nVoy a preguntarte de a una. Empecemos:`);
-
-          const primera = dudosas[0];
-          await sendWhatsAppMessage(from, `❓ *"${primera.descripcion}"* — ${fmt(primera.monto)}\n\n¿En qué categoría va?\n\n1. Alimentación\n2. Transporte\n3. Salud\n4. Entretenimiento\n5. Ropa\n6. Vivienda\n7. Educación\n8. Servicios\n9. Otros\n\nRespondé con el número o el nombre. Si no sabés, decí *"no sé"* o *"otros"*.`);
-        } else {
-          // Todas categorizadas, registrar todo de una
-          const newTxs = txList.map(t => ({
-            id: crypto.randomUUID(),
-            type: t.tipo || 'gasto',
-            description: t.descripcion,
-            amount: parseFloat(t.monto),
-            category: t.categoria || 'Otros',
-            date: t.fecha || today(),
-            savingsId: '',
-            note: 'Importado por foto',
-          }));
-          await saveData(userId, { ...data, transactions: [...data.transactions, ...newTxs] });
-          const total = newTxs.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0);
-          await sendWhatsAppMessage(from, `✅ *${newTxs.length} transacciones importadas!*\n\n${newTxs.map(t => `${t.type === 'gasto' ? '💸' : '💰'} ${t.description} — ${fmt(t.amount)} (${t.category})`).join('\n')}\n\n💸 Total gastos: ${fmt(total)}`);
-        }
-      } catch (err) {
-        console.error('❌ Error procesando imagen:', err.message);
-        await sendWhatsAppMessage(from, `😓 Tuve un problema procesando la imagen. ¿Podés pasarme los datos a mano?`);
-      }
+      await sendWhatsAppMessage(from, `Por ahora no proceso imágenes. Escribime el gasto: *"gasté $X en Y"* y lo anoto en segundos 😊`);
       return;
     }
 
@@ -229,14 +118,17 @@ Devolvé SOLO el JSON, sin texto adicional.`;
           await sendWhatsAppMessage(from, `😓 No pude entender el audio. ¿Podés repetirlo o escribirme?`);
           return;
         }
-        console.log(`🎙️ Transcripción (${from}): ${transcripcion}`);
+        console.log(`🎙️ Transcripción (***${from.slice(-4)}): ${transcripcion}`);
         // Procesar la transcripción como si fuera un mensaje de texto normal
         message.type = 'text';
         message.text = { body: transcripcion };
         await sendWhatsAppMessage(from, `_🎙️ Escuché: "${transcripcion}"_`);
       } catch (err) {
         console.error('❌ Error procesando audio:', err.message);
-        await sendWhatsAppMessage(from, `😓 Tuve un problema con el audio. ¿Podés escribirme?`);
+        const msg = err.message === 'audio_demasiado_largo'
+          ? `🎙️ El audio es muy largo. Mandame uno de menos de 10 segundos o escribime directamente.`
+          : `😓 Tuve un problema con el audio. ¿Podés escribirme?`;
+        await sendWhatsAppMessage(from, msg);
         return;
       }
     }
@@ -256,7 +148,7 @@ Devolvé SOLO el JSON, sin texto adicional.`;
       return;
     }
 
-    console.log(`📩 ${from}: ${incomingMsg.substring(0, 100)}${incomingMsg.length > 100 ? '...' : ''}`);
+    console.log(`📩 ***${from.slice(-4)}: ${incomingMsg.substring(0, 100)}${incomingMsg.length > 100 ? '...' : ''}`);
 
     // Activación segura con código temporal — formato: ORBE:123456
     if (incomingMsg.startsWith('ORBE:')) {
@@ -358,15 +250,22 @@ Devolvé SOLO el JSON, sin texto adicional.`;
       action = { type: 'unknown' };
     }
 
-    console.log('🤖 Acción:', JSON.stringify(action));
-    const respuesta = await processAction(action, data, userId, userName, history, from);
+    console.log('🤖 Acción:', action.type);
+    let respuesta;
+    try {
+      respuesta = await processAction(action, data, userId, userName, history, from);
+    } catch (err) {
+      console.error('❌ Error en processAction:', err.message);
+      await sendWhatsAppMessage(from, `😓 Tuve un problema procesando tu mensaje. Intentá de nuevo en un momento.`);
+      return;
+    }
 
     if (action.type === 'unknown') {
       await savePendingSuggestion(from, incomingMsg);
     }
 
     const updatedHistory = [...history, { role: 'user', content: incomingMsg }, { role: 'assistant', content: respuesta }];
-    await saveHistory(from, updatedHistory.slice(-40)); // mantener últimos 40 mensajes (20 intercambios)
+    await saveHistory(from, updatedHistory.slice(-30));
     await sendWhatsAppMessage(from, respuesta);
 
   } catch (err) {

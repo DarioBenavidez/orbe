@@ -16,8 +16,8 @@ const supabaseAdmin = createClient(
 // ── Estructura por defecto del usuario ────────────────────
 function defaultData() {
   return {
-    transactions: [], budgets: [], categories: {}, savings: [], debts: [], events: [],
-    vocabulario: [], recurringIncomes: [],
+    transactions: [], budgets: [], categories: {}, savings: [], debts: [], loans: [], events: [],
+    vocabulario: [], recurringIncomes: [], memoria: [], tareas: [],
     balanceAlert: 0,
     reminders: [],
     selectedMonth: new Date().getMonth(), selectedYear: new Date().getFullYear(),
@@ -92,27 +92,44 @@ async function saveHistory(phone, messages) {
   await supabaseAdmin.from('chat_history').upsert({ phone, messages: trimmed, updated_at: new Date().toISOString() });
 }
 
-// ── Sugerencias / estados pendientes (en memoria) ─────────
-// Los flujos pendientes duran segundos/minutos — memoria es suficiente y más confiable.
+// ── Sugerencias / estados pendientes (memoria + Supabase) ─
+// Memoria como fuente primaria (rápida). Supabase como respaldo ante reinicios del servidor.
 const pendingMap = new Map(); // phone → { message, createdAt }
+const PENDING_TTL = 30 * 60 * 1000; // 30 minutos
 
-function getPendingSuggestion(phone) {
+async function getPendingSuggestion(phone) {
   const entry = pendingMap.get(phone);
-  if (!entry) return null;
-  // Auto-expirar después de 30 minutos
-  if (Date.now() - entry.createdAt > 30 * 60 * 1000) {
-    pendingMap.delete(phone);
-    return null;
+  if (entry) {
+    if (Date.now() - entry.createdAt > PENDING_TTL) {
+      pendingMap.delete(phone);
+      supabaseAdmin.from('pending_suggestions').delete().eq('phone', phone).catch(() => {});
+      return null;
+    }
+    return entry.message;
   }
-  return entry.message;
+  // Fallback a Supabase (tras reinicio del servidor)
+  try {
+    const { data } = await supabaseAdmin.from('pending_suggestions').select('original_message, created_at').eq('phone', phone).single();
+    if (!data) return null;
+    if (Date.now() - new Date(data.created_at).getTime() > PENDING_TTL) {
+      supabaseAdmin.from('pending_suggestions').delete().eq('phone', phone).catch(() => {});
+      return null;
+    }
+    // Restaurar en memoria
+    pendingMap.set(phone, { message: data.original_message, createdAt: new Date(data.created_at).getTime() });
+    return data.original_message;
+  } catch { return null; }
 }
 
 function savePendingSuggestion(phone, originalMessage) {
   pendingMap.set(phone, { message: originalMessage, createdAt: Date.now() });
+  // Write-through a Supabase (fire and forget)
+  supabaseAdmin.from('pending_suggestions').upsert({ phone, original_message: originalMessage, created_at: new Date().toISOString() }).catch(() => {});
 }
 
 function clearPendingSuggestion(phone) {
   pendingMap.delete(phone);
+  supabaseAdmin.from('pending_suggestions').delete().eq('phone', phone).catch(() => {});
 }
 
 async function saveFeatureRequest(phone, userName, originalMessage, suggestion) {

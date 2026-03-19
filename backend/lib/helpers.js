@@ -40,18 +40,26 @@ function getGreeting() {
   return 'Buenas noches';
 }
 
-// ── Precio del dólar ──────────────────────────────────────
+// ── Precio del dólar (con cache de 5 min) ─────────────────
+let _dolarCache = null;
+let _dolarCacheAt = 0;
 async function getDolarPrice() {
+  if (_dolarCache && Date.now() - _dolarCacheAt < 5 * 60_000) return _dolarCache;
   try {
     const res = await fetch('https://api.bluelytics.com.ar/v2/latest');
     const data = await res.json();
-    return {
-      oficial: data.oficial?.value_sell,
-      blue: data.blue?.value_sell,
-    };
+    _dolarCache = { oficial: data.oficial?.value_sell, blue: data.blue?.value_sell };
+    _dolarCacheAt = Date.now();
+    return _dolarCache;
   } catch {
-    return null;
+    return _dolarCache || null; // devuelve cache viejo si hay, mejor que null
   }
+}
+
+// ── Limitar longitud de strings del usuario ───────────────
+function truncate(str, max = 200) {
+  if (typeof str !== 'string') return '';
+  return str.slice(0, max);
 }
 
 const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
@@ -59,6 +67,6 @@ const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','A
 module.exports = {
   arNow, arDay, today, currentMonth, parseDateParts,
   fmt, fmtSigned, fmtDate,
-  getGreeting, getDolarPrice,
+  getGreeting, getDolarPrice, truncate,
   MONTH_NAMES,
 };
