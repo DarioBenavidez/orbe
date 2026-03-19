@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert, Modal, KeyboardAvoidingView, Platform, TextInput } from 'react-native';
-import { useC } from '../_lib/theme';
-import { fmt, fmtAmt, parseAmt, parseDateParts, MONTH_NAMES, DEFAULT_CATEGORIES } from '../_lib/constants';
-import { Card } from '../_components/ui';
+import { useC } from '../../lib/theme';
+import { fmt, fmtAmt, parseAmt, parseDateParts, MONTH_NAMES, DEFAULT_CATEGORIES } from '../../lib/constants';
+import { Card } from '../../components/ui';
 
 export default function Proyeccion({ data, onSave }) {
   const C = useC();

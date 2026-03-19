@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, ScrollView, ActivityIndicator,
-  Image, KeyboardAvoidingView, Platform, Linking,
+  KeyboardAvoidingView, Platform, Linking,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FontAwesome5 } from '@expo/vector-icons';
@@ -102,7 +102,6 @@ export default function FinancialOnboardingScreen({ user, onDone }) {
       <View style={s.root}>
 
         <View style={s.header}>
-          <Image source={require('../assets/images/orbe-logo.png')} style={s.logo} resizeMode="contain" />
           <StepDots current={step} />
         </View>
 

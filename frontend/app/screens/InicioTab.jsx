@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useC } from '../_lib/theme';
-import { fmt, parseDateParts, DEFAULT_CATEGORIES, MONTH_NAMES, cMonth, cYear } from '../_lib/constants';
-import { Card, TxRow, ScreenWithHeader } from '../_components/ui';
+import { useC } from '../../lib/theme';
+import { fmt, parseDateParts, DEFAULT_CATEGORIES, MONTH_NAMES, cMonth, cYear } from '../../lib/constants';
+import { Card, TxRow, ScreenWithHeader } from '../../components/ui';
 
 export default function InicioTab({ data, onSave, onMonthPress, nombre, onOpenPanel }) {
   const C = useC();

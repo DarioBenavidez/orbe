@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
-import { useC } from '../_lib/theme';
-import { EVENT_TYPES, MONTH_FULL, cMonth, cYear, fmt, fmtAmt, parseAmt } from '../_lib/constants';
-import { Card, Btn, Input, FAB, ModalSheet, Chip } from '../_components/ui';
+import { useC } from '../../lib/theme';
+import { EVENT_TYPES, MONTH_FULL, cMonth, cYear, fmt, fmtAmt, parseAmt } from '../../lib/constants';
+import { Card, Btn, Input, FAB, ModalSheet, Chip } from '../../components/ui';
 
 export default function Calendario({ data, onSave }) {
   const C = useC();

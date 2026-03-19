@@ -1,7 +1,20 @@
 'use strict';
 
+const crypto = require('crypto');
 const express = require('express');
 const router = express.Router();
+
+// ── Deduplicación de webhooks (message.id) ─────────────────
+const processedMessages = new Map(); // id → timestamp
+setInterval(() => {
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  for (const [id, ts] of processedMessages) if (ts < cutoff) processedMessages.delete(id);
+}, 60 * 60_000);
+
+// ── Sanitizar texto de usuario antes de meterlo en prompts ─
+function sanitizeForPrompt(str, maxLen = 200) {
+  return (str || '').replace(/[`\\]/g, '').slice(0, maxLen);
+}
 
 const {
   getUserIdByPhone, loadData, saveData,
@@ -12,7 +25,7 @@ const {
 const { sendWhatsAppMessage, transcribeWhatsAppAudio, downloadWhatsAppImage, callClaudeWithImage } = require('../lib/whatsapp');
 const { consumeLinkingCode, linkPhoneToUser, isPhoneRateLimited, verifyMetaSignature } = require('../lib/auth');
 const { today, fmt } = require('../lib/helpers');
-const { callClaude, interpretMessage } = require('../ai/interpret');
+const { callClaude, interpretMessage, isClaudeRateLimited } = require('../ai/interpret');
 const { processAction } = require('../actions/index');
 const { handlePending } = require('./pendingRouter');
 
@@ -47,6 +60,13 @@ router.post('/', async (req, res) => {
 
     if (!message || !['text', 'image', 'audio'].includes(message.type)) return;
 
+    // Deduplicar: ignorar mensajes ya procesados (Meta puede reintentar)
+    const msgId = message.id;
+    if (msgId) {
+      if (processedMessages.has(msgId)) return;
+      processedMessages.set(msgId, Date.now());
+    }
+
     const from = message.from;
     if (!from) return;
 
@@ -58,7 +78,7 @@ router.post('/', async (req, res) => {
         return;
       }
       const mediaId = message.image?.id;
-      const caption = message.image?.caption?.trim() || '';
+      const caption = sanitizeForPrompt(message.image?.caption?.trim() || '');
       if (!mediaId) return;
 
       try {
@@ -293,6 +313,13 @@ Devolvé SOLO el JSON, sin texto adicional.`;
       const confirmMsg = await callClaude(confirmPrompt, [], incomingMsg);
       await saveHistory(from, [...history, { role: 'user', content: incomingMsg }, { role: 'assistant', content: confirmMsg }]);
       await sendWhatsAppMessage(from, confirmMsg);
+      return;
+    }
+
+    // ── Rate limit de Claude API por teléfono ──────────────────
+    if (isClaudeRateLimited(from)) {
+      console.warn(`⚠️  Claude rate limit: ${from}`);
+      await sendWhatsAppMessage(from, `Un momento, mandaste muchos mensajes seguidos. Esperá un minuto y volvemos. 😊`);
       return;
     }
 

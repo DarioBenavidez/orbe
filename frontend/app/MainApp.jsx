@@ -4,10 +4,10 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { loadData, saveData, supabase, BACKEND_URL } from '../constants/supabase';
 
-import { ThemeCtx, mkTheme } from './_lib/theme';
-import { defaultData, MONTH_NAMES } from './_lib/constants';
-import { ModalSheet, Chip, Btn, Input } from './_components/ui';
-import AddTxModal  from './_components/AddTxModal';
+import { ThemeCtx, mkTheme } from '../lib/theme';
+import { defaultData, MONTH_NAMES } from '../lib/constants';
+import { ModalSheet, Chip, Btn, Input } from '../components/ui';
+import AddTxModal  from '../components/AddTxModal';
 import InicioTab   from './screens/InicioTab';
 import AnalisisTab from './screens/AnalisisTab';
 import PerfilTab   from './screens/PerfilTab';

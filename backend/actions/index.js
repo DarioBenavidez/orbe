@@ -239,9 +239,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       const { month: cm, year: cy } = currentMonth();
       const keyword = (action.keyword || '').toLowerCase();
       const targetAmount = parseFloat(action.amount) || 0;
-      // Buscar la transacción más reciente del mes actual que matchee keyword en descripción O categoría
-      const txsRev = [...data.transactions].reverse();
-      const found = txsRev.find(t => {
+      const matchFn = t => {
         const p = parseDateParts(t.date);
         if (p.month !== cm || p.year !== cy) return false;
         const matchDesc = t.description?.toLowerCase().includes(keyword);
@@ -249,11 +247,43 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
         if (!matchDesc && !matchCat) return false;
         if (targetAmount > 0) return Math.abs(t.amount - targetAmount) < 1;
         return true;
-      });
+      };
+      // all:true → borrar todas las que coincidan
+      if (action.all) {
+        const toDelete = data.transactions.filter(matchFn);
+        if (!toDelete.length) return `🤔 No encontré transacciones de este mes que coincidan con *"${action.keyword}"*.`;
+        await saveData(userId, { ...data, transactions: data.transactions.filter(t => !matchFn(t)) });
+        return `🗑️ Eliminé *${toDelete.length} transacciones* de ${toDelete[0].description}.`;
+      }
+      // Por defecto: borrar solo la más reciente
+      const txsRev = [...data.transactions].reverse();
+      const found = txsRev.find(matchFn);
       if (!found) return `🤔 No encontré ninguna transacción de este mes que coincida con *"${action.keyword}"*${targetAmount > 0 ? ` por ${fmt(targetAmount)}` : ''}.`;
       const newTxs = data.transactions.filter(t => t.id !== found.id);
       await saveData(userId, { ...data, transactions: newTxs });
       return `🗑️ Listo, eliminé *${found.description}* (${fmt(found.amount)}) del ${found.date}.`;
+    }
+
+    case 'borrar_duplicados': {
+      const { month: cm, year: cy } = currentMonth();
+      const txsMes = data.transactions.filter(t => {
+        const p = parseDateParts(t.date);
+        return p.month === cm && p.year === cy;
+      });
+      // Detectar duplicados: misma descripción + mismo monto + misma fecha
+      const seen = new Map();
+      const toRemove = [];
+      for (const t of txsMes) {
+        const key = `${t.description?.toLowerCase()}|${t.amount}|${t.date}`;
+        if (!seen.has(key)) seen.set(key, t.id);
+        else toRemove.push(t);
+      }
+      if (!toRemove.length) return `✅ No encontré duplicados en las transacciones de este mes.`;
+      // Guardar pending con los IDs exactos a borrar
+      const idsToRemove = toRemove.map(t => t.id);
+      await savePendingSuggestion(phone, JSON.stringify({ type: 'confirm_borrar_duplicados', idsToRemove }));
+      const resumen = [...new Set(toRemove.map(t => t.description))].slice(0, 5).join(', ');
+      return `⚠️ Encontré *${toRemove.length} transacciones duplicadas*: ${resumen}${toRemove.length > 5 ? '...' : ''}.\n\nRespondé *CONFIRMAR* para limpiarlas, o cualquier otra cosa para cancelar.`;
     }
 
     case 'presupuesto_diario': {
@@ -1586,6 +1616,68 @@ Sin listas. Máximo 8 líneas. Tono cálido, directo y que inspire confianza en 
       // Si el concepto no está en la lista, usar Claude para explicarlo
       const eduPrompt = `Sos Orbe, asistente financiero especialista en administración de empresas. Explicá el concepto "${concepto}" en español rioplatense informal, con un ejemplo concreto en pesos argentinos. Máximo 5 líneas. Sin listas largas. Como si se lo explicaras a un emprendedor que no tiene formación contable.`;
       return await callClaude(eduPrompt, [], `Explicame qué es ${concepto}`);
+    }
+
+    case 'agregar_tarea': {
+      const tareas = data.tareas || [];
+      const nueva = {
+        id: Date.now(),
+        description: action.description,
+        dueDate: action.dueDate || null,
+        status: 'pendiente',
+        createdAt: today(),
+      };
+      await saveData(userId, { ...data, tareas: [...tareas, nueva] });
+      const dueDateTxt = nueva.dueDate ? ` para el ${fmtDate(nueva.dueDate)}` : '';
+      return `📝 Anotado${dueDateTxt}: *${nueva.description}*`;
+    }
+
+    case 'consultar_tareas': {
+      const tareas = data.tareas || [];
+      const filter = action.filter || 'pendientes';
+      const lista = filter === 'todas' ? tareas : filter === 'hechas' ? tareas.filter(t => t.status === 'hecha') : tareas.filter(t => t.status === 'pendiente');
+      if (!lista.length) {
+        if (filter === 'hechas') return `✅ No tenés tareas completadas aún.`;
+        return `📋 No tenés tareas pendientes${name ? ', ' + name : ''}.\n\nPodés agregar una: *"anotá que tengo que llamar al banco"*`;
+      }
+      const pendientes = lista.filter(t => t.status === 'pendiente');
+      const hechas = lista.filter(t => t.status === 'hecha');
+      let lines = [];
+      if (pendientes.length) {
+        lines.push(...pendientes.map(t => {
+          const due = t.dueDate ? ` — ${fmtDate(t.dueDate)}` : '';
+          const urgente = t.dueDate && t.dueDate <= today() ? ' 🔴' : t.dueDate && t.dueDate <= (() => { const d = new Date(today()); d.setDate(d.getDate() + 3); return d.toISOString().slice(0, 10); })() ? ' 🟡' : '';
+          return `⬜ ${t.description}${due}${urgente}`;
+        }));
+      }
+      if (hechas.length && filter === 'todas') {
+        if (pendientes.length) lines.push('');
+        lines.push(...hechas.map(t => `✅ ~~${t.description}~~`));
+      }
+      const header = filter === 'todas' ? `📋 *Todas tus tareas* (${pendientes.length} pendientes, ${hechas.length} hechas)` : `📋 *Tareas pendientes* (${pendientes.length})`;
+      return `${header}\n\n${lines.join('\n')}`;
+    }
+
+    case 'completar_tarea': {
+      const tareas = data.tareas || [];
+      const keyword = (action.keyword || '').toLowerCase();
+      const idx = tareas.findIndex(t => t.status === 'pendiente' && t.description.toLowerCase().includes(keyword));
+      if (idx === -1) return `🤔 No encontré ninguna tarea pendiente que coincida con *${action.keyword}*.`;
+      const completada = tareas[idx];
+      const newTareas = tareas.map((t, i) => i === idx ? { ...t, status: 'hecha' } : t);
+      await saveData(userId, { ...data, tareas: newTareas });
+      const pendientesRestantes = newTareas.filter(t => t.status === 'pendiente').length;
+      const suffix = pendientesRestantes === 0 ? ' No te queda ninguna pendiente 🙌' : ` Te ${pendientesRestantes === 1 ? 'queda 1' : `quedan ${pendientesRestantes}`} pendiente${pendientesRestantes !== 1 ? 's' : ''}.`;
+      return `✅ *${completada.description}* — listo.${suffix}`;
+    }
+
+    case 'borrar_tarea': {
+      const tareas = data.tareas || [];
+      const keyword = (action.keyword || '').toLowerCase();
+      const tarea = tareas.find(t => t.description.toLowerCase().includes(keyword));
+      if (!tarea) return `🤔 No encontré ninguna tarea que coincida con *${action.keyword}*.`;
+      await saveData(userId, { ...data, tareas: tareas.filter(t => t.id !== tarea.id) });
+      return `🗑️ Tarea *${tarea.description}* eliminada.`;
     }
 
     case 'conversacion':

@@ -2,8 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert, Switch } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../constants/supabase';
-import { useC } from '../_lib/theme';
-import { Card, Btn, Input, ModalSheet } from '../_components/ui';
+import { useC } from '../../lib/theme';
+import { Card, Btn, Input, ModalSheet } from '../../components/ui';
 
 export default function PerfilTab({ user, onLogout, connectWhatsApp, waLinked, dark, setDark, data }) {
   const C = useC();

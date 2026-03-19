@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
-import { useC } from '../_lib/theme';
-import { Card, Btn, Input, FAB, ModalSheet, Chip, IconCircle } from '../_components/ui';
+import { useC } from '../../lib/theme';
+import { Card, Btn, Input, FAB, ModalSheet, Chip, IconCircle } from '../../components/ui';
 
 export default function Turnos({ data, onSave }) {
   const C = useC();

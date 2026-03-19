@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, Alert } from 'react-native';
-import { useC } from '../_lib/theme';
-import { fmt, fmtAmt, parseAmt, parseDateParts, MONTH_NAMES, DEFAULT_CATEGORIES } from '../_lib/constants';
-import { Card, Btn, Input, ModalSheet, Chip, BarChart, ScreenWithHeader } from '../_components/ui';
+import { useC } from '../../lib/theme';
+import { fmt, fmtAmt, parseAmt, parseDateParts, MONTH_NAMES, DEFAULT_CATEGORIES } from '../../lib/constants';
+import { Card, Btn, Input, ModalSheet, Chip, BarChart, ScreenWithHeader } from '../../components/ui';
 
 export default function AnalisisTab({ data, onSave }) {
   const C = useC();

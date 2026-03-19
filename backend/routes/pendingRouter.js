@@ -322,6 +322,29 @@ async function handlePending(pendingRaw, incomingMsg, data, userId, history, fro
       return true;
     }
 
+    case 'confirm_borrar_duplicados': {
+      await clearPendingSuggestion(from);
+      const confirmado = /\b(confirmar|confirmo|sí|si|dale|ok|listo|adelante|borrar)\b/i.test(incomingMsg.trim());
+      if (!confirmado) {
+        const msg = `Ok, cancelado. No borré nada 👍`;
+        await saveHistory(from, [...history, { role: 'user', content: incomingMsg }, { role: 'assistant', content: msg }]);
+        await sendWhatsAppMessage(from, msg);
+        return true;
+      }
+      const idsToRemove = new Set(parsed.idsToRemove || []);
+      if (!idsToRemove.size) {
+        await sendWhatsAppMessage(from, `😅 No encontré los duplicados para borrar. Intentá de nuevo.`);
+        return true;
+      }
+      const newTxs = data.transactions.filter(t => !idsToRemove.has(t.id));
+      const borrados = data.transactions.length - newTxs.length;
+      await saveData(userId, { ...data, transactions: newTxs });
+      const msg = `🧹 Listo, eliminé *${borrados} transacciones duplicadas*. Quedan las originales intactas.`;
+      await saveHistory(from, [...history, { role: 'user', content: incomingMsg }, { role: 'assistant', content: msg }]);
+      await sendWhatsAppMessage(from, msg);
+      return true;
+    }
+
     default:
       return false;
   }

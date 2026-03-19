@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, Alert } from 'react-native';
-import { useC } from '../_lib/theme';
-import { parseAmt, DEFAULT_CATEGORIES } from '../_lib/constants';
+import { useC } from '../lib/theme';
+import { parseAmt, DEFAULT_CATEGORIES } from '../lib/constants';
 import { ModalSheet, Chip, Btn, Input } from './ui';
 
 export default function AddTxModal({ visible, onClose, data, onSave, editTx }) {

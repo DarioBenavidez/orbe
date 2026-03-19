@@ -1,58 +1,64 @@
 'use strict';
 
 const crypto = require('crypto');
-const { supabase } = require('./supabase');
+const { supabaseAdmin } = require('./supabase');
 
 // ── Códigos de vinculación (Supabase) ─────────────────────
 async function generateLinkingCode(userId, userName, expectedPhone) {
-  const code = String(crypto.randomInt(100000, 1000000));
+  const code = String(crypto.randomInt(10000000, 100000000)); // 8 dígitos
   const expires_at = new Date(Date.now() + 10 * 60_000).toISOString();
-  await supabase.from('linking_codes').delete().eq('user_id', userId);
-  await supabase.from('linking_codes').insert({ code, user_id: userId, user_name: userName, expected_phone: expectedPhone || null, expires_at });
+  await supabaseAdmin.from('linking_codes').delete().eq('user_id', userId);
+  await supabaseAdmin.from('linking_codes').insert({ code, user_id: userId, user_name: userName, expected_phone: expectedPhone || null, expires_at });
   return code;
 }
 
 async function consumeLinkingCode(code, fromPhone) {
-  const { data: entry } = await supabase.from('linking_codes').select('*').eq('code', code).single();
+  const { data: entry } = await supabaseAdmin.from('linking_codes').select('*').eq('code', code).single();
   if (!entry) return null;
   if (new Date(entry.expires_at) < new Date()) {
-    await supabase.from('linking_codes').delete().eq('code', code);
+    await supabaseAdmin.from('linking_codes').delete().eq('code', code);
     return null;
   }
   if (entry.expected_phone && entry.expected_phone !== fromPhone) return null;
-  await supabase.from('linking_codes').delete().eq('code', code);
+  await supabaseAdmin.from('linking_codes').delete().eq('code', code);
   return { userId: entry.user_id, userName: entry.user_name };
 }
 
 // ── OTP de verificación de teléfono (Supabase) ────────────
 async function generatePhoneOTP(userId, userName, phone) {
-  const otp = String(crypto.randomInt(100000, 1000000));
+  const otp = String(crypto.randomInt(10000000, 100000000)); // 8 dígitos
   const expires_at = new Date(Date.now() + 5 * 60_000).toISOString();
-  await supabase.from('phone_otps').upsert({ phone, otp, user_id: userId, user_name: userName, expires_at });
+  await supabaseAdmin.from('phone_otps').upsert({ phone, otp, user_id: userId, user_name: userName, expires_at });
   return otp;
 }
 
 async function getPhoneOTP(phone) {
-  const { data } = await supabase.from('phone_otps').select('*').eq('phone', phone).single();
+  const { data } = await supabaseAdmin.from('phone_otps').select('*').eq('phone', phone).single();
   if (!data) return null;
   if (new Date(data.expires_at) < new Date()) {
-    await supabase.from('phone_otps').delete().eq('phone', phone);
+    await supabaseAdmin.from('phone_otps').delete().eq('phone', phone);
     return null;
   }
   return { otp: data.otp, userId: data.user_id, userName: data.user_name, expires: new Date(data.expires_at).getTime() };
 }
 
 async function deletePhoneOTP(phone) {
-  await supabase.from('phone_otps').delete().eq('phone', phone);
+  await supabaseAdmin.from('phone_otps').delete().eq('phone', phone);
 }
 
 // ── Rate limit por teléfono (en memoria) ──────────────────
 const phoneRateMap = new Map();
 
+const RATE_MAP_MAX = 10_000; // evitar memory exhaustion con IPs/phones distintos
+
 function isPhoneRateLimited(phone) {
   const now = Date.now();
   const windowMs = 60_000;
   const maxPerWindow = 20;
+  // Si el Map creció demasiado, limpiar entradas expiradas antes de agregar
+  if (phoneRateMap.size >= RATE_MAP_MAX) {
+    for (const [k, v] of phoneRateMap) if (now > v.reset) phoneRateMap.delete(k);
+  }
   const entry = phoneRateMap.get(phone) || { count: 0, reset: now + windowMs };
   if (now > entry.reset) { entry.count = 0; entry.reset = now + windowMs; }
   entry.count++;

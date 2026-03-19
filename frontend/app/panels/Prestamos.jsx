@@ -1,8 +1,8 @@
 import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
-import { useC } from '../_lib/theme';
-import { fmt } from '../_lib/constants';
-import { Card, IconCircle } from '../_components/ui';
+import { useC } from '../../lib/theme';
+import { fmt } from '../../lib/constants';
+import { Card, IconCircle } from '../../components/ui';
 
 export default function Prestamos({ data, onSave }) {
   const C = useC();

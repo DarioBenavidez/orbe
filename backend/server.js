@@ -2,6 +2,14 @@
 
 require('dotenv').config();
 
+// ── Validación de variables críticas al startup ───────────
+const REQUIRED_ENV = ['WHATSAPP_APP_SECRET', 'SUPABASE_URL', 'SUPABASE_ANON_KEY', 'ANTHROPIC_API_KEY', 'PHONE_NUMBER_ID', 'WHATSAPP_TOKEN'];
+const missing = REQUIRED_ENV.filter(k => !process.env[k]);
+if (missing.length) {
+  console.error(`❌ Variables de entorno faltantes: ${missing.join(', ')} — el servidor no puede arrancar.`);
+  process.exit(1);
+}
+
 const express = require('express');
 const helmet  = require('helmet');
 const rateLimit = require('express-rate-limit');

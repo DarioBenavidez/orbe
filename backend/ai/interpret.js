@@ -4,6 +4,23 @@ const { anthropic } = require('../lib/whatsapp');
 const { currentMonth, getGreeting, arDay, parseDateParts, fmt, today, MONTH_NAMES } = require('../lib/helpers');
 const { getRelevantExpertise } = require('./expertise');
 
+// ── Rate limit por teléfono para llamadas a Claude ─────────
+const claudeRateMap = new Map(); // phone → { count, reset }
+const CLAUDE_MAX_PER_MINUTE = 15; // máximo de calls a Claude API por teléfono por minuto
+
+function isClaudeRateLimited(phone) {
+  if (!phone) return false;
+  const now = Date.now();
+  const entry = claudeRateMap.get(phone) || { count: 0, reset: now + 60_000 };
+  if (now > entry.reset) { entry.count = 0; entry.reset = now + 60_000; }
+  entry.count++;
+  claudeRateMap.set(phone, entry);
+  if (claudeRateMap.size > 5_000) {
+    for (const [k, v] of claudeRateMap) if (now > v.reset) claudeRateMap.delete(k);
+  }
+  return entry.count > CLAUDE_MAX_PER_MINUTE;
+}
+
 async function callClaude(systemPrompt, history, userMessage) {
   // Asegurarse de que los mensajes alternen roles correctamente
   const rawMessages = [...history.slice(-20), { role: 'user', content: userMessage }];
@@ -28,7 +45,9 @@ async function callClaude(systemPrompt, history, userMessage) {
 async function interpretMessage(userMessage, data, history, userName) {
   const { month, year } = currentMonth();
   const greeting = getGreeting();
-  const name = userName ? userName.split(' ')[0] : '';
+  // Sanitizar nombre antes de embeber en system prompt (prevenir prompt injection)
+  const rawName = userName ? userName.split(' ')[0] : '';
+  const name = rawName.replace(/[`\\{}]/g, '').slice(0, 30);
 
   // Calcular contexto financiero actual
   const txsMes = data.transactions.filter(t => {
@@ -77,6 +96,7 @@ CONTEXTO ACTUAL:
 - Ingresos fijos esperados (${(data.recurringIncomes || []).filter(r => r.active).length}): ${(data.recurringIncomes || []).filter(r => r.active).length > 0 ? (data.recurringIncomes || []).filter(r => r.active).map(r => `${r.name} ${fmt(r.amount)}/mes día ${r.day}${r.reason ? ' por ' + r.reason : ''}`).join(', ') : 'ninguno'}
 - Mes anterior (${MONTH_NAMES[prevMonth]}): ingresos ${fmt(ingresosPrev)}, gastos ${fmt(gastosPrev)}${gastosPrev > 0 && gastos > gastosPrev ? ' ← este mes está gastando más que el anterior' : gastosPrev > 0 && gastos < gastosPrev * 0.8 ? ' ← este mes está gastando menos, buen dato' : ''}
 ${proxVenc.length > 0 ? `- Vencimientos próximos (7 días): ${proxVenc.map(ev => ev.title).join(', ')} ← mencionálos si viene al caso` : ''}
+- Tareas pendientes: ${(data.tasks || data.tareas || []).filter(t => t.status === 'pendiente').length}${(data.tasks || data.tareas || []).filter(t => t.status === 'pendiente').length > 0 ? ' — ' + (data.tasks || data.tareas || []).filter(t => t.status === 'pendiente').map(t => `"${t.description}"${t.dueDate ? ' (vence ' + t.dueDate + ')' : ''}`).join(', ') : ''}
 ${data.balanceAlert > 0 ? `- Alerta de balance configurada: avisa cuando baje de ${fmt(data.balanceAlert)}` : ''}
 ${(data.reminders || []).filter(r => !r.notified).length > 0 ? `- Recordatorios pendientes: ${(data.reminders || []).filter(r => !r.notified).map(r => `"${r.description}" el ${r.date}`).join(', ')}` : ''}
 
@@ -88,6 +108,8 @@ ACCIONES DISPONIBLES:
 {"type":"agregar_multiples_transacciones","transacciones":[{"txType":"gasto","description":"Pan","amount":500,"category":"Alimentación","date":"YYYY-MM-DD"},{"txType":"gasto","description":"Nafta","amount":1500,"category":"Transporte","date":"YYYY-MM-DD"}]}
 {"type":"buscar_transacciones","keyword":"","category":"","dateFrom":"","dateTo":"","txType":""}
 {"type":"borrar_transaccion","keyword":"...","amount":0}
+{"type":"borrar_transaccion","keyword":"...","all":true}
+{"type":"borrar_duplicados"}
 {"type":"consultar_balance"}
 {"type":"ultimas_transacciones"}
 {"type":"consultar_presupuesto"}
@@ -168,6 +190,10 @@ ACCIONES DISPONIBLES:
 {"type":"flujo_de_caja_negocio"}
 {"type":"educacion_financiera","concepto":"amortizacion|margen|punto_equilibrio|balance|flujo_de_caja|roi|ebitda|capital_de_trabajo|costos_fijos_variables"}
 {"type":"exportar_csv","scope":"transacciones|ventas|prestamos|todo"}
+{"type":"agregar_tarea","description":"...","dueDate":"YYYY-MM-DD"}
+{"type":"consultar_tareas","filter":"pendientes|hechas|todas"}
+{"type":"completar_tarea","keyword":"..."}
+{"type":"borrar_tarea","keyword":"..."}
 {"type":"agendar_turno","description":"Turno médico Dr. García","date":"YYYY-MM-DD","time":"10:30","location":"Av. Corrientes 1234","turnoType":"médico|banco|trámite|veterinario|odontólogo|otro"}
 {"type":"consultar_turnos"}
 {"type":"cancelar_turno","keyword":"dr garcia","date":"2026-03-21"}
@@ -211,6 +237,8 @@ REGLAS DE INTERPRETACIÓN:
 - "chau / hasta luego / buenas noches / nos vemos" AL FINAL de una conversación o junto a "gracias" → conversacion con despedida breve. NUNCA disparar el saludo completo en una despedida.
 - "borrá/eliminá todo el historial", "empezar de cero", "limpiá todo", "quiero borrar todo", "borrá todas las transacciones" → limpiar_transacciones (scope: "mes" si dice "de este mes", "todo" si dice "todo" o "empezar de cero")
 - "borrá/eliminá/quitá/sacá el gasto/ingreso de X", "borrá el X", "ese no va" → borrar_transaccion (keyword: parte del nombre/descripción/categoría, amount: monto si lo mencionan para asegurarse de borrar la correcta, omitir si no especifica)
+- "borrá todos los X", "eliminá todos los de X", "borrá todas las transacciones de X", "eliminá todos los duplicados de X", "borrá todos los que son X" → borrar_transaccion con all:true (keyword: nombre a buscar)
+- "hay duplicados", "se repiten las transacciones", "limpiar duplicados", "borrá los repetidos", "tengo transacciones repetidas" → borrar_duplicados
 - "corregí/cambié/el X era Y/el monto del X era Y/modificá el X a Y" → editar_transaccion (keyword: parte de la descripción, newAmount si cambia monto, newDescription si cambia descripción, newCategory si cambia categoría — solo los campos que se modifican)
 - "cuando diga/digo X es/significa/quiero decir Y", "aprendé que X es Y", "guardá que X es Y", "X = Y" (enseñanza explícita de vocabulario) → guardar_vocabulario (categoria: inferila del contexto o usá "Otros")
 - Hay palabras genéricas que son SIEMPRE ambiguas porque pueden referirse a muchas cosas distintas: "cuota", "pago", "factura", "el pago", "la cuenta", "el servicio", "la mensualidad". Si el usuario las usa SIN especificar de qué (ej: "pagué la cuota", "aboné la factura"), NO asumas ni uses confirmar_vocabulario — usá conversacion para preguntar "¿cuota de qué?" o "¿factura de qué servicio?". Si el usuario YA especificó (ej: "pagué la cuota del auto", "cuota del colegio"), procesá normalmente.
@@ -265,6 +293,11 @@ REGLAS DE INTERPRETACIÓN:
 - "me confundí / era el día X / cambiá el turno de X / el turno del médico es el día X / corregí el turno" → editar_turno (keyword: parte del nombre del turno que ya existe, y los campos a cambiar: date, time, location — solo los que cambian)
 - IMPORTANTE: si el usuario corrige un turno que acaba de agendar (ej: "me confundí, era el 21"), usá editar_turno con el keyword del turno recién creado. NUNCA uses agendar_turno para una corrección.
 - Preguntas sobre Excel (fórmulas, errores, tablas dinámicas, Power Query, atajos, etc.) → conversacion (Orbe responde como experta en Excel con ejemplos concretos)
+- "anotá que tengo que X", "recordame que tengo que X", "tengo pendiente X", "agregá a mis tareas X", "poné en mi lista X" → agregar_tarea (description: la tarea, dueDate: fecha resuelta YYYY-MM-DD si la menciona, omitir si no)
+- "qué tengo pendiente", "qué tareas tengo", "mi lista de tareas", "mis pendientes", "qué me falta hacer" → consultar_tareas (filter: "pendientes" por defecto, "todas" si pide ver todo, "hechas" si pide ver las completadas)
+- "hice X", "ya llamé al X", "terminé con X", "listo el X", "completé X", "ya X" cuando X es una tarea registrada → completar_tarea (keyword: parte de la descripción)
+- "borrá la tarea de X", "eliminá el pendiente de X", "sacá X de mis tareas" → borrar_tarea (keyword: parte de la descripción)
+- "qué podés hacer", "qué más podés hacer", "para qué servís", "cómo me podés ayudar", "qué hacés", "en qué me ayudás" → conversacion. Respondé como una persona, no como una app. NUNCA hagas una lista de funciones o features. Mencioná una o dos cosas concretas que sean relevantes para la situación actual del usuario, y preguntá qué necesita. Ejemplo: "Puedo ayudarte con lo que necesites de tus finanzas — cómo vas este mes, si te alcanza para algo que tenés en mente, lo que sea. ¿Qué tenés en mente?"
 
 CONTEXTO EMPRESARIAL:
 ${data.negocio ? `- Negocio registrado: ${data.negocio.nombre} (${data.negocio.tipo})` : '- Sin negocio registrado aún'}
@@ -358,4 +391,4 @@ NUNCA devuelvas texto fuera del JSON. Devolvé SOLO el JSON.`;
   }
 }
 
-module.exports = { callClaude, interpretMessage };
+module.exports = { callClaude, interpretMessage, isClaudeRateLimited };

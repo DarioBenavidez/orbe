@@ -3,8 +3,8 @@ import {
   View, Text, TouchableOpacity, TextInput,
   Modal, KeyboardAvoidingView, Platform,
 } from 'react-native';
-import { useC } from '../_lib/theme';
-import { fmt, fmtAmt } from '../_lib/constants';
+import { useC } from '../lib/theme';
+import { fmt, fmtAmt } from '../lib/constants';
 
 export function Card({ children, style }) {
   const C = useC();
