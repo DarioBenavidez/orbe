@@ -102,7 +102,7 @@ async function getPendingSuggestion(phone) {
   if (entry) {
     if (Date.now() - entry.createdAt > PENDING_TTL) {
       pendingMap.delete(phone);
-      supabaseAdmin.from('pending_suggestions').delete().eq('phone', phone).catch(() => {});
+      (async () => { try { await supabaseAdmin.from('pending_suggestions').delete().eq('phone', phone); } catch {} })();
       return null;
     }
     return entry.message;
@@ -112,7 +112,7 @@ async function getPendingSuggestion(phone) {
     const { data } = await supabaseAdmin.from('pending_suggestions').select('original_message, created_at').eq('phone', phone).single();
     if (!data) return null;
     if (Date.now() - new Date(data.created_at).getTime() > PENDING_TTL) {
-      supabaseAdmin.from('pending_suggestions').delete().eq('phone', phone).catch(() => {});
+      (async () => { try { await supabaseAdmin.from('pending_suggestions').delete().eq('phone', phone); } catch {} })();
       return null;
     }
     // Restaurar en memoria
@@ -124,12 +124,12 @@ async function getPendingSuggestion(phone) {
 function savePendingSuggestion(phone, originalMessage) {
   pendingMap.set(phone, { message: originalMessage, createdAt: Date.now() });
   // Write-through a Supabase (fire and forget)
-  supabaseAdmin.from('pending_suggestions').upsert({ phone, original_message: originalMessage, created_at: new Date().toISOString() }).catch(() => {});
+  (async () => { try { await supabaseAdmin.from('pending_suggestions').upsert({ phone, original_message: originalMessage, created_at: new Date().toISOString() }); } catch {} })();
 }
 
 function clearPendingSuggestion(phone) {
   pendingMap.delete(phone);
-  supabaseAdmin.from('pending_suggestions').delete().eq('phone', phone).catch(() => {});
+  (async () => { try { await supabaseAdmin.from('pending_suggestions').delete().eq('phone', phone); } catch {} })();
 }
 
 async function saveFeatureRequest(phone, userName, originalMessage, suggestion) {

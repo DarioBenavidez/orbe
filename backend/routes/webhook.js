@@ -19,14 +19,14 @@ async function isAlreadyProcessed(msgId) {
 
 function markAsProcessed(msgId) {
   processedMessages.set(msgId, Date.now());
-  supabaseAdmin.from('processed_messages').upsert({ msg_id: msgId, processed_at: new Date().toISOString() }).catch(() => {});
+  (async () => { try { await supabaseAdmin.from('processed_messages').upsert({ msg_id: msgId, processed_at: new Date().toISOString() }); } catch {} })();
 }
 
 // Limpiar registros viejos cada hora
 setInterval(() => {
   const cutoff = Date.now() - 24 * 60 * 60 * 1000;
   for (const [id, ts] of processedMessages) if (ts < cutoff) processedMessages.delete(id);
-  supabaseAdmin.from('processed_messages').delete().lt('processed_at', new Date(cutoff).toISOString()).catch(() => {});
+  (async () => { try { await supabaseAdmin.from('processed_messages').delete().lt('processed_at', new Date(cutoff).toISOString()); } catch {} })();
 }, 60 * 60_000);
 
 // ── Sanitizar texto de usuario antes de meterlo en prompts ─
