@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert, Switch } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Alert, Switch, ActivityIndicator } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../constants/supabase';
 import { useC } from '../../lib/theme';
@@ -150,7 +150,7 @@ export default function PerfilTab({ user, onLogout, connectWhatsApp, waLinked, d
         <Input label="Apellido" value={editApellido} onChangeText={setEditApellido} placeholder="Tu apellido"/>
         <View style={{ flexDirection:'row', gap:10, marginTop:4 }}>
           <Btn label="Cancelar" variant="ghost" style={{ flex:1 }} onPress={() => setEditNameModal(false)}/>
-          <Btn label={savingName ? '...' : 'Guardar'} style={{ flex:1 }} onPress={saveNombre}/>
+          <Btn label={savingName ? <ActivityIndicator size="small" color="#fff"/> : 'Guardar'} style={{ flex:1 }} onPress={saveNombre}/>
         </View>
       </ModalSheet>
 
@@ -159,7 +159,7 @@ export default function PerfilTab({ user, onLogout, connectWhatsApp, waLinked, d
         <Input label="Repetir contraseña" value={pwConfirm} onChangeText={setPwConfirm} placeholder="Repetí la contraseña" secureTextEntry/>
         <View style={{ flexDirection:'row', gap:10, marginTop:4 }}>
           <Btn label="Cancelar" variant="ghost" style={{ flex:1 }} onPress={() => setPwModal(false)}/>
-          <Btn label={savingPw ? '...' : 'Guardar'} style={{ flex:1 }} onPress={changePassword}/>
+          <Btn label={savingPw ? <ActivityIndicator size="small" color="#fff"/> : 'Guardar'} style={{ flex:1 }} onPress={changePassword}/>
         </View>
       </ModalSheet>
     </View>

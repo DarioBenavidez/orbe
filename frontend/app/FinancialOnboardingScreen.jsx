@@ -2,7 +2,7 @@ import { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
   StyleSheet, ScrollView, ActivityIndicator,
-  KeyboardAvoidingView, Platform, Linking,
+  KeyboardAvoidingView, Platform,
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FontAwesome5 } from '@expo/vector-icons';
@@ -10,11 +10,15 @@ import { loadData, saveData } from '../constants/supabase';
 
 const C = {
   green:      '#005247',
+  greenDark:  '#003D36',
   gold:       '#C9A84C',
   goldLight:  '#E8C97A',
   white:      '#FFFFFF',
   whiteMuted: '#FFFFFF99',
-  border:     '#FFFFFF25',
+  whiteDim:   '#FFFFFF40',
+  border:     '#FFFFFF20',
+  surface:    '#FFFFFF12',
+  surface2:   '#FFFFFF08',
 };
 
 const DEFAULT_CATS = [
@@ -28,13 +32,28 @@ const DEFAULT_CATS = [
   { name: 'Otros',           icon: '📦' },
 ];
 
-const TOTAL_STEPS = 3;
+const STEPS = [
+  { label: 'Ingresos' },
+  { label: 'Categorías' },
+  { label: 'WhatsApp' },
+];
 
-function StepDots({ current }) {
+function ProgressBar({ current }) {
   return (
-    <View style={s.dots}>
-      {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
-        <View key={i} style={[s.dot, i === current && s.dotActive]} />
+    <View style={s.progressWrap}>
+      {STEPS.map((step, i) => (
+        <View key={i} style={s.progressItem}>
+          <View style={[s.progressDot, i <= current && s.progressDotActive, i === current && s.progressDotCurrent]}>
+            {i < current
+              ? <Text style={{ fontSize: 10, color: C.green, fontWeight: '800' }}>✓</Text>
+              : <Text style={{ fontSize: 11, color: i === current ? C.green : C.whiteDim, fontWeight: '800' }}>{i + 1}</Text>
+            }
+          </View>
+          <Text style={[s.progressLabel, i === current && s.progressLabelActive]}>{step.label}</Text>
+          {i < STEPS.length - 1 && (
+            <View style={[s.progressLine, i < current && s.progressLineActive]} />
+          )}
+        </View>
       ))}
     </View>
   );
@@ -57,13 +76,13 @@ export default function FinancialOnboardingScreen({ user, onDone }) {
       const month  = now.getMonth();
       const year   = now.getFullYear();
       const amount = parseFloat(sueldo.replace(/\./g, ''));
-
       if (amount > 0) {
         let data = await loadData(user.id);
         if (!data) {
           data = {
             transactions: [], budgets: [], categories: {}, savings: [],
-            debts: [], events: [], vocabulario: [], recurringIncomes: [],
+            debts: [], events: [], turnos: [], loans: [], credits: {},
+            vocabulario: [], recurringIncomes: [],
             salaryOverrides: [], selectedMonth: month, selectedYear: year,
           };
         }
@@ -101,8 +120,12 @@ export default function FinancialOnboardingScreen({ user, onDone }) {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
       <View style={s.root}>
 
+        {/* Decorative blobs */}
+        <View style={s.blob1} />
+        <View style={s.blob2} />
+
         <View style={s.header}>
-          <StepDots current={step} />
+          <ProgressBar current={step} />
         </View>
 
         <ScrollView
@@ -114,44 +137,50 @@ export default function FinancialOnboardingScreen({ user, onDone }) {
           {/* ── PASO 1: Sueldo ── */}
           {step === 0 && (
             <View style={s.stepWrap}>
-              <Text style={s.emoji}>💼</Text>
-              <Text style={s.title}>¿Cuánto ganás por mes?</Text>
-              <Text style={s.subtitle}>
-                Con tu sueldo, Orbe sabe cuánto te queda disponible y puede proyectar tus ahorros mes a mes.
-              </Text>
-
-              <View style={s.amountBox}>
-                <Text style={s.amountPrefix}>$</Text>
-                <TextInput
-                  style={s.amountInput}
-                  value={sueldo}
-                  onChangeText={v => setSueldo(v.replace(/\D/g,'').replace(/\B(?=(\d{3})+(?!\d))/g, '.'))}
-                  placeholder="0"
-                  placeholderTextColor={C.whiteMuted}
-                  keyboardType="numeric"
-                  returnKeyType="done"
-                />
+              <View style={s.iconWrap}>
+                <Text style={{ fontSize: 48 }}>💼</Text>
               </View>
-
-              <Text style={s.hint}>
-                Si no sabés la cantidad exacta, no hay problema — te espero.{'\n'}
-                Podés cambiarlo cuando quieras desde la app.
+              <Text style={s.title}>¿Cuánto ganás{'\n'}por mes?</Text>
+              <Text style={s.subtitle}>
+                Con tu sueldo, Orbe sabe cuánto te queda disponible y proyecta tus ahorros mes a mes.
               </Text>
+
+              <View style={s.amountCard}>
+                <Text style={s.amountLabel}>INGRESO MENSUAL</Text>
+                <View style={s.amountRow}>
+                  <Text style={s.amountPrefix}>$</Text>
+                  <TextInput
+                    style={s.amountInput}
+                    value={sueldo}
+                    onChangeText={v => setSueldo(v.replace(/\D/g, '').replace(/\B(?=(\d{3})+(?!\d))/g, '.'))}
+                    placeholder="0"
+                    placeholderTextColor={C.whiteDim}
+                    keyboardType="numeric"
+                    returnKeyType="done"
+                  />
+                </View>
+                <View style={s.amountDivider} />
+                <Text style={s.amountHint}>
+                  Podés cambiarlo cuando quieras desde la app
+                </Text>
+              </View>
             </View>
           )}
 
           {/* ── PASO 2: Categorías ── */}
           {step === 1 && (
             <View style={s.stepWrap}>
-              <Text style={s.emoji}>🗂</Text>
-              <Text style={s.title}>Organizá tus gastos</Text>
+              <View style={s.iconWrap}>
+                <Text style={{ fontSize: 48 }}>🗂</Text>
+              </View>
+              <Text style={s.title}>Organizá{'\n'}tus gastos</Text>
               <Text style={s.subtitle}>
-                Cada gasto que cargués va a una categoría. Así Orbe te muestra exactamente en qué gastás más y dónde podés mejorar.
+                Cada movimiento va a una categoría. Así Orbe te muestra en qué gastás más y dónde podés mejorar.
               </Text>
 
               <View style={s.catGrid}>
                 {DEFAULT_CATS.map(cat => (
-                  <View key={cat.name} style={s.catChip}>
+                  <View key={cat.name} style={s.catCard}>
                     <Text style={s.catIcon}>{cat.icon}</Text>
                     <Text style={s.catLabel}>{cat.name}</Text>
                   </View>
@@ -159,8 +188,9 @@ export default function FinancialOnboardingScreen({ user, onDone }) {
               </View>
 
               <View style={s.infoBox}>
+                <Text style={s.infoIcon}>💡</Text>
                 <Text style={s.infoText}>
-                  💡 Estas categorías ya vienen listas. Si necesitás una diferente, podés crearla desde la sección de Gastos dentro de la app.
+                  Estas categorías ya vienen listas. Podés crear nuevas desde la sección de Análisis.
                 </Text>
               </View>
             </View>
@@ -169,32 +199,34 @@ export default function FinancialOnboardingScreen({ user, onDone }) {
           {/* ── PASO 3: WhatsApp ── */}
           {step === 2 && (
             <View style={s.stepWrap}>
-              <View style={s.waCircle}>
-                <FontAwesome5 name="whatsapp" size={44} color="#25D366" solid />
+              <View style={s.waIconWrap}>
+                <FontAwesome5 name="whatsapp" size={52} color="#25D366" solid />
               </View>
-              <Text style={s.title}>Tu asistente en WhatsApp</Text>
+              <Text style={s.title}>Tu asistente{'\n'}donde ya estás</Text>
               <Text style={s.subtitle}>
-                Podés usar Orbe sin abrir la app. Solo mandá un mensaje por WhatsApp y listo.
+                Usá Orbe sin abrir la app. Solo mandá un mensaje por WhatsApp.
               </Text>
 
               <View style={s.waSteps}>
                 {[
-                  { n: '1', text: 'Andá a Perfil → Conectar WhatsApp dentro de la app.' },
-                  { n: '2', text: 'Ingresá tu número y verificalo con el código que te enviamos.' },
-                  { n: '3', text: 'Abrí el chat con Orbe y empezá a escribir.' },
+                  { n: '1', icon: '📱', text: 'Andá a Perfil → Conectar WhatsApp.' },
+                  { n: '2', icon: '🔐', text: 'Ingresá tu número y verificalo con el código.' },
+                  { n: '3', icon: '💬', text: 'Abrí el chat con Orbe y empezá a escribir.' },
                 ].map(item => (
-                  <View key={item.n} style={s.waStep}>
+                  <View key={item.n} style={s.waStepCard}>
                     <View style={s.waStepNum}>
-                      <Text style={{ color: C.green, fontWeight: '800', fontSize: 13 }}>{item.n}</Text>
+                      <Text style={{ color: C.green, fontWeight: '800', fontSize: 12 }}>{item.n}</Text>
                     </View>
+                    <Text style={{ fontSize: 22, marginHorizontal: 12 }}>{item.icon}</Text>
                     <Text style={s.waStepText}>{item.text}</Text>
                   </View>
                 ))}
               </View>
 
               <View style={s.infoBox}>
+                <Text style={s.infoIcon}>✨</Text>
                 <Text style={s.infoText}>
-                  💬 Desde WhatsApp podés registrar gastos, consultar tu saldo, ver el precio del dólar y más — con un solo mensaje.
+                  Registrá gastos, consultá tu saldo, o pedí el precio del dólar — con un solo mensaje.
                 </Text>
               </View>
             </View>
@@ -204,7 +236,6 @@ export default function FinancialOnboardingScreen({ user, onDone }) {
 
         {/* ── Botones ── */}
         <View style={s.btnArea}>
-
           {step === 0 && (
             <View style={s.btnRow}>
               <TouchableOpacity onPress={skip} style={s.skipBtn}>
@@ -217,7 +248,7 @@ export default function FinancialOnboardingScreen({ user, onDone }) {
               >
                 {saving
                   ? <ActivityIndicator color={C.green} />
-                  : <Text style={s.primaryText}>Siguiente</Text>
+                  : <Text style={s.primaryText}>Siguiente →</Text>
                 }
               </TouchableOpacity>
             </View>
@@ -226,10 +257,10 @@ export default function FinancialOnboardingScreen({ user, onDone }) {
           {step === 1 && (
             <View style={s.btnRow}>
               <TouchableOpacity onPress={back} style={s.skipBtn}>
-                <Text style={s.skipText}>Atrás</Text>
+                <Text style={s.skipText}>← Atrás</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={next} style={s.primaryBtn}>
-                <Text style={s.primaryText}>Siguiente</Text>
+                <Text style={s.primaryText}>Siguiente →</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -237,91 +268,134 @@ export default function FinancialOnboardingScreen({ user, onDone }) {
           {step === 2 && (
             <View style={s.btnRow}>
               <TouchableOpacity onPress={back} style={s.skipBtn}>
-                <Text style={s.skipText}>Atrás</Text>
+                <Text style={s.skipText}>← Atrás</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={finish} style={s.primaryBtn}>
-                <Text style={s.primaryText}>Comenzar</Text>
+                <Text style={s.primaryText}>¡Arranquemos! 🚀</Text>
               </TouchableOpacity>
             </View>
           )}
-
         </View>
+
       </View>
     </KeyboardAvoidingView>
   );
 }
 
 const s = StyleSheet.create({
-  root:   { flex: 1, backgroundColor: C.green },
-  header: { alignItems: 'center', paddingTop: 56, paddingBottom: 8 },
-  logo:   { width: 160, height: 64 },
-  scroll: { flexGrow: 1, paddingHorizontal: 28, paddingBottom: 20 },
+  root:   { flex: 1, backgroundColor: C.green, overflow: 'hidden' },
+  header: { paddingTop: 56, paddingHorizontal: 24, paddingBottom: 8 },
+  scroll: { flexGrow: 1, paddingHorizontal: 24, paddingBottom: 20 },
 
-  dots:      { flexDirection: 'row', gap: 8, marginTop: 16 },
-  dot:       { width: 7, height: 7, borderRadius: 4, backgroundColor: '#FFFFFF30' },
-  dotActive: { backgroundColor: C.gold, width: 22 },
+  // Decorative blobs
+  blob1: {
+    position: 'absolute', top: -80, right: -80,
+    width: 280, height: 280, borderRadius: 140,
+    backgroundColor: '#FFFFFF07',
+  },
+  blob2: {
+    position: 'absolute', bottom: 100, left: -100,
+    width: 320, height: 320, borderRadius: 160,
+    backgroundColor: '#C9A84C08',
+  },
 
-  stepWrap: { flex: 1, paddingTop: 28, alignItems: 'center' },
-  emoji:    { fontSize: 52, marginBottom: 16 },
+  // Progress bar
+  progressWrap: {
+    flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'center', paddingVertical: 8,
+  },
+  progressItem:       { alignItems: 'center', position: 'relative' },
+  progressDot: {
+    width: 32, height: 32, borderRadius: 16,
+    backgroundColor: C.surface, borderWidth: 1.5, borderColor: C.border,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 6,
+  },
+  progressDotActive:  { borderColor: C.gold, backgroundColor: '#C9A84C30' },
+  progressDotCurrent: { backgroundColor: C.gold, borderColor: C.goldLight },
+  progressLabel:      { fontSize: 10, color: C.whiteDim, fontWeight: '600', letterSpacing: 0.3 },
+  progressLabelActive:{ color: C.gold },
+  progressLine: {
+    position: 'absolute', top: 16, left: 32,
+    width: 56, height: 1.5,
+    backgroundColor: C.border,
+  },
+  progressLineActive: { backgroundColor: C.gold },
+
+  // Step content
+  stepWrap: { paddingTop: 24, alignItems: 'center' },
+  iconWrap: {
+    width: 90, height: 90, borderRadius: 45,
+    backgroundColor: C.surface, borderWidth: 1, borderColor: C.border,
+    alignItems: 'center', justifyContent: 'center', marginBottom: 20,
+  },
   title: {
-    fontSize: 26, fontWeight: '800', color: C.white,
-    textAlign: 'center', letterSpacing: -0.5, marginBottom: 12,
+    fontSize: 30, fontWeight: '800', color: C.white,
+    textAlign: 'center', letterSpacing: -0.8, marginBottom: 12, lineHeight: 36,
   },
   subtitle: {
     fontSize: 14, color: C.whiteMuted,
-    textAlign: 'center', lineHeight: 22, marginBottom: 24,
-  },
-  hint: {
-    fontSize: 12, color: C.whiteMuted,
-    textAlign: 'center', lineHeight: 18, marginTop: 14,
+    textAlign: 'center', lineHeight: 22, marginBottom: 28, paddingHorizontal: 8,
   },
 
   // Sueldo
-  amountBox: {
-    flexDirection: 'row', alignItems: 'center',
-    backgroundColor: '#FFFFFF15', borderRadius: 20,
-    borderWidth: 1, borderColor: C.border,
-    paddingHorizontal: 20, paddingVertical: 4, width: '100%',
+  amountCard: {
+    width: '100%', backgroundColor: C.surface,
+    borderRadius: 24, borderWidth: 1, borderColor: C.border,
+    padding: 24,
   },
-  amountPrefix: { fontSize: 28, fontWeight: '700', color: C.gold, marginRight: 8 },
-  amountInput:  { flex: 1, fontSize: 32, fontWeight: '800', color: C.white, paddingVertical: 12 },
+  amountLabel: {
+    fontSize: 10, fontWeight: '800', color: C.gold,
+    letterSpacing: 1.5, marginBottom: 12,
+  },
+  amountRow:   { flexDirection: 'row', alignItems: 'center' },
+  amountPrefix:{ fontSize: 32, fontWeight: '700', color: C.gold, marginRight: 8 },
+  amountInput: { flex: 1, fontSize: 40, fontWeight: '800', color: C.white, paddingVertical: 0 },
+  amountDivider: { height: 1, backgroundColor: C.border, marginVertical: 16 },
+  amountHint:  { fontSize: 12, color: C.whiteDim, textAlign: 'center' },
 
   // Categorías
   catGrid: {
-    flexDirection: 'row', flexWrap: 'wrap', gap: 8,
-    justifyContent: 'center', marginBottom: 20,
+    flexDirection: 'row', flexWrap: 'wrap', gap: 10,
+    justifyContent: 'center', marginBottom: 20, width: '100%',
   },
-  catChip: {
-    flexDirection: 'row', alignItems: 'center', gap: 6,
-    backgroundColor: '#FFFFFF15', borderRadius: 99,
+  catCard: {
+    width: '22%', aspectRatio: 1,
+    backgroundColor: C.surface, borderRadius: 18,
     borderWidth: 1, borderColor: C.border,
-    paddingVertical: 8, paddingHorizontal: 14,
+    alignItems: 'center', justifyContent: 'center', gap: 4,
   },
-  catIcon:  { fontSize: 15 },
-  catLabel: { fontSize: 12, color: C.white, fontWeight: '600' },
+  catIcon:  { fontSize: 22 },
+  catLabel: { fontSize: 9, color: C.whiteMuted, fontWeight: '700', textAlign: 'center' },
 
   // Info box
   infoBox: {
-    backgroundColor: '#FFFFFF0F', borderRadius: 16,
+    flexDirection: 'row', alignItems: 'flex-start', gap: 10,
+    backgroundColor: C.surface2, borderRadius: 16,
     borderWidth: 1, borderColor: C.border,
     padding: 16, width: '100%',
   },
-  infoText: { fontSize: 13, color: C.whiteMuted, lineHeight: 20 },
+  infoIcon: { fontSize: 16 },
+  infoText: { flex: 1, fontSize: 13, color: C.whiteMuted, lineHeight: 20 },
 
   // WhatsApp
-  waCircle: {
-    width: 90, height: 90, borderRadius: 45,
-    backgroundColor: '#FFFFFF15', borderWidth: 1, borderColor: '#25D36640',
-    alignItems: 'center', justifyContent: 'center', marginBottom: 16,
+  waIconWrap: {
+    width: 100, height: 100, borderRadius: 50,
+    backgroundColor: '#25D36615', borderWidth: 1.5, borderColor: '#25D36640',
+    alignItems: 'center', justifyContent: 'center', marginBottom: 20,
   },
-  waSteps: { width: '100%', gap: 14, marginBottom: 20 },
-  waStep: { flexDirection: 'row', alignItems: 'flex-start', gap: 14 },
+  waSteps: { width: '100%', gap: 10, marginBottom: 20 },
+  waStepCard: {
+    flexDirection: 'row', alignItems: 'center',
+    backgroundColor: C.surface, borderRadius: 16,
+    borderWidth: 1, borderColor: C.border,
+    padding: 14,
+  },
   waStepNum: {
-    width: 28, height: 28, borderRadius: 14,
+    width: 26, height: 26, borderRadius: 13,
     backgroundColor: C.gold, alignItems: 'center', justifyContent: 'center',
-    flexShrink: 0, marginTop: 1,
+    flexShrink: 0,
   },
-  waStepText: { flex: 1, color: C.white, fontSize: 14, lineHeight: 21 },
+  waStepText: { flex: 1, color: C.white, fontSize: 13, lineHeight: 20 },
 
   // Buttons
   btnArea: { paddingHorizontal: 24, paddingBottom: 44, paddingTop: 12 },
@@ -330,11 +404,13 @@ const s = StyleSheet.create({
     flex: 1, paddingVertical: 16, alignItems: 'center',
     borderRadius: 18, borderWidth: 1, borderColor: C.border,
   },
-  skipText: { color: C.whiteMuted, fontSize: 15, fontWeight: '600' },
+  skipText: { color: C.whiteMuted, fontSize: 14, fontWeight: '600' },
   primaryBtn: {
     flex: 2, paddingVertical: 16, alignItems: 'center',
     borderRadius: 18, backgroundColor: C.gold,
     borderWidth: 1, borderColor: C.goldLight,
+    shadowColor: C.gold, shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4, shadowRadius: 16, elevation: 10,
   },
   primaryText: { color: C.green, fontSize: 15, fontWeight: '800' },
 });

@@ -27,6 +27,7 @@ const TABS = [
 ];
 
 const PICKER_YEARS = [2026, 2027, 2028, 2029, 2030];
+const WA_POLLING_TIMEOUT_MS = 2 * 60 * 1000;
 
 const PANEL_LABELS = {
   ahorros: 'Ahorros', deudas: 'Deudas', prestamos: 'Préstamos',
@@ -40,6 +41,7 @@ export default function MainApp({ user, onLogout }) {
   const [dark,     setDarkState] = useState(false);
   const [monthPicker, setMonthPicker] = useState(false);
   const [addModal, setAddModal] = useState(false);
+  const [editTx,   setEditTx]   = useState(null);
   const [panel,    setPanel]    = useState(null);
 
   const C = mkTheme(dark);
@@ -147,7 +149,11 @@ export default function MainApp({ user, onLogout }) {
   const startPolling = () => {
     const id = setInterval(async () => { await checkLinked(); }, 3000);
     setWaPolling(id);
-    setTimeout(() => { clearInterval(id); setWaPolling(null); }, 2 * 60 * 1000);
+    setTimeout(() => {
+      clearInterval(id);
+      setWaPolling(null);
+      Alert.alert('Tiempo agotado', 'No detectamos el mensaje. Asegurate de haber enviado el código y volvé a intentarlo.');
+    }, WA_POLLING_TIMEOUT_MS);
   };
 
   const closeWaModal = () => {
@@ -167,7 +173,11 @@ export default function MainApp({ user, onLogout }) {
 
   const save = useCallback(async (newData) => {
     setData(newData);
-    try { await saveData(user.id, newData); } catch {}
+    try {
+      await saveData(user.id, newData);
+    } catch {
+      Alert.alert('Error al guardar', 'No se pudieron guardar los cambios. Verificá tu conexión.');
+    }
   }, [user]);
 
   if (loading) return (
@@ -204,7 +214,7 @@ export default function MainApp({ user, onLogout }) {
       <View style={{ flex:1, backgroundColor:C.bg }}>
         {/* Tab content */}
         <View style={{ flex:1 }}>
-          {tab==='inicio'   && <InicioTab data={data} onSave={save} onMonthPress={() => setMonthPicker(true)} nombre={nombre} onOpenPanel={setPanel}/>}
+          {tab==='inicio'   && <InicioTab data={data} onSave={save} onMonthPress={() => setMonthPicker(true)} nombre={nombre} onOpenPanel={setPanel} onEditTx={tx => { setEditTx(tx); setAddModal(true); }}/>}
           {tab==='analisis' && <AnalisisTab data={data} onSave={save}/>}
           {tab==='perfil'   && <PerfilTab user={user} onLogout={onLogout} connectWhatsApp={connectWhatsApp} waLinked={waLinked} dark={dark} setDark={setDark} data={data}/>}
         </View>
@@ -213,11 +223,14 @@ export default function MainApp({ user, onLogout }) {
         <Modal visible={!!panel} animationType="slide" onRequestClose={() => setPanel(null)}>
           <ThemeCtx.Provider value={C}>
             <View style={{ flex:1, backgroundColor: C.bg }}>
-              <View style={{ backgroundColor: C.accent, paddingTop: 52, paddingBottom: 16, paddingHorizontal: 20, flexDirection:'row', alignItems:'center', gap:12, borderBottomWidth:1, borderBottomColor:C.gold }}>
-                <TouchableOpacity onPress={() => setPanel(null)}>
-                  <Text style={{ color:'#fff', fontSize:22 }}>←</Text>
+              <View style={{ backgroundColor: C.accent, paddingTop: 52, paddingBottom: 18, paddingHorizontal: 20, flexDirection:'row', alignItems:'center', gap:12, borderBottomWidth:1, borderBottomColor:C.gold+'60', overflow:'hidden' }}>
+                {/* Decorative blobs */}
+                <View style={{ position:'absolute', top:-40, right:-40, width:160, height:160, borderRadius:80, backgroundColor:'#FFFFFF07', pointerEvents:'none' }}/>
+                <View style={{ position:'absolute', bottom:-60, left:-60, width:180, height:180, borderRadius:90, backgroundColor:'#C9A84C08', pointerEvents:'none' }}/>
+                <TouchableOpacity onPress={() => setPanel(null)} style={{ width:36, height:36, borderRadius:18, backgroundColor:'#FFFFFF15', alignItems:'center', justifyContent:'center', borderWidth:1, borderColor:'#FFFFFF25' }}>
+                  <Text style={{ color:'#fff', fontSize:18 }}>←</Text>
                 </TouchableOpacity>
-                <Text style={{ color:'#fff', fontSize:18, fontWeight:'800' }}>{PANEL_LABELS[panel]}</Text>
+                <Text style={{ color:'#fff', fontSize:19, fontWeight:'800', letterSpacing:-0.3 }}>{PANEL_LABELS[panel]}</Text>
               </View>
               {panel==='ahorros'    && <Ahorros    data={data} onSave={save}/>}
               {panel==='deudas'     && <Deudas     data={data} onSave={save}/>}
@@ -233,10 +246,10 @@ export default function MainApp({ user, onLogout }) {
         <View style={{
           flexDirection:'row', backgroundColor:C.tab,
           paddingBottom:28, paddingTop:10,
-          borderTopWidth:1, borderTopColor:C.border,
-          shadowColor: C.dark ? '#000' : '#6366F1',
-          shadowOffset:{width:0,height:-4},
-          shadowOpacity:C.dark?0.5:0.08, shadowRadius:16, elevation:14,
+          borderTopWidth:1, borderTopColor:C.gold+'40',
+          shadowColor: C.gold,
+          shadowOffset:{width:0,height:-6},
+          shadowOpacity:0.12, shadowRadius:20, elevation:14,
         }}>
           {TABS.map(t => {
             const isActive = tab === t.key;
@@ -264,7 +277,7 @@ export default function MainApp({ user, onLogout }) {
                       }
                     </View>
                     <Text style={{ fontSize:10, fontWeight:'700', color: isActive ? C.accent : C.textMuted, marginTop:2, letterSpacing:0.2 }}>{t.label}</Text>
-                    {isActive && <View style={{ width:4, height:4, borderRadius:2, backgroundColor:C.accent, marginTop:3 }}/>}
+                    {isActive && <View style={{ width:20, height:3, borderRadius:2, backgroundColor:C.gold, marginTop:3, shadowColor:C.gold, shadowOffset:{width:0,height:2}, shadowOpacity:0.8, shadowRadius:6 }}/>}
                   </>
                 )}
               </TouchableOpacity>
@@ -273,7 +286,7 @@ export default function MainApp({ user, onLogout }) {
         </View>
 
         {/* Add Transaction Modal */}
-        <AddTxModal visible={addModal} onClose={() => setAddModal(false)} data={data} onSave={save}/>
+        <AddTxModal visible={addModal} onClose={() => { setAddModal(false); setEditTx(null); }} data={data} onSave={save} editTx={editTx}/>
 
         {/* Month Picker */}
         <ModalSheet visible={monthPicker} onClose={() => setMonthPicker(false)} title="Seleccionar mes">

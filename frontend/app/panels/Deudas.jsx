@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert, TextInput } from 'react-native';
 import { useC } from '../../lib/theme';
-import { fmt, fmtAmt, parseAmt, MONTH_NAMES } from '../../lib/constants';
+import { fmt, fmtAmt, parseAmt, MONTH_NAMES, DEFAULT_CATEGORIES } from '../../lib/constants';
 import { Card, Btn, Input, FAB, ModalSheet, IconCircle } from '../../components/ui';
 
 export default function Deudas({ data, onSave }) {
@@ -50,7 +50,9 @@ export default function Deudas({ data, onSave }) {
     const deuda = data.debts.find(d => d.id===id);
     const realAmt = Math.min(amt, deuda.remaining);
     const debts = data.debts.map(d => d.id===id ? { ...d, remaining:Math.max(0,d.remaining-realAmt), remainingInstallments:Math.max(0,(d.remainingInstallments||0)-1) } : d);
-    const tx = { id:Date.now().toString(), type:'gasto', description:`Pago: ${deuda.name}`, amount:realAmt, category:'Préstamo tarjeta', date:new Date().toISOString().split('T')[0] };
+    const cats = data.categories || DEFAULT_CATEGORIES;
+    const payCategory = cats['Préstamo tarjeta'] ? 'Préstamo tarjeta' : 'Otros';
+    const tx = { id:Date.now().toString(), type:'gasto', description:`Pago: ${deuda.name}`, amount:realAmt, category:payCategory, date:new Date().toISOString().split('T')[0] };
     onSave({ ...data, debts, transactions:[...data.transactions, tx] });
     setPayAmt({ ...payAmt, [id]:'' });
   };

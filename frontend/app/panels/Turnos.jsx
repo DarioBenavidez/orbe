@@ -15,6 +15,10 @@ export default function Turnos({ data, onSave }) {
 
   const addTurno = () => {
     if (!form.description || !form.date) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(form.date)) {
+      Alert.alert('Fecha inválida', 'Usá el formato YYYY-MM-DD (ej: 2026-04-15)');
+      return;
+    }
     const turno = { ...form, id: Date.now().toString(), notified: false };
     onSave({ ...data, turnos: [...(data.turnos || []), turno] });
     setModal(false); setForm(emptyF);

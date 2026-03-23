@@ -38,13 +38,19 @@ export default function AnalisisTab({ data, onSave }) {
     onSave({ ...data, categories:{ ...cats, [key]:catForm.icon }, budgets:[...data.budgets, { cat:key, limit:0 }] });
     setCatModal(false); setCatForm({ icon:'📦', name:'' });
   };
-  const deleteCategory = (cat) => Alert.alert('Eliminar categoría',`¿Eliminar "${cat}"?`,[
-    { text:'Cancelar' },
-    { text:'Eliminar', style:'destructive', onPress: () => {
-      const nc = {...cats}; delete nc[cat];
-      onSave({ ...data, categories:nc, budgets:data.budgets.filter(b => b.cat!==cat) });
-    }},
-  ]);
+  const deleteCategory = (cat) => {
+    const txCount = data.transactions.filter(t => t.category === cat).length;
+    const msg = txCount > 0
+      ? `¿Eliminar "${cat}"? Hay ${txCount} transacción${txCount !== 1 ? 'es' : ''} con esta categoría que quedarán sin categorizar.`
+      : `¿Eliminar "${cat}"?`;
+    Alert.alert('Eliminar categoría', msg, [
+      { text:'Cancelar' },
+      { text:'Eliminar', style:'destructive', onPress: () => {
+        const nc = {...cats}; delete nc[cat];
+        onSave({ ...data, categories:nc, budgets:data.budgets.filter(b => b.cat!==cat) });
+      }},
+    ]);
+  };
   const saveEditCat = () => {
     if (!editCat) return;
     const nc = {...cats};

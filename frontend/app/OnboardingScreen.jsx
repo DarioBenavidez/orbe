@@ -76,6 +76,10 @@ export default function OnboardingScreen({ onDone }) {
   return (
     <View style={s.root}>
 
+      {/* Decorative blobs */}
+      <View style={s.blob1} />
+      <View style={s.blob2} />
+
       {/* Slides */}
       <ScrollView
         ref={scrollRef}
@@ -88,7 +92,7 @@ export default function OnboardingScreen({ onDone }) {
         {SLIDES.map((slide, i) => (
           <View key={i} style={s.slide}>
             {slide.welcome ? (
-              <Image source={require('../assets/images/orbe-logo.png')} style={{ width: width * 0.7, height: 120, marginBottom: 40 }} resizeMode="contain"/>
+              <Image source={require('../assets/images/orbe-logo.png')} style={{ width: width * 0.85, height: 200, marginBottom: 40 }} resizeMode="contain"/>
             ) : (
               <View style={[s.iconCircle, { borderColor: slide.accent }]}>
                 {slide.whatsapp
@@ -136,15 +140,19 @@ const s = StyleSheet.create({
     flex: 1,
     backgroundColor: C.green,
     paddingBottom: 48,
+    overflow: 'hidden',
   },
-  logoWrap: {
-    alignItems: 'center',
-    paddingTop: 64,
-    paddingBottom: 8,
+
+  // Decorative blobs
+  blob1: {
+    position: 'absolute', top: -80, right: -80,
+    width: 280, height: 280, borderRadius: 140,
+    backgroundColor: '#FFFFFF06',
   },
-  logo: {
-    width: 200,
-    height: 80,
+  blob2: {
+    position: 'absolute', bottom: 80, left: -100,
+    width: 320, height: 320, borderRadius: 160,
+    backgroundColor: '#C9A84C07',
   },
 
   // Slides
@@ -156,29 +164,31 @@ const s = StyleSheet.create({
     paddingVertical: 24,
   },
   iconCircle: {
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    borderWidth: 1.5,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+    borderWidth: 1,
+    borderColor: '#FFFFFF20',
     backgroundColor: '#FFFFFF10',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 32,
   },
-  iconText:  { fontSize: 48 },
+  iconText: { fontSize: 52 },
   title: {
-    fontSize: 26,
+    fontSize: 30,
     fontWeight: '800',
     color: C.white,
     textAlign: 'center',
-    letterSpacing: -0.5,
-    marginBottom: 16,
+    letterSpacing: -0.8,
+    marginBottom: 14,
+    lineHeight: 36,
   },
   body: {
     fontSize: 15,
     color: C.whiteMuted,
     textAlign: 'center',
-    lineHeight: 23,
+    lineHeight: 24,
   },
 
   // Dots
@@ -192,11 +202,15 @@ const s = StyleSheet.create({
     width: 7,
     height: 7,
     borderRadius: 4,
-    backgroundColor: '#FFFFFF30',
+    backgroundColor: '#FFFFFF25',
   },
   dotActive: {
     backgroundColor: C.gold,
-    width: 22,
+    width: 24,
+    shadowColor: C.gold,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.8,
+    shadowRadius: 6,
   },
 
   // Buttons
@@ -211,7 +225,7 @@ const s = StyleSheet.create({
     alignItems: 'center',
     borderRadius: 18,
     borderWidth: 1,
-    borderColor: '#FFFFFF30',
+    borderColor: '#FFFFFF25',
   },
   skipText: { color: C.whiteMuted, fontSize: 15, fontWeight: '600' },
   nextBtn: {
@@ -222,6 +236,11 @@ const s = StyleSheet.create({
     backgroundColor: C.gold,
     borderWidth: 1,
     borderColor: C.goldLight,
+    shadowColor: C.gold,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.45,
+    shadowRadius: 16,
+    elevation: 10,
   },
   nextBtnFull: { flex: 1 },
   nextText: { color: C.green, fontSize: 15, fontWeight: '800' },

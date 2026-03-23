@@ -10,7 +10,6 @@ export default function AddTxModal({ visible, onClose, data, onSave, editTx }) {
   const TYPES = [
     { key:'gasto', label:'Gasto' }, { key:'ingreso', label:'Ingreso' },
     { key:'sueldo', label:'Sueldo 💼' }, { key:'ahorro_meta', label:'Ahorro 🐷' },
-    { key:'presupuesto', label:'Presupuesto' },
   ];
   const emptyForm = { type:'gasto', description:'', amount:'', category:'', date: new Date().toISOString().split('T')[0], savingsId:'' };
   const [form, setForm]             = useState(emptyForm);
@@ -33,19 +32,6 @@ export default function AddTxModal({ visible, onClose, data, onSave, editTx }) {
   };
 
   const saveTx = () => {
-    if (form.type === 'presupuesto') {
-      if (!form.category) return Alert.alert('Categoría requerida', 'Seleccioná una categoría para el presupuesto');
-      if (!form.amount || parseAmt(form.amount) <= 0) return Alert.alert('Error', 'Ingresá un monto válido');
-      const amt = parseAmt(form.amount);
-      const existingBudgets = data.budgets || [];
-      const updated = existingBudgets.some(b => b.cat === form.category)
-        ? existingBudgets.map(b => b.cat === form.category ? { ...b, limit: amt } : b)
-        : [...existingBudgets, { cat: form.category, limit: amt }];
-      onSave({ ...data, budgets: updated });
-      onClose();
-      setForm(emptyForm);
-      return;
-    }
     if (!form.description.trim()) return Alert.alert('Error', 'Ingresá una descripción');
     if (!form.amount || parseAmt(form.amount) <= 0) return Alert.alert('Error', 'Ingresá un monto válido');
     if ((form.type==='gasto'||form.type==='ingreso') && !form.category) return Alert.alert('Categoría requerida', 'Seleccioná una categoría para continuar');
@@ -54,7 +40,7 @@ export default function AddTxModal({ visible, onClose, data, onSave, editTx }) {
     if (isEditing) {
       newData = { ...newData, transactions: newData.transactions.map(t => t.id===editTx.id ? { ...form, amount:amt } : t) };
     } else {
-      const tx = { ...form, id: crypto.randomUUID(), amount:amt };
+      const tx = { ...form, id: Date.now().toString(), amount:amt };
       if (form.type==='ahorro_meta' && form.savingsId) {
         const savings = data.savings.map(sv =>
           sv.id===form.savingsId
@@ -70,7 +56,7 @@ export default function AddTxModal({ visible, onClose, data, onSave, editTx }) {
     setForm(emptyForm);
   };
 
-  const needsCategory = form.type==='gasto' || form.type==='ingreso' || form.type==='presupuesto';
+  const needsCategory = form.type==='gasto' || form.type==='ingreso';
   const currentCats = data.categories || DEFAULT_CATEGORIES;
 
   return (
@@ -97,11 +83,9 @@ export default function AddTxModal({ visible, onClose, data, onSave, editTx }) {
                 <Chip key={cat} label={`${icon} ${cat}`} active={form.category===cat}
                   onPress={() => setForm(f => ({ ...f, category:cat }))} style={{ marginRight:8 }}/>
               ))}
-              {form.type !== 'presupuesto' && (
-                <Chip label="+ Nueva" active={showNewCat} onPress={() => setShowNewCat(s => !s)} style={{ marginRight:8 }}/>
-              )}
+              <Chip label="+ Nueva" active={showNewCat} onPress={() => setShowNewCat(s => !s)} style={{ marginRight:8 }}/>
             </ScrollView>
-            {showNewCat && form.type !== 'presupuesto' && (
+            {showNewCat && (
               <View style={{ flexDirection:'row', gap:8, marginBottom:14 }}>
                 <TextInput
                   style={{ flex:1, backgroundColor:C.surface2, borderRadius:12, paddingHorizontal:14, paddingVertical:10, fontSize:14, color:C.text }}

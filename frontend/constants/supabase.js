@@ -53,22 +53,26 @@ export async function loadData(uid) {
   if (!d || typeof d !== 'object') return null;
   // Merge with defaults to handle users with older schema (missing fields)
   return {
-    transactions:    Array.isArray(d.transactions)   ? d.transactions   : [],
-    budgets:         Array.isArray(d.budgets)         ? d.budgets        : [],
-    categories:      d.categories && typeof d.categories === 'object' ? d.categories : {},
-    savings:         Array.isArray(d.savings)         ? d.savings        : [],
-    debts:           Array.isArray(d.debts)           ? d.debts          : [],
-    events:          Array.isArray(d.events)          ? d.events         : [],
-    vocabulario:        Array.isArray(d.vocabulario)        ? d.vocabulario        : [],
-    recurringIncomes:   Array.isArray(d.recurringIncomes)   ? d.recurringIncomes   : [],
-    salaryOverrides:    Array.isArray(d.salaryOverrides)    ? d.salaryOverrides    : [],
-    selectedMonth:   typeof d.selectedMonth === 'number' ? d.selectedMonth : new Date().getMonth(),
-    selectedYear:    typeof d.selectedYear  === 'number' ? d.selectedYear  : new Date().getFullYear(),
+    transactions:     Array.isArray(d.transactions)    ? d.transactions    : [],
+    budgets:          Array.isArray(d.budgets)          ? d.budgets         : [],
+    categories:       d.categories && typeof d.categories === 'object' ? d.categories : {},
+    savings:          Array.isArray(d.savings)          ? d.savings         : [],
+    debts:            Array.isArray(d.debts)            ? d.debts           : [],
+    events:           Array.isArray(d.events)           ? d.events          : [],
+    turnos:           Array.isArray(d.turnos)           ? d.turnos          : [],
+    loans:            Array.isArray(d.loans)            ? d.loans           : [],
+    credits:          d.credits && typeof d.credits === 'object' ? d.credits : {},
+    vocabulario:      Array.isArray(d.vocabulario)      ? d.vocabulario     : [],
+    recurringIncomes: Array.isArray(d.recurringIncomes) ? d.recurringIncomes : [],
+    salaryOverrides:  Array.isArray(d.salaryOverrides)  ? d.salaryOverrides : [],
+    selectedMonth:    typeof d.selectedMonth === 'number' ? d.selectedMonth : new Date().getMonth(),
+    selectedYear:     typeof d.selectedYear  === 'number' ? d.selectedYear  : new Date().getFullYear(),
   };
 }
 
 export async function saveData(uid, payload) {
-  await supabase
+  const { error } = await supabase
     .from('finanzas')
     .upsert({ id: uid, data: payload, updated_at: new Date().toISOString() });
+  if (error) throw error;
 }

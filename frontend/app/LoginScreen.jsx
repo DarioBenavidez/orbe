@@ -97,6 +97,7 @@ export default function LoginScreen({ onLogin }) {
   const handleSubmit = async () => {
     clear(); setLoading(true);
     try {
+      if (!email.includes('@') || !email.includes('.')) throw new Error('Ingresá un email válido');
       if (mode === 'register') {
         if (!nombre.trim() || !apellido.trim()) throw new Error('Ingresá tu nombre y apellido');
         if (!pwValid) throw new Error('La contraseña no cumple los requisitos');
@@ -159,17 +160,23 @@ export default function LoginScreen({ onLogin }) {
   const isReset    = mode === 'reset';
 
   return (
-    <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    <KeyboardAvoidingView style={styles.root} behavior="padding">
       <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
         {/* ── Header verde con logo ── */}
         <View style={styles.header}>
-          <Image
-            source={require('../assets/images/orbe-logo.png')}
-            style={styles.logo}
-            resizeMode="contain"
-          />
-          <Text style={styles.tagline}>Tu asistente financiero personal</Text>
+          <View style={styles.headerBlob1} />
+          <View style={styles.headerBlob2} />
+          <View style={{ position: 'relative' }}>
+            <Image
+              source={require('../assets/images/orbe-logo.png')}
+              style={styles.logo}
+              resizeMode="contain"
+            />
+            <Text style={[styles.tagline, { position: 'absolute', bottom: 60, left: 0, right: 0, textAlign: 'center' }]}>
+              Tu asistente financiero personal
+            </Text>
+          </View>
         </View>
 
         {/* ── Card blanca ── */}
@@ -272,16 +279,21 @@ export default function LoginScreen({ onLogin }) {
             </>
           )}
 
+          {/* Botón registrarse (solo en login) */}
+          {isLogin && (
+            <TouchableOpacity
+              style={styles.registerBtn}
+              onPress={() => { setMode('register'); clear(); }}
+            >
+              <Text style={styles.registerBtnText}>Registrarse</Text>
+            </TouchableOpacity>
+          )}
+
           {/* Links de modo */}
           <View style={styles.links}>
             {!isLogin && (
               <TouchableOpacity onPress={() => { setMode('login'); clear(); }}>
                 <Text style={styles.link}>¿Ya tenés cuenta? <Text style={styles.linkBold}>Iniciá sesión</Text></Text>
-              </TouchableOpacity>
-            )}
-            {!isRegister && (
-              <TouchableOpacity onPress={() => { setMode('register'); clear(); }}>
-                <Text style={styles.link}>¿No tenés cuenta? <Text style={styles.linkBold}>Registrate</Text></Text>
               </TouchableOpacity>
             )}
             {!isReset && (
@@ -306,20 +318,32 @@ const styles = StyleSheet.create({
     backgroundColor: C.green,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 70,
-    paddingBottom: 36,
+    paddingTop: 60,
+    paddingBottom: 20,
     paddingHorizontal: 24,
+    overflow: 'hidden',
+  },
+  headerBlob1: {
+    position: 'absolute', top: -60, right: -60,
+    width: 220, height: 220, borderRadius: 110,
+    backgroundColor: '#FFFFFF06',
+  },
+  headerBlob2: {
+    position: 'absolute', bottom: -40, left: -80,
+    width: 200, height: 200, borderRadius: 100,
+    backgroundColor: '#C9A84C08',
   },
   logo: {
-    width: 380,
-    height: 170,
-    marginBottom: 12,
+    width: 420,
+    height: 220,
+    marginBottom: 4,
   },
   tagline: {
     color: '#FFFFFF80',
     fontSize: 13,
     fontWeight: '500',
     letterSpacing: 0.3,
+    marginTop: 0,
   },
 
   // Card
@@ -376,15 +400,26 @@ const styles = StyleSheet.create({
     paddingVertical: 17,
     alignItems: 'center',
     marginTop: 8,
-    borderWidth: 0.8,
+    borderWidth: 1,
     borderColor: C.gold,
     shadowColor: C.gold,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 8,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 10,
   },
   mainBtnText: { color: C.goldLight, fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
+
+  registerBtn: {
+    borderRadius: 18,
+    paddingVertical: 17,
+    alignItems: 'center',
+    marginTop: 12,
+    borderWidth: 1.5,
+    borderColor: C.green,
+    backgroundColor: 'transparent',
+  },
+  registerBtnText: { color: C.green, fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
 
   // Divider
   divider: {
