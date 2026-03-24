@@ -54,19 +54,26 @@ export default function PerfilTab({ user, onLogout, connectWhatsApp, waLinked, d
   };
 
   const [bioEnabled,   setBioEnabled]   = useState(false);
-  const [bioAvailable, setBioAvailable] = useState(false);
+  const [bioHardware,  setBioHardware]  = useState(false);
   useEffect(() => {
     let LA;
     try { LA = require('expo-local-authentication'); } catch { return; }
     LA.hasHardwareAsync().then(has => {
       if (!has) return;
-      LA.isEnrolledAsync().then(enrolled => {
-        setBioAvailable(enrolled);
-        AsyncStorage.getItem('orbe_bio').then(v => setBioEnabled(v === '1')).catch(() => {});
-      });
+      setBioHardware(true);
+      AsyncStorage.getItem('orbe_bio').then(v => setBioEnabled(v === '1')).catch(() => {});
     });
   }, []);
   const toggleBio = async (val) => {
+    if (val) {
+      let LA;
+      try { LA = require('expo-local-authentication'); } catch {}
+      const enrolled = LA ? await LA.isEnrolledAsync() : false;
+      if (!enrolled) {
+        Alert.alert('Biometría no configurada', 'Primero configurá Face ID o huella dactilar en los ajustes del dispositivo.');
+        return;
+      }
+    }
     setBioEnabled(val);
     await AsyncStorage.setItem('orbe_bio', val ? '1' : '0');
   };
@@ -107,7 +114,7 @@ export default function PerfilTab({ user, onLogout, connectWhatsApp, waLinked, d
           </Card>
 
           <Card style={{ marginBottom:14 }}>
-            {bioAvailable && (
+            {bioHardware && (
               <View style={{ flexDirection:'row', alignItems:'center', paddingVertical:14, borderBottomWidth:1, borderBottomColor:C.border }}>
                 <Text style={{ flex:1, fontSize:15, fontWeight:'600', color:C.text }}>Huella / Face ID</Text>
                 <Switch value={bioEnabled} onValueChange={toggleBio}
