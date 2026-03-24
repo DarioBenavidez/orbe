@@ -13,7 +13,7 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/images/icon.png",
+        "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundColor": "#005247"
       },
       "edgeToEdgeEnabled": true,
@@ -30,12 +30,12 @@
       [
         "expo-splash-screen",
         {
-          "image": "./assets/images/splash-icon.png",
-          "imageWidth": 200,
+          "image": "./assets/images/orbe-logo.png",
+          "imageWidth": 280,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
+          "backgroundColor": "#005247",
           "dark": {
-            "backgroundColor": "#000000"
+            "backgroundColor": "#005247"
           }
         }
       ],
