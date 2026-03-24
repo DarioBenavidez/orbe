@@ -33,7 +33,7 @@ async function processAction(action, data, userId, userName, history = [], phone
         contextoHoy = `Hoy ya registraste: ${partes.join(' y ')}.`;
       }
 
-      const saludoPrompt = `Sos Orbe, el asistente financiero personal de ${name || 'tu usuario'}. Sos cálido, empático, cercano y hablás en español rioplatense informal. No sos un bot, sos una persona de confianza.
+      const saludoPrompt = `Sos Orbe, el asistente financiero personal de ${name || 'tu usuario'}. Sos cálido, empático, cercano y hablás en español rioplatense informal. Sos un asistente — nunca digas que sos humano ni que no sos un bot.
 
 Situación actual:
 - Saludo del horario: "${greeting}"
