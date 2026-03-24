@@ -1,11 +1,11 @@
 import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Alert, RefreshControl } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useC } from '../../lib/theme';
 import { fmt, parseDateParts, DEFAULT_CATEGORIES, MONTH_NAMES, cMonth, cYear } from '../../lib/constants';
 import { Card, TxRow, ScreenWithHeader, EmptyState } from '../../components/ui';
 
-export default function InicioTab({ data, onSave, onMonthPress, nombre, onOpenPanel, onEditTx, txFilter, setTxFilter }) {
+export default function InicioTab({ data, onSave, onMonthPress, nombre, onOpenPanel, onEditTx, txFilter, setTxFilter, onRefresh, refreshing }) {
   const C = useC();
   const txs = data.transactions.filter(t => {
     const { month, year } = parseDateParts(t.date);
@@ -92,7 +92,8 @@ export default function InicioTab({ data, onSave, onMonthPress, nombre, onOpenPa
         )}
       </>
     }>
-      <ScrollView contentContainerStyle={{ padding:16, paddingTop:20 }} showsVerticalScrollIndicator={false}>
+      <ScrollView contentContainerStyle={{ padding:16, paddingTop:20 }} showsVerticalScrollIndicator={false}
+        refreshControl={<RefreshControl refreshing={!!refreshing} onRefresh={onRefresh} tintColor="#C9A84C" colors={['#C9A84C']}/>}>
         <View style={{ marginBottom:12 }}>
           <ScrollView
             horizontal

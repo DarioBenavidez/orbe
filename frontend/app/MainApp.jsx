@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Linking, Modal } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Linking, Modal, AppState } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { FontAwesome5 } from '@expo/vector-icons';
 import { loadData, saveData, supabase, BACKEND_URL } from '../constants/supabase';
@@ -170,6 +170,18 @@ export default function MainApp({ user, onLogout }) {
     setWaModal(false);
   };
 
+  const [refreshing, setRefreshing] = useState(false);
+  const appState = useRef(AppState.currentState);
+
+  const reload = useCallback(async (showIndicator = false) => {
+    if (showIndicator) setRefreshing(true);
+    try {
+      const d = await loadData(user.id);
+      if (d) setData(d);
+    } catch (e) { console.error('[reload]', e); }
+    if (showIndicator) setRefreshing(false);
+  }, [user]);
+
   useEffect(() => {
     AsyncStorage.getItem('orbe_dark').then(v => { if (v === '1') setDarkState(true); }).catch(() => {});
     loadData(user.id)
@@ -178,6 +190,14 @@ export default function MainApp({ user, onLogout }) {
     supabase.from('whatsapp_users').select('phone, linked_at').eq('user_id', user.id).order('linked_at', { ascending: false })
       .then(({ data: waRows }) => setWaLinked(waRows?.[0]?.phone || false))
       .catch((e) => { console.error('[wa check]', e); setWaLinked(false); });
+
+    const sub = AppState.addEventListener('change', nextState => {
+      if (appState.current.match(/inactive|background/) && nextState === 'active') {
+        reload();
+      }
+      appState.current = nextState;
+    });
+    return () => sub.remove();
   }, [user]);
 
   const save = useCallback(async (newData) => {
@@ -227,7 +247,7 @@ export default function MainApp({ user, onLogout }) {
         <SaveIndicator saving={saving}/>
         {/* Tab content */}
         <View style={{ flex:1 }}>
-          {tab==='inicio'   && <InicioTab data={data} onSave={save} onMonthPress={() => setMonthPicker(true)} nombre={nombre} onOpenPanel={setPanel} onEditTx={tx => { setEditTx(tx); setAddModal(true); }} txFilter={txFilter} setTxFilter={setTxFilter}/>}
+          {tab==='inicio'   && <InicioTab data={data} onSave={save} onMonthPress={() => setMonthPicker(true)} nombre={nombre} onOpenPanel={setPanel} onEditTx={tx => { setEditTx(tx); setAddModal(true); }} txFilter={txFilter} setTxFilter={setTxFilter} onRefresh={() => reload(true)} refreshing={refreshing}/>}
           {tab==='analisis' && <AnalisisTab data={data} onSave={save}/>}
           {tab==='perfil'   && <PerfilTab user={user} onLogout={onLogout} connectWhatsApp={connectWhatsApp} waLinked={waLinked} dark={dark} setDark={setDark} data={data}/>}
         </View>
