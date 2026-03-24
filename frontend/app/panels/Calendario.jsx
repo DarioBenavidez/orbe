@@ -21,7 +21,8 @@ export default function Calendario({ data, onSave }) {
   const addEvent = () => {
     if (!form.title||!form.day) return;
     const dayNum = parseInt(form.day);
-    if (isNaN(dayNum) || dayNum < 1 || dayNum > 31) return Alert.alert('Día inválido', 'Ingresá un día entre 1 y 31.');
+    const maxDay = new Date(data.selectedYear, data.selectedMonth + 1, 0).getDate();
+    if (isNaN(dayNum) || dayNum < 1 || dayNum > maxDay) return Alert.alert('Día inválido', `Ingresá un día entre 1 y ${maxDay} para este mes.`);
     const ev = { ...form, id:Date.now().toString(), day:dayNum, notifyDaysBefore:parseInt(form.notifyDaysBefore)||2 };
     onSave({ ...data, events:[...events, ev] });
     setModal(false); setForm(emptyF);
@@ -33,7 +34,8 @@ export default function Calendario({ data, onSave }) {
   };
   const saveEdit = () => {
     const dayNum = parseInt(editForm.day);
-    if (isNaN(dayNum) || dayNum < 1 || dayNum > 31) return Alert.alert('Día inválido', 'Ingresá un día entre 1 y 31.');
+    const maxDay = new Date(data.selectedYear, data.selectedMonth + 1, 0).getDate();
+    if (isNaN(dayNum) || dayNum < 1 || dayNum > maxDay) return Alert.alert('Día inválido', `Ingresá un día entre 1 y ${maxDay} para este mes.`);
     const ev = { ...editForm, id:editTarget, day:dayNum, notifyDaysBefore:parseInt(editForm.notifyDaysBefore)||2 };
     onSave({ ...data, events:events.map(e => e.id===editTarget?ev:e) });
     setEditModal(false);

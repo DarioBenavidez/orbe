@@ -12,10 +12,10 @@ export default function Prestamos({ data, onSave }) {
   const totalPrestado  = loans.reduce((s, l) => s + (l.amount || 0), 0);
   const totalPendiente = loans.reduce((s, l) => s + (l.remaining ?? l.amount ?? 0), 0);
 
-  const delLoan = (name) => Alert.alert('Eliminar préstamo', `¿Eliminar el préstamo de ${name}?`, [
+  const delLoan = (index) => Alert.alert('Eliminar préstamo', `¿Eliminar el préstamo de ${loans[index].name}?`, [
     { text: 'Cancelar' },
     { text: 'Eliminar', style: 'destructive', onPress: () =>
-        onSave({ ...data, loans: loans.filter(l => l.name !== name) })
+        onSave({ ...data, loans: loans.filter((_, i) => i !== index) })
     },
   ]);
 
@@ -62,7 +62,7 @@ export default function Prestamos({ data, onSave }) {
           </Card>
         )}
 
-        {loans.map(l => {
+        {loans.map((l, i) => {
           const remaining = l.remaining ?? l.amount ?? 0;
           const total     = l.amount || 0;
           const pct       = total > 0 ? Math.min(((total - remaining) / total) * 100, 100) : 0;
@@ -77,7 +77,7 @@ export default function Prestamos({ data, onSave }) {
                     Pagado: {fmt(pagado)} · Pendiente: {fmt(remaining)}
                   </Text>
                 </View>
-                <TouchableOpacity onPress={() => delLoan(l.name)}>
+                <TouchableOpacity onPress={() => delLoan(i)}>
                   <Text style={{ color:C.red, fontSize:12 }}>Eliminar</Text>
                 </TouchableOpacity>
               </View>

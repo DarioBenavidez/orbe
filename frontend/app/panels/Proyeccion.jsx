@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert, Modal, KeyboardAvoidingView, Platform, TextInput } from 'react-native';
 import { useC } from '../../lib/theme';
 import { fmt, fmtAmt, parseAmt, parseDateParts, MONTH_NAMES, DEFAULT_CATEGORIES } from '../../lib/constants';
@@ -15,7 +15,7 @@ export default function Proyeccion({ data, onSave }) {
   const cats = data.categories || DEFAULT_CATEGORIES;
   const overrides = data.salaryOverrides || [];
 
-  const avgIncome = (() => {
+  const avgIncome = useMemo(() => {
     const totals=[];
     for (let i=0;i<3;i++){
       let m=startMonth-i; let y=startYear; if(m<0){m+=12;y--;}
@@ -26,7 +26,7 @@ export default function Proyeccion({ data, onSave }) {
       if(inc>0) totals.push(inc);
     }
     return totals.length>0?totals.reduce((a,b)=>a+b,0)/totals.length:0;
-  })();
+  }, [data.transactions]);
 
   const getIncome = (m, y) => {
     const absMonth = y * 12 + m;
@@ -36,16 +36,16 @@ export default function Proyeccion({ data, onSave }) {
     return applicable.length > 0 ? applicable[0].amount : avgIncome;
   };
 
-  const budgetItems = data.budgets.filter(b=>b.limit>0);
-  const budgetTotal = budgetItems.reduce((s,b)=>s+b.limit,0);
-  const activeDebts = data.debts.filter(d=>d.installment>0&&d.remainingInstallments>0);
-  const months = Array.from({length:12},(_,i)=>{
+  const budgetItems = useMemo(() => data.budgets.filter(b=>b.limit>0), [data.budgets]);
+  const budgetTotal = useMemo(() => budgetItems.reduce((s,b)=>s+b.limit,0), [budgetItems]);
+  const activeDebts = useMemo(() => data.debts.filter(d=>d.installment>0&&d.remainingInstallments>0), [data.debts]);
+  const months = useMemo(() => Array.from({length:12},(_,i)=>{
     const m=(startMonth+i)%12; const y=startYear+Math.floor((startMonth+i)/12);
     const income = getIncome(m, y);
     const cuotas=activeDebts.filter(d=>i<d.remainingInstallments).map(d=>({name:d.name,amount:d.installment}));
     const totalCuotas=cuotas.reduce((s,d)=>s+d.amount,0);
     return {label:MONTH_NAMES[m],year:y,income,cuotas,totalCuotas,balance:income-budgetTotal-totalCuotas};
-  });
+  }), [activeDebts, budgetTotal, avgIncome, overrides]);
 
   const saveOverride = () => {
     const amount = parseAmt(newSalary);

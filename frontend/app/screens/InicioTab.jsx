@@ -1,13 +1,12 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useC } from '../../lib/theme';
 import { fmt, parseDateParts, DEFAULT_CATEGORIES, MONTH_NAMES, cMonth, cYear } from '../../lib/constants';
 import { Card, TxRow, ScreenWithHeader, EmptyState } from '../../components/ui';
 
-export default function InicioTab({ data, onSave, onMonthPress, nombre, onOpenPanel, onEditTx }) {
+export default function InicioTab({ data, onSave, onMonthPress, nombre, onOpenPanel, onEditTx, txFilter, setTxFilter }) {
   const C = useC();
-  const [txFilter, setTxFilter] = useState('mes');
   const txs = data.transactions.filter(t => {
     const { month, year } = parseDateParts(t.date);
     return month === data.selectedMonth && year === data.selectedYear;

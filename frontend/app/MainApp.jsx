@@ -26,7 +26,8 @@ const TABS = [
   { key:'__add__',       label:'',         icon:'+' },
 ];
 
-const PICKER_YEARS = [2026, 2027, 2028, 2029, 2030];
+const _y = new Date().getFullYear();
+const PICKER_YEARS = Array.from({ length: 5 }, (_, i) => _y - 1 + i);
 const WA_POLLING_TIMEOUT_MS = 2 * 60 * 1000;
 
 const PANEL_LABELS = {
@@ -39,6 +40,7 @@ export default function MainApp({ user, onLogout }) {
   const [data,     setData]     = useState(null);
   const [loading,  setLoading]  = useState(true);
   const [saving,   setSaving]   = useState(false);
+  const [txFilter, setTxFilter] = useState('mes');
   const [dark,     setDarkState] = useState(false);
   const [monthPicker, setMonthPicker] = useState(false);
   const [addModal, setAddModal] = useState(false);
@@ -49,7 +51,7 @@ export default function MainApp({ user, onLogout }) {
 
   const setDark = useCallback(async (val) => {
     setDarkState(val);
-    try { await AsyncStorage.setItem('orbe_dark', val ? '1' : '0'); } catch {}
+    try { await AsyncStorage.setItem('orbe_dark', val ? '1' : '0'); } catch (e) { console.error('[dark mode]', e); }
   }, []);
 
   const meta     = user?.user_metadata || {};
@@ -61,9 +63,10 @@ export default function MainApp({ user, onLogout }) {
   const [waPhone,   setWaPhone]   = useState('');
   const [waOtp,     setWaOtp]     = useState('');
   const [waCode,    setWaCode]    = useState('');
-  const [waLoading, setWaLoading] = useState(false);
-  const [waError,   setWaError]   = useState('');
-  const [waPolling, setWaPolling] = useState(null);
+  const [waLoading,   setWaLoading]   = useState(false);
+  const [waError,     setWaError]     = useState('');
+  const [waPolling,   setWaPolling]   = useState(null);
+  const [waOtpSentAt, setWaOtpSentAt] = useState(null);
 
   const formatWaPhone = (raw) => {
     let digits = raw.replace(/\D/g, '');
@@ -84,6 +87,10 @@ export default function MainApp({ user, onLogout }) {
   };
 
   const sendOtp = async () => {
+    if (waOtpSentAt && Date.now() - waOtpSentAt < 60000) {
+      setWaError('Esperá 60 segundos antes de reenviar el código.');
+      return;
+    }
     setWaError(''); setWaLoading(true);
     try {
       const { data: { session } } = await supabase.auth.getSession();
@@ -106,6 +113,7 @@ export default function MainApp({ user, onLogout }) {
         if (body2.code) { setWaCode(body2.code); setWaStep('fallback'); }
         else setWaError('Error generando el código. Intentá de nuevo.');
       } else if (resp.ok) {
+        setWaOtpSentAt(Date.now());
         setWaStep('otp');
       } else {
         setWaError(body.error || 'No se pudo enviar el código.');
@@ -166,10 +174,10 @@ export default function MainApp({ user, onLogout }) {
     AsyncStorage.getItem('orbe_dark').then(v => { if (v === '1') setDarkState(true); }).catch(() => {});
     loadData(user.id)
       .then(d => { setData(d || defaultData()); setLoading(false); })
-      .catch(() => { setData(defaultData()); setLoading(false); });
+      .catch((e) => { console.error('[load data]', e); setData(defaultData()); setLoading(false); });
     supabase.from('whatsapp_users').select('phone, linked_at').eq('user_id', user.id).order('linked_at', { ascending: false })
       .then(({ data: waRows }) => setWaLinked(waRows?.[0]?.phone || false))
-      .catch(() => setWaLinked(false));
+      .catch((e) => { console.error('[wa check]', e); setWaLinked(false); });
   }, [user]);
 
   const save = useCallback(async (newData) => {
@@ -219,7 +227,7 @@ export default function MainApp({ user, onLogout }) {
         <SaveIndicator saving={saving}/>
         {/* Tab content */}
         <View style={{ flex:1 }}>
-          {tab==='inicio'   && <InicioTab data={data} onSave={save} onMonthPress={() => setMonthPicker(true)} nombre={nombre} onOpenPanel={setPanel} onEditTx={tx => { setEditTx(tx); setAddModal(true); }}/>}
+          {tab==='inicio'   && <InicioTab data={data} onSave={save} onMonthPress={() => setMonthPicker(true)} nombre={nombre} onOpenPanel={setPanel} onEditTx={tx => { setEditTx(tx); setAddModal(true); }} txFilter={txFilter} setTxFilter={setTxFilter}/>}
           {tab==='analisis' && <AnalisisTab data={data} onSave={save}/>}
           {tab==='perfil'   && <PerfilTab user={user} onLogout={onLogout} connectWhatsApp={connectWhatsApp} waLinked={waLinked} dark={dark} setDark={setDark} data={data}/>}
         </View>

@@ -101,7 +101,7 @@ export default function FinancialOnboardingScreen({ user, onDone }) {
         data.salaryOverrides = [...overrides, { fromMonth: month, fromYear: year, amount }];
         await saveData(user.id, data);
       }
-    } catch {}
+    } catch (e) { console.error('[onboarding] saveSueldo:', e); }
     setSaving(false);
     next();
   };

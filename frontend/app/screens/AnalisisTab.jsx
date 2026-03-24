@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, Alert } from 'react-native';
 import { useC } from '../../lib/theme';
 import { fmt, fmtAmt, parseAmt, parseDateParts, MONTH_NAMES, DEFAULT_CATEGORIES } from '../../lib/constants';
@@ -7,15 +7,18 @@ import { Card, Btn, Input, ModalSheet, Chip, BarChart, ScreenWithHeader, EmptySt
 export default function AnalisisTab({ data, onSave }) {
   const C = useC();
   const cats = data.categories || DEFAULT_CATEGORIES;
-  const txs  = data.transactions.filter(t => {
-    const { month, year } = parseDateParts(t.date);
-    return month===data.selectedMonth && year===data.selectedYear;
-  });
-  const totalIncome  = txs.filter(t => t.type==='ingreso'||t.type==='sueldo').reduce((a,t) => a+t.amount, 0);
-  const totalExpense = txs.filter(t => t.type==='gasto' || t.type==='ahorro_meta').reduce((a,t) => a+t.amount, 0);
-  const expByCat     = txs.filter(t => t.type==='gasto').reduce((acc,t) => { acc[t.category]=(acc[t.category]||0)+t.amount; return acc; }, {});
-  const topGastos    = Object.entries(expByCat).sort((a,b) => b[1]-a[1]).slice(0,5);
-  const maxG         = topGastos[0]?.[1] || 1;
+  const { txs, totalIncome, totalExpense, expByCat, topGastos, maxG } = useMemo(() => {
+    const txs  = data.transactions.filter(t => {
+      const { month, year } = parseDateParts(t.date);
+      return month===data.selectedMonth && year===data.selectedYear;
+    });
+    const totalIncome  = txs.filter(t => t.type==='ingreso'||t.type==='sueldo').reduce((a,t) => a+t.amount, 0);
+    const totalExpense = txs.filter(t => t.type==='gasto' || t.type==='ahorro_meta').reduce((a,t) => a+t.amount, 0);
+    const expByCat     = txs.filter(t => t.type==='gasto').reduce((acc,t) => { acc[t.category]=(acc[t.category]||0)+t.amount; return acc; }, {});
+    const topGastos    = Object.entries(expByCat).sort((a,b) => b[1]-a[1]).slice(0,5);
+    const maxG         = topGastos[0]?.[1] || 1;
+    return { txs, totalIncome, totalExpense, expByCat, topGastos, maxG };
+  }, [data.transactions, data.selectedMonth, data.selectedYear]);
 
   const [editing, setEditing]             = useState({});
   const [editingValues, setEditingValues] = useState({});
@@ -65,7 +68,7 @@ export default function AnalisisTab({ data, onSave }) {
     setEditCat(null);
   };
 
-  const chartData = Array.from({ length:6 }, (_, i) => {
+  const chartData = useMemo(() => Array.from({ length:6 }, (_, i) => {
     let m = data.selectedMonth - (5-i); let y = data.selectedYear;
     if (m < 0) { m += 12; y--; }
     const mTxs = data.transactions.filter(t => { const { month, year } = parseDateParts(t.date); return month===m && year===y; });
@@ -74,7 +77,7 @@ export default function AnalisisTab({ data, onSave }) {
       income:  mTxs.filter(t => t.type==='ingreso'||t.type==='sueldo').reduce((a,t) => a+t.amount, 0),
       expense: mTxs.filter(t => t.type==='gasto').reduce((a,t) => a+t.amount, 0),
     };
-  });
+  }), [data.transactions, data.selectedMonth, data.selectedYear]);
 
   return (
     <ScreenWithHeader header={
