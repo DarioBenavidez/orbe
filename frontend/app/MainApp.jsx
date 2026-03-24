@@ -368,8 +368,8 @@ export default function MainApp({ user, onLogout }) {
               <Input
                 label="Código de verificación"
                 value={waOtp}
-                onChangeText={v => setWaOtp(v.replace(/\D/g, '').slice(0, 6))}
-                placeholder="123456"
+                onChangeText={v => setWaOtp(v.replace(/\D/g, '').slice(0, 8))}
+                placeholder="12345678"
                 keyboardType="number-pad"
               />
               {waError ? <Text style={{ color:C.red, fontSize:12, marginBottom:12 }}>{waError}</Text> : null}
