@@ -6,7 +6,7 @@ import { loadData, saveData, supabase, BACKEND_URL } from '../constants/supabase
 
 import { ThemeCtx, mkTheme } from '../lib/theme';
 import { defaultData, MONTH_NAMES } from '../lib/constants';
-import { ModalSheet, Chip, Btn, Input } from '../components/ui';
+import { ModalSheet, Chip, Btn, Input, SaveIndicator } from '../components/ui';
 import AddTxModal  from '../components/AddTxModal';
 import InicioTab   from './screens/InicioTab';
 import AnalisisTab from './screens/AnalisisTab';
@@ -38,6 +38,7 @@ export default function MainApp({ user, onLogout }) {
   const [tab,      setTab]      = useState('inicio');
   const [data,     setData]     = useState(null);
   const [loading,  setLoading]  = useState(true);
+  const [saving,   setSaving]   = useState(false);
   const [dark,     setDarkState] = useState(false);
   const [monthPicker, setMonthPicker] = useState(false);
   const [addModal, setAddModal] = useState(false);
@@ -173,10 +174,13 @@ export default function MainApp({ user, onLogout }) {
 
   const save = useCallback(async (newData) => {
     setData(newData);
+    setSaving(true);
     try {
       await saveData(user.id, newData);
     } catch {
       Alert.alert('Error al guardar', 'No se pudieron guardar los cambios. Verificá tu conexión.');
+    } finally {
+      setSaving(false);
     }
   }, [user]);
 
@@ -212,6 +216,7 @@ export default function MainApp({ user, onLogout }) {
   return (
     <ThemeCtx.Provider value={C}>
       <View style={{ flex:1, backgroundColor:C.bg }}>
+        <SaveIndicator saving={saving}/>
         {/* Tab content */}
         <View style={{ flex:1 }}>
           {tab==='inicio'   && <InicioTab data={data} onSave={save} onMonthPress={() => setMonthPicker(true)} nombre={nombre} onOpenPanel={setPanel} onEditTx={tx => { setEditTx(tx); setAddModal(true); }}/>}

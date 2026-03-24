@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, TextInput, Alert } from 'react-native';
 import { useC } from '../../lib/theme';
 import { fmt, fmtAmt, parseAmt, parseDateParts, MONTH_NAMES, DEFAULT_CATEGORIES } from '../../lib/constants';
-import { Card, Btn, Input, ModalSheet, Chip, BarChart, ScreenWithHeader } from '../../components/ui';
+import { Card, Btn, Input, ModalSheet, Chip, BarChart, ScreenWithHeader, EmptyState } from '../../components/ui';
 
 export default function AnalisisTab({ data, onSave }) {
   const C = useC();
@@ -112,7 +112,7 @@ export default function AnalisisTab({ data, onSave }) {
         <Card style={{ marginBottom:14 }}>
           <Text style={{ fontSize:15, fontWeight:'700', color:C.text, marginBottom:14 }}>Top gastos</Text>
           {topGastos.length === 0
-            ? <Text style={{ color:C.textDim, fontSize:13, textAlign:'center', paddingVertical:16 }}>Sin gastos este mes</Text>
+            ? <EmptyState icon="📊" title="Sin gastos este mes" subtitle="Tus gastos aparecerán aquí una vez que los registres"/>
             : topGastos.map(([cat, val]) => (
               <View key={cat} style={{ marginBottom:12 }}>
                 <View style={{ flexDirection:'row', justifyContent:'space-between', marginBottom:5 }}>

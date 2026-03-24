@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useC } from '../../lib/theme';
 import { fmt, parseDateParts, DEFAULT_CATEGORIES, MONTH_NAMES, cMonth, cYear } from '../../lib/constants';
-import { Card, TxRow, ScreenWithHeader } from '../../components/ui';
+import { Card, TxRow, ScreenWithHeader, EmptyState } from '../../components/ui';
 
 export default function InicioTab({ data, onSave, onMonthPress, nombre, onOpenPanel, onEditTx }) {
   const C = useC();
@@ -176,7 +176,7 @@ export default function InicioTab({ data, onSave, onMonthPress, nombre, onOpenPa
             ))}
           </View>
           {filteredTxs.length === 0
-            ? <Text style={{ color:C.textMuted, fontSize:13, textAlign:'center', paddingVertical:24 }}>Sin transacciones</Text>
+            ? <EmptyState icon="💸" title="Sin movimientos" subtitle="Registrá tu primer ingreso o gasto con el botón +"/>
             : filteredTxs.slice().reverse().slice(0,20).map(t => <TxRow key={t.id} tx={t} cats={cats} onEdit={onEditTx} onDelete={id => Alert.alert('Eliminar','¿Eliminar esta transacción?',[{text:'Cancelar'},{text:'Eliminar',style:'destructive',onPress:()=>onSave({...data,transactions:data.transactions.filter(t=>t.id!==id)})}])}/>)
           }
         </Card>

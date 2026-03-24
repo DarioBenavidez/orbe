@@ -1,7 +1,7 @@
 import React from 'react';
 import {
   View, Text, TouchableOpacity, TextInput,
-  Modal, KeyboardAvoidingView, Platform,
+  Modal, KeyboardAvoidingView, Platform, ActivityIndicator,
 } from 'react-native';
 import { useC } from '../lib/theme';
 import { fmt, fmtAmt } from '../lib/constants';
@@ -21,17 +21,18 @@ export function Card({ children, style }) {
   );
 }
 
-export function Btn({ label, onPress, variant = 'primary', style, disabled }) {
+export function Btn({ label, onPress, variant = 'primary', style, disabled, loading }) {
   const C = useC();
   const isPrimary = variant === 'primary';
   const isDanger  = variant === 'danger';
   const bg    = isPrimary ? C.accent : isDanger ? C.redLight : C.surface2;
   const color = isPrimary ? '#fff'   : isDanger ? C.red      : C.textMuted;
+  const isDisabled = disabled || loading;
   return (
-    <TouchableOpacity onPress={onPress} disabled={disabled}
+    <TouchableOpacity onPress={onPress} disabled={isDisabled}
       style={[{
         borderRadius: 18, padding: 15, alignItems: 'center', backgroundColor: bg,
-        opacity: disabled ? 0.5 : 1,
+        opacity: isDisabled ? 0.7 : 1,
         borderWidth: 1, borderColor: isPrimary ? C.gold : C.border,
         ...(isPrimary ? {
           shadowColor: C.gold,
@@ -41,12 +42,48 @@ export function Btn({ label, onPress, variant = 'primary', style, disabled }) {
           elevation: 10,
         } : {}),
       }, style]}>
-      <Text style={{ fontSize: 14, fontWeight: '800', color, letterSpacing: 0.2 }}>{label}</Text>
+      {loading
+        ? <ActivityIndicator size="small" color={isPrimary ? '#fff' : C.textMuted}/>
+        : <Text style={{ fontSize: 14, fontWeight: '800', color, letterSpacing: 0.2 }}>{label}</Text>
+      }
     </TouchableOpacity>
   );
 }
 
-export function Input({ label, value, onChangeText, placeholder, keyboardType, prefix, multiline, secureTextEntry }) {
+export function FieldError({ error }) {
+  const C = useC();
+  if (!error) return null;
+  return <Text style={{ fontSize: 11, color: C.red, marginTop: -8, marginBottom: 10, marginLeft: 4 }}>⚠ {error}</Text>;
+}
+
+export function EmptyState({ icon, title, subtitle, actionLabel, onAction }) {
+  const C = useC();
+  return (
+    <View style={{ alignItems: 'center', paddingVertical: 40, paddingHorizontal: 20 }}>
+      <Text style={{ fontSize: 48, marginBottom: 14 }}>{icon}</Text>
+      <Text style={{ fontSize: 15, fontWeight: '700', color: C.text, textAlign: 'center', marginBottom: subtitle ? 6 : 0 }}>{title}</Text>
+      {subtitle ? <Text style={{ fontSize: 13, color: C.textMuted, textAlign: 'center', lineHeight: 20 }}>{subtitle}</Text> : null}
+      {actionLabel && onAction ? (
+        <TouchableOpacity onPress={onAction} style={{ marginTop: 16, backgroundColor: C.accent, borderRadius: 14, paddingHorizontal: 20, paddingVertical: 10, borderWidth: 1, borderColor: C.gold }}>
+          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 13 }}>{actionLabel}</Text>
+        </TouchableOpacity>
+      ) : null}
+    </View>
+  );
+}
+
+export function SaveIndicator({ saving }) {
+  const C = useC();
+  if (!saving) return null;
+  return (
+    <View style={{ position: 'absolute', top: 52, alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: C.surface, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 7, borderWidth: 1, borderColor: C.border, shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.15, shadowRadius: 8, elevation: 8, zIndex: 999 }}>
+      <ActivityIndicator size="small" color={C.accent}/>
+      <Text style={{ fontSize: 12, color: C.textMuted, fontWeight: '600' }}>Guardando...</Text>
+    </View>
+  );
+}
+
+export function Input({ label, value, onChangeText, placeholder, keyboardType, prefix, multiline, secureTextEntry, error }) {
   const C = useC();
   const isAmount = prefix === '$';
   const handleChange = (raw) => {
@@ -65,7 +102,7 @@ export function Input({ label, value, onChangeText, placeholder, keyboardType, p
       ) : null}
       <View style={{
         flexDirection: 'row', alignItems: 'center',
-        backgroundColor: C.surface2, borderWidth: 1, borderColor: C.border, borderRadius: 18,
+        backgroundColor: C.surface2, borderWidth: 1, borderColor: error ? C.red : C.border, borderRadius: 18,
       }}>
         {prefix ? <Text style={{ paddingLeft: 16, paddingRight: 4, color: C.textMuted, fontSize: 15 }}>{prefix}</Text> : null}
         <TextInput
@@ -80,6 +117,7 @@ export function Input({ label, value, onChangeText, placeholder, keyboardType, p
           secureTextEntry={secureTextEntry}
         />
       </View>
+      {error ? <Text style={{ fontSize: 11, color: C.red, marginTop: 4, marginLeft: 4 }}>⚠ {error}</Text> : null}
     </View>
   );
 }

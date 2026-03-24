@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, TextInput, Alert } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, TextInput } from 'react-native';
 import { useC } from '../lib/theme';
 import { parseAmt, DEFAULT_CATEGORIES } from '../lib/constants';
-import { ModalSheet, Chip, Btn, Input } from './ui';
+import { ModalSheet, Chip, Btn, Input, FieldError, EmptyState } from './ui';
 
 export default function AddTxModal({ visible, onClose, data, onSave, editTx }) {
   const C = useC();
@@ -15,6 +15,7 @@ export default function AddTxModal({ visible, onClose, data, onSave, editTx }) {
   const [form, setForm]             = useState(emptyForm);
   const [showNewCat, setShowNewCat] = useState(false);
   const [newCatName, setNewCatName] = useState('');
+  const [errors, setErrors]         = useState({});
 
   useEffect(() => {
     if (editTx) { setForm({ ...editTx, amount: String(editTx.amount) }); }
@@ -32,9 +33,12 @@ export default function AddTxModal({ visible, onClose, data, onSave, editTx }) {
   };
 
   const saveTx = () => {
-    if (!form.description.trim()) return Alert.alert('Error', 'Ingresá una descripción');
-    if (!form.amount || parseAmt(form.amount) <= 0) return Alert.alert('Error', 'Ingresá un monto válido');
-    if ((form.type==='gasto'||form.type==='ingreso') && !form.category) return Alert.alert('Categoría requerida', 'Seleccioná una categoría para continuar');
+    const errs = {};
+    if (!form.description.trim()) errs.description = 'Ingresá una descripción';
+    if (!form.amount || parseAmt(form.amount) <= 0) errs.amount = 'Ingresá un monto válido';
+    if ((form.type==='gasto'||form.type==='ingreso') && !form.category) errs.category = 'Seleccioná una categoría';
+    if (Object.keys(errs).length) { setErrors(errs); return; }
+    setErrors({});
     const amt = parseAmt(form.amount);
     let newData = { ...data };
     if (isEditing) {
@@ -69,22 +73,23 @@ export default function AddTxModal({ visible, onClose, data, onSave, editTx }) {
           ))}
         </ScrollView>
 
-        <Input label="Monto" value={form.amount} onChangeText={v => setForm(f => ({ ...f, amount:v }))} placeholder="0" keyboardType="numeric" prefix="$"/>
+        <Input label="Monto" value={form.amount} onChangeText={v => { setForm(f => ({ ...f, amount:v })); if (errors.amount) setErrors(e => ({ ...e, amount:null })); }} placeholder="0" keyboardType="numeric" prefix="$" error={errors.amount}/>
 
         {form.type !== 'presupuesto' && (
-          <Input label="Descripción" value={form.description} onChangeText={v => setForm(f => ({ ...f, description:v }))} placeholder="Ej: Supermercado, Netflix..."/>
+          <Input label="Descripción" value={form.description} onChangeText={v => { setForm(f => ({ ...f, description:v })); if (errors.description) setErrors(e => ({ ...e, description:null })); }} placeholder="Ej: Supermercado, Netflix..." error={errors.description}/>
         )}
 
         {needsCategory && (
           <>
             <Text style={{ fontSize:10, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:0.5, marginBottom:8 }}>Categoría *</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: showNewCat ? 8 : 14 }}>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: showNewCat ? 8 : 4 }}>
               {Object.entries(currentCats).map(([cat,icon]) => (
                 <Chip key={cat} label={`${icon} ${cat}`} active={form.category===cat}
-                  onPress={() => setForm(f => ({ ...f, category:cat }))} style={{ marginRight:8 }}/>
+                  onPress={() => { setForm(f => ({ ...f, category:cat })); if (errors.category) setErrors(e => ({ ...e, category:null })); }} style={{ marginRight:8 }}/>
               ))}
               <Chip label="+ Nueva" active={showNewCat} onPress={() => setShowNewCat(s => !s)} style={{ marginRight:8 }}/>
             </ScrollView>
+            <FieldError error={errors.category}/>
             {showNewCat && (
               <View style={{ flexDirection:'row', gap:8, marginBottom:14 }}>
                 <TextInput
@@ -107,7 +112,7 @@ export default function AddTxModal({ visible, onClose, data, onSave, editTx }) {
           <>
             <Text style={{ fontSize:10, fontWeight:'700', color:C.textMuted, textTransform:'uppercase', letterSpacing:0.5, marginBottom:8 }}>Meta de ahorro</Text>
             {data.savings.length===0
-              ? <Text style={{ color:C.textMuted, fontSize:13, marginBottom:14 }}>Primero creá una meta de ahorro.</Text>
+              ? <EmptyState icon="🐷" title="Sin metas de ahorro" subtitle="Creá una desde el panel de Ahorros"/>
               : <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom:14 }}>
                   {data.savings.map(sv => (
                     <Chip key={sv.id} label={`🐷 ${sv.name}`} active={form.savingsId===sv.id}

@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert, TextInput } from 'react-native';
 import { useC } from '../../lib/theme';
 import { fmt, fmtAmt, parseAmt, MONTH_NAMES, DEFAULT_CATEGORIES } from '../../lib/constants';
-import { Card, Btn, Input, FAB, ModalSheet, IconCircle } from '../../components/ui';
+import { Card, Btn, Input, FAB, ModalSheet, IconCircle, EmptyState } from '../../components/ui';
 
 export default function Deudas({ data, onSave }) {
   const C = useC();
@@ -13,6 +13,7 @@ export default function Deudas({ data, onSave }) {
   const [form, setForm]             = useState(emptyF);
   const [editForm, setEditForm]     = useState(emptyF);
   const [payAmt, setPayAmt]         = useState({});
+  const [addErrors, setAddErrors]   = useState({});
 
   const totalDebt       = data.debts.reduce((s,d) => s+d.remaining, 0);
   const monthlyPayments = data.debts.reduce((s,d) => s+d.installment, 0);
@@ -28,7 +29,11 @@ export default function Deudas({ data, onSave }) {
     return `${MONTH_NAMES[d.getMonth()]} ${d.getFullYear()}`;
   };
   const addDeuda = () => {
-    if (!form.name||!form.remaining) return;
+    const errs = {};
+    if (!form.name) errs.name = 'Ingresá un nombre o acreedor';
+    if (!form.remaining || parseAmt(form.remaining) <= 0) errs.remaining = 'Ingresá el monto pendiente';
+    if (Object.keys(errs).length) { setAddErrors(errs); return; }
+    setAddErrors({});
     const inst = parseAmt(form.installment)||0;
     const ri = parseInt(form.remainingInstallments)||(inst>0?Math.ceil(parseAmt(form.remaining)/inst):0);
     onSave({ ...data, debts:[...data.debts, { name:form.name, total:parseAmt(form.remaining), remaining:parseAmt(form.remaining), installment:inst, remainingInstallments:ri, id:Date.now().toString() }] });
@@ -61,10 +66,10 @@ export default function Deudas({ data, onSave }) {
     { text:'Eliminar', style:'destructive', onPress: () => onSave({ ...data, debts:data.debts.filter(d => d.id!==id) }) },
   ]);
 
-  const DeudaForm = ({ frm, setFrm }) => (
+  const DeudaForm = ({ frm, setFrm, errors = {} }) => (
     <>
-      <Input label="Nombre / Acreedor" value={frm.name} onChangeText={v => setFrm(f => ({ ...f, name:v }))} placeholder="Ej: Tarjeta Visa"/>
-      <Input label="Monto pendiente" value={frm.remaining} onChangeText={v => setFrm(f => ({ ...f, remaining:v, remainingInstallments:calcInst(v,f.installment) }))} placeholder="0" keyboardType="numeric" prefix="$"/>
+      <Input label="Nombre / Acreedor" value={frm.name} onChangeText={v => { setFrm(f => ({ ...f, name:v })); if (errors.name) setAddErrors(e => ({ ...e, name:null })); }} placeholder="Ej: Tarjeta Visa" error={errors.name}/>
+      <Input label="Monto pendiente" value={frm.remaining} onChangeText={v => { setFrm(f => ({ ...f, remaining:v, remainingInstallments:calcInst(v,f.installment) })); if (errors.remaining) setAddErrors(e => ({ ...e, remaining:null })); }} placeholder="0" keyboardType="numeric" prefix="$" error={errors.remaining}/>
       <Input label="Cuota mensual" value={frm.installment} onChangeText={v => setFrm(f => ({ ...f, installment:v, remainingInstallments:calcInst(f.remaining,v) }))} placeholder="0" keyboardType="numeric" prefix="$"/>
       <View style={{ backgroundColor:C.surface2, borderRadius:12, padding:12, marginBottom:14 }}>
         <Text style={{ fontSize:13, color:C.accent }}>
@@ -92,10 +97,7 @@ export default function Deudas({ data, onSave }) {
           </View>
         )}
         {data.debts.length===0
-          ? <View style={{ padding:40, alignItems:'center' }}>
-              <Text style={{ fontSize:48, marginBottom:12 }}>💳</Text>
-              <Text style={{ color:C.textMuted, fontSize:14, textAlign:'center' }}>Sin deudas registradas</Text>
-            </View>
+          ? <EmptyState icon="💳" title="Sin deudas registradas" subtitle="Agregá una deuda para hacer seguimiento de tus pagos" actionLabel="+ Agregar deuda" onAction={() => setModal(true)}/>
           : data.debts.map(d => {
               const pct = d.total>0 ? Math.min(((d.total-d.remaining)/d.total)*100, 100) : 0;
               return (
@@ -132,8 +134,8 @@ export default function Deudas({ data, onSave }) {
         }
       </ScrollView>
       <FAB onPress={() => setModal(true)}/>
-      <ModalSheet visible={modal} onClose={() => setModal(false)} title="Nueva deuda">
-        <DeudaForm frm={form} setFrm={setForm}/>
+      <ModalSheet visible={modal} onClose={() => { setModal(false); setAddErrors({}); }} title="Nueva deuda">
+        <DeudaForm frm={form} setFrm={setForm} errors={addErrors}/>
         <View style={{ flexDirection:'row', gap:10 }}>
           <Btn label="Cancelar" variant="ghost" style={{ flex:1 }} onPress={() => setModal(false)}/>
           <Btn label="Guardar" style={{ flex:1 }} onPress={addDeuda}/>
