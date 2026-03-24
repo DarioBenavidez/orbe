@@ -18,24 +18,32 @@ export default function Index() {
   const [loading, setLoading] = useState(true);
   const [locked, setLocked] = useState(false);
   const [bioAvailable, setBioAvailable] = useState(false);
+  const [bioEnabled, setBioEnabled] = useState(false);
   const [onboarded, setOnboarded]           = useState<boolean | null>(null);
   const [financialOnboarded, setFinancialOnboarded] = useState<boolean | null>(null);
+
   useEffect(() => {
-    // Check if onboarded
-    AsyncStorage.getItem('orbe_onboarded').then(v => setOnboarded(v === '1'));
-    AsyncStorage.getItem('orbe_financial_onboarded').then(v => setFinancialOnboarded(v === '1'));
+    Promise.all([
+      AsyncStorage.getItem('orbe_onboarded'),
+      AsyncStorage.getItem('orbe_financial_onboarded'),
+      AsyncStorage.getItem('orbe_bio'),
+    ]).then(([onboardedVal, financialVal, bioVal]) => {
+      setOnboarded(onboardedVal === '1');
+      setFinancialOnboarded(financialVal === '1');
+      const bioOn = bioVal === '1';
+      setBioEnabled(bioOn);
 
-    // Check biometric availability
-    LocalAuthentication.hasHardwareAsync().then(has => {
-      if (has) LocalAuthentication.isEnrolledAsync().then(setBioAvailable);
-    });
+      LocalAuthentication.hasHardwareAsync().then(has => {
+        if (has) LocalAuthentication.isEnrolledAsync().then(setBioAvailable);
+      });
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        setUser(session.user);
-        setLocked(true); // lock on session restore
-      }
-      setLoading(false);
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session?.user) {
+          setUser(session.user);
+          if (bioOn) setLocked(true); // solo lockea si el usuario activó el bio
+        }
+        setLoading(false);
+      });
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_e, session) => {
@@ -105,9 +113,14 @@ export default function Index() {
           <Text style={s.bioBtnText}>Usar huella / Face ID</Text>
         </TouchableOpacity>
       ) : (
-        <TouchableOpacity style={s.bioBtn} onPress={() => setLocked(false)}>
-          <Text style={s.bioBtnText}>Continuar</Text>
-        </TouchableOpacity>
+        <View style={{ alignItems: 'center', gap: 16 }}>
+          <Text style={{ color: C.textMuted, fontSize: 13, textAlign: 'center', lineHeight: 20 }}>
+            Configurá huella o Face ID en los ajustes del dispositivo para usar el bloqueo.
+          </Text>
+          <TouchableOpacity onPress={() => setLocked(false)} style={s.bioBtn}>
+            <Text style={s.bioBtnText}>Ingresar de todas formas</Text>
+          </TouchableOpacity>
+        </View>
       )}
 
       <TouchableOpacity onPress={logout} style={{ marginTop: 28 }}>
