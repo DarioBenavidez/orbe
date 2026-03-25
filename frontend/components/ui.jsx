@@ -228,9 +228,16 @@ export function TxRow({ tx, cats, onDelete, onEdit }) {
         <Text style={{ fontSize: 11, color: C.textMuted, marginTop: 3 }}>{catLabel} · {tx.date}</Text>
       </View>
       <View style={{ alignItems: 'flex-end' }}>
-        <Text style={{ fontSize: 15, fontWeight: '800', color: isGasto ? C.red : C.green, letterSpacing: -0.3 }}>
-          {isGasto ? '-' : '+'}{fmt(tx.amount)}
-        </Text>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          {(tx.source === 'gasto_en_dolares' || tx.currency === 'USD') && (
+            <View style={{ backgroundColor: '#C9A84C22', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2, borderWidth: 1, borderColor: '#C9A84C' }}>
+              <Text style={{ fontSize: 9, fontWeight: '800', color: '#C9A84C', letterSpacing: 0.5 }}>USD</Text>
+            </View>
+          )}
+          <Text style={{ fontSize: 15, fontWeight: '800', color: isGasto ? C.red : C.green, letterSpacing: -0.3 }}>
+            {isGasto ? '-' : '+'}{fmt(tx.amount)}
+          </Text>
+        </View>
         <View style={{ flexDirection: 'row', gap: 12, marginTop: 4 }}>
           {onEdit && (
             <TouchableOpacity onPress={() => onEdit(tx)}>

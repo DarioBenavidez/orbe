@@ -21,7 +21,7 @@ function isClaudeRateLimited(phone) {
   return entry.count > CLAUDE_MAX_PER_MINUTE;
 }
 
-async function callClaude(systemPrompt, history, userMessage) {
+async function callClaude(systemPrompt, history, userMessage, useComplexModel = false) {
   // Asegurarse de que los mensajes alternen roles correctamente
   const rawMessages = [...history.slice(-20), { role: 'user', content: userMessage }];
   const messages = [];
@@ -31,9 +31,13 @@ async function callClaude(systemPrompt, history, userMessage) {
   }
   if (messages[0]?.role === 'assistant') messages.shift();
 
+  const model = useComplexModel
+    ? 'claude-sonnet-4-6'
+    : (process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001');
+
   const response = await anthropic.messages.create({
-    model: process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5',
-    max_tokens: 600,
+    model,
+    max_tokens: 400,
     system: systemPrompt,
     messages,
   }, { timeout: 25_000 });
@@ -165,8 +169,6 @@ ACCIONES DISPONIBLES:
 {"type":"cancelar_suscripcion","keyword":"netflix"}
 {"type":"silenciar","dias":3}
 {"type":"reanudar"}
-{"type":"calcular_impuesto_pais","amountUSD":100}
-{"type":"equivalencia_canasta","amount":50000}
 {"type":"cambiar_nombre","nombre":"Fiona"}
 {"type":"onboarding"}
 {"type":"proyectar_fin_de_mes"}
@@ -177,20 +179,6 @@ ACCIONES DISPONIBLES:
 {"type":"agregar_categoria","name":"Mascotas","icon":"🐾"}
 {"type":"agregar_recordatorio","description":"Pagar seguro","date":"YYYY-MM-DD"}
 {"type":"gasto_compartido","description":"Alquiler","amount":200000,"category":"Vivienda","sharedWith":"pareja","date":"YYYY-MM-DD"}
-{"type":"registrar_negocio","nombre":"Kiosco Don Dario","tipo":"kiosco|comercio|servicio|emprendimiento|otro"}
-{"type":"agregar_activo","name":"Computadora","value":400000,"residualValue":50000,"usefulLifeYears":4,"purchaseDate":"YYYY-MM-DD","category":"Tecnología"}
-{"type":"consultar_amortizacion"}
-{"type":"agregar_producto","name":"Coca Cola 500ml","cost":500,"price":900,"unit":"unidad"}
-{"type":"consultar_productos"}
-{"type":"eliminar_producto","keyword":"coca"}
-{"type":"registrar_venta","items":[{"name":"Coca Cola 500ml","quantity":2,"unitPrice":900}],"date":"YYYY-MM-DD","paymentMethod":"efectivo|transferencia|tarjeta"}
-{"type":"consultar_ventas_negocio"}
-{"type":"calcular_margen","keyword":"coca cola"}
-{"type":"punto_equilibrio","costosFijos":0}
-{"type":"estado_de_resultados"}
-{"type":"flujo_de_caja_negocio"}
-{"type":"educacion_financiera","concepto":"amortizacion|margen|punto_equilibrio|balance|flujo_de_caja|roi|ebitda|capital_de_trabajo|costos_fijos_variables"}
-{"type":"exportar_csv","scope":"transacciones|ventas|prestamos|todo"}
 {"type":"agregar_tarea","description":"...","dueDate":"YYYY-MM-DD"}
 {"type":"consultar_tareas","filter":"pendientes|hechas|todas"}
 {"type":"completar_tarea","keyword":"..."}
@@ -198,6 +186,7 @@ ACCIONES DISPONIBLES:
 {"type":"agendar_turno","description":"Turno médico Dr. García","date":"YYYY-MM-DD","time":"10:30","location":"Av. Corrientes 1234","turnoType":"médico|banco|trámite|veterinario|odontólogo|otro"}
 {"type":"consultar_turnos"}
 {"type":"cancelar_turno","keyword":"dr garcia","date":"2026-03-21"}
+{"type":"editar_turno","keyword":"dr garcia","date":"YYYY-MM-DD","time":"10:30","location":"..."}
 {"type":"guardar_memoria","text":"el usuario prefiere no agrupar gastos del trabajo en Alimentación"}
 {"type":"registrar_feedback_negativo","text":"registré el mismo gasto dos veces sin que lo pidiera"}
 {"type":"conversacion","respuesta":"..."}
@@ -238,7 +227,7 @@ REGLAS DE INTERPRETACIÓN:
 - "ya pagué mis gastos fijos", "pagué todos los fijos", "este mes pagué los gastos fijos", "ya aboné los gastos del mes" → registrar_gastos_fijos (date: fecha que mencione o today si no dice)
 - "cambiá el día de X al Y", "pasá el gasto fijo X al día Y", "actualizá el monto de X a Y", "el X ahora cuesta Y", "poneles el día Y a todos los gastos fijos" → actualizar_gasto_fijo (keyword: nombre del gasto o "todos" si aplica a todos, day y/o amount solo si se mencionan, omitir los que no cambian)
 - "chau / hasta luego / buenas noches / nos vemos" AL FINAL de una conversación o junto a "gracias" → conversacion con despedida breve. NUNCA disparar el saludo completo en una despedida.
-- "borrá/eliminá todo el historial", "empezar de cero", "limpiá todo", "quiero borrar todo", "borrá todas las transacciones" → limpiar_transacciones (scope: "mes" si dice "de este mes", "todo" si dice "todo" o "empezar de cero")
+- "borrá/eliminá todo el historial", "empezar de cero", "limpiá todo", "quiero borrar todo", "borrá todas las transacciones" → limpiar_transacciones (scope: "mes" si dice "de este mes", "todo" si dice "todo" o "empezar de cero"). EXCEPCIÓN CRÍTICA: si el scope es "todo", SIEMPRE devolvé conversacion pidiendo confirmación explícita ("¿Estás seguro? Esto borra TODAS tus transacciones sin posibilidad de recuperarlas. Respondé 'sí, borrá todo' para confirmar."). Solo ejecutá limpiar_transacciones(scope:"todo") si el mensaje actual ya incluye una confirmación explícita del usuario.
 - "borrá/eliminá/quitá/sacá el gasto/ingreso de X", "borrá el X", "ese no va" → borrar_transaccion (keyword: parte del nombre/descripción/categoría, amount: monto si lo mencionan para asegurarse de borrar la correcta, omitir si no especifica)
 - "borrá todos los X", "eliminá todos los de X", "borrá todas las transacciones de X", "eliminá todos los duplicados de X", "borrá todos los que son X" → borrar_transaccion con all:true (keyword: nombre a buscar)
 - "hay duplicados", "se repiten las transacciones", "limpiar duplicados", "borrá los repetidos", "tengo transacciones repetidas" → borrar_duplicados
@@ -273,23 +262,8 @@ REGLAS DE INTERPRETACIÓN:
 - "cancelá la suscripción de X", "eliminá X de mis suscripciones" → cancelar_suscripcion
 - "no me molestes por X días", "silenciá las notificaciones", "estoy de vacaciones X días" → silenciar (dias: número)
 - "volvé a escribirme", "reanudar notificaciones", "ya volví" → reanudar
-- "cuánto es con impuesto país", "cuánto me sale en pesos con recargo", "precio dólar con impuesto" → calcular_impuesto_pais (amountUSD si lo menciona, sino 1)
-- "a cuántas canastas básicas equivale X", "qué tan caro es X en canastas", "equivalencia en canasta" → equivalencia_canasta
 - Si el usuario pide cambiar tu nombre, respondé con type "conversacion" explicando que tu nombre es Orbe y así se queda
 - "onboarding", "configuración inicial", "ayudame a configurar todo" → onboarding
-- "tengo un negocio / registrá mi negocio / mi emprendimiento se llama X" → registrar_negocio
-- "compré X por $Y / tengo un activo / agregá un activo / computadora/auto/heladera/etc" → agregar_activo (value: precio de compra, usefulLifeYears: vida útil estimada, residualValue: valor al final — si no menciona estos últimos, estimá razonables)
-- "cuánto se amortiza / amortización / depreciación de mis activos / mis activos" → consultar_amortizacion
-- "agregá el producto X / vendo X a $Y, me cuesta $Z / precio de venta X, costo X" → agregar_producto
-- "mis productos / qué vendo / lista de productos / qué margen tengo" → consultar_productos
-- "vendí X unidades de Y / registrá una venta / hice una venta de $X" → registrar_venta
-- "cuánto vendí / mis ventas del mes / reporte de ventas" → consultar_ventas_negocio
-- "cuál es el margen de X / cuánto gano por X / margen de ganancia de X" → calcular_margen
-- "cuánto tengo que vender para cubrir los costos / punto de equilibrio / break-even" → punto_equilibrio (costosFijos: si los menciona, sino 0 para calcular automáticamente)
-- "estado de resultados / P&L / cómo va mi negocio / resultados del negocio" → estado_de_resultados
-- "flujo de caja / cash flow / movimiento de plata del negocio" → flujo_de_caja_negocio
-- "qué es X / explicame X / no entiendo X / cómo funciona X" donde X es un concepto de administración → educacion_financiera (concepto: el término más cercano de la lista)
-- "exportá mis datos a Excel / pasame en Excel / quiero un CSV / exportar transacciones" → exportar_csv
 - "tengo turno / agendá un turno / tengo cita / tengo que ir al médico/banco/trámite el [fecha]" → agendar_turno (description: descripción del turno, date: fecha resuelta YYYY-MM-DD, time: hora si la menciona, location: lugar si lo menciona, turnoType: inferilo del contexto)
 - "qué turnos tengo / mis turnos / agenda / compromisos / cuántos turnos tengo / tengo algún turno / mostrá mis turnos / listá mis turnos" → SIEMPRE consultar_turnos. NUNCA balance ni conversacion para estas frases.
 - "cancelá el turno de X / borrá el turno del médico / ya no voy al turno de X" → cancelar_turno (keyword: nombre del turno, date: fecha YYYY-MM-DD si el usuario la menciona para desambiguar entre turnos con el mismo nombre)
@@ -305,12 +279,12 @@ REGLAS DE INTERPRETACIÓN:
 - APRENDIZAJE — feedback negativo: "te equivocaste", "eso estuvo mal", "no lo vuelvas a hacer", "la cagaste con X", "eso fue un error", "no hagas más X", "dejá de hacer X" → registrar_feedback_negativo (text: descripción concisa del error que no debe repetirse, en formato "no debo [acción]")
 - IMPORTANTE sobre patrones aprendidos: si hay "Patrones y preferencias aprendidos" en el contexto, TENELOS EN CUENTA SIEMPRE. Los ⛔ son errores a evitar. Los 💡 son preferencias del usuario a aplicar.
 
-CONTEXTO EMPRESARIAL:
-${data.negocio ? `- Negocio registrado: ${data.negocio.nombre} (${data.negocio.tipo})` : '- Sin negocio registrado aún'}
+${data.negocio ? `CONTEXTO EMPRESARIAL:
+- Negocio registrado: ${data.negocio.nombre} (${data.negocio.tipo})
 - Activos registrados: ${(data.activos || []).length}${(data.activos || []).length > 0 ? ' — ' + data.activos.map(a => `${a.name} (valor residual: ${fmt(a.residualValue || 0)})`).join(', ') : ''}
 - Productos/servicios: ${(data.productos || []).length}${(data.productos || []).length > 0 ? ' — ' + data.productos.map(p => `${p.name} costo:${fmt(p.cost)} precio:${fmt(p.price)} margen:${Math.round(((p.price-p.cost)/p.price)*100)}%`).join(', ') : ''}
 - Ventas del mes: ${(data.ventas || []).filter(v => { const p = parseDateParts(v.date); return p.month === month && p.year === year; }).length} registros | Total: ${fmt((data.ventas || []).filter(v => { const p = parseDateParts(v.date); return p.month === month && p.year === year; }).reduce((s, v) => s + v.total, 0))}
-${getRelevantExpertise(userMessage)}
+${getRelevantExpertise(userMessage)}` : ''}
 
 MENTALIDAD DE AHORRO PROACTIVO — HACER QUE LAS COSAS SUCEDAN:
 Cuando el usuario quiere algo y no llega económicamente, NUNCA respondés solo "no te alcanza". Eso es lo más fácil y lo menos útil. Tu trabajo es encontrar el camino.
@@ -379,7 +353,8 @@ CÓMO MANEJAR "conversacion":
 
 NUNCA devuelvas texto fuera del JSON. Devolvé SOLO el JSON.`;
 
-  const text = await callClaude(systemPrompt, history, userMessage);
+  const isComplex = userMessage.length > 150 || /comparar|analiz|estrategia|simul|proyect/i.test(userMessage);
+  const text = await callClaude(systemPrompt, history, userMessage, isComplex);
   try { return JSON.parse(text); } catch {
     // Extraer el primer objeto JSON balanceado (ignora texto extra antes/después)
     const start = text.indexOf('{');

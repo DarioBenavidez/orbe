@@ -36,6 +36,7 @@ export default function Proyeccion({ data, onSave }) {
     return applicable.length > 0 ? applicable[0].amount : avgIncome;
   };
 
+  const recurringIncomes = data.recurringIncomes || [];
   const budgetItems = useMemo(() => data.budgets.filter(b=>b.limit>0), [data.budgets]);
   const budgetTotal = useMemo(() => budgetItems.reduce((s,b)=>s+b.limit,0), [budgetItems]);
   const activeDebts = useMemo(() => data.debts.filter(d=>d.installment>0&&d.remainingInstallments>0), [data.debts]);
@@ -101,6 +102,21 @@ export default function Proyeccion({ data, onSave }) {
                   <Text style={{ fontSize:16, color:C.red }}>✕</Text>
                 </TouchableOpacity>
               </View>
+            </View>
+          ))}
+        </Card>
+      )}
+
+      {recurringIncomes.length > 0 && (
+        <Card style={{ marginBottom:14 }}>
+          <Text style={{ fontSize:11, fontWeight:'700', color:C.textMuted, letterSpacing:0.5, marginBottom:8 }}>INGRESOS RECURRENTES</Text>
+          {recurringIncomes.map((ri, i) => (
+            <View key={i} style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', paddingVertical:8, borderBottomWidth:1, borderBottomColor:C.border }}>
+              <View>
+                <Text style={{ fontSize:13, color:C.text, fontWeight:'600' }}>{ri.name}</Text>
+                <Text style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>Día {ri.day} de cada mes</Text>
+              </View>
+              <Text style={{ fontSize:14, fontWeight:'800', color:C.green }}>{fmt(ri.amount)}</Text>
             </View>
           ))}
         </Card>

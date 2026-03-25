@@ -16,7 +16,8 @@ import Deudas      from './panels/Deudas';
 import Prestamos   from './panels/Prestamos';
 import Turnos      from './panels/Turnos';
 import Calendario  from './panels/Calendario';
-import Proyeccion  from './panels/Proyeccion';
+import Proyeccion    from './panels/Proyeccion';
+import Suscripciones from './panels/Suscripciones';
 
 const TABS = [
   { key:'inicio',        label:'Inicio',   icon:'🏠' },
@@ -33,6 +34,7 @@ const WA_POLLING_TIMEOUT_MS = 2 * 60 * 1000;
 const PANEL_LABELS = {
   ahorros: 'Ahorros', deudas: 'Deudas', prestamos: 'Préstamos',
   turnos: 'Turnos', calendario: 'Eventos', proyeccion: 'Proyección',
+  suscripciones: 'Suscripciones',
 };
 
 export default function MainApp({ user, onLogout }) {
@@ -270,7 +272,8 @@ export default function MainApp({ user, onLogout }) {
               {panel==='prestamos'  && <Prestamos  data={data} onSave={save}/>}
               {panel==='turnos'     && <Turnos     data={data} onSave={save}/>}
               {panel==='calendario' && <Calendario data={data} onSave={save}/>}
-              {panel==='proyeccion' && <Proyeccion data={data} onSave={save}/>}
+              {panel==='proyeccion'     && <Proyeccion     data={data} onSave={save}/>}
+              {panel==='suscripciones' && <Suscripciones  data={data} onSave={save}/>}
             </View>
           </ThemeCtx.Provider>
         </Modal>

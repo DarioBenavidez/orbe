@@ -12,6 +12,7 @@ export default function Turnos({ data, onSave }) {
   const emptyF = { description:'', date:'', time:'', location:'', turnoType:'médico' };
   const [form, setForm]   = useState(emptyF);
   const [errors, setErrors] = useState({});
+  const [addToCalendar, setAddToCalendar] = useState(false);
   const TIPOS = ['médico', 'peluquería', 'banco', 'trámite', 'reunión', 'otro'];
 
   const addTurno = () => {
@@ -22,8 +23,17 @@ export default function Turnos({ data, onSave }) {
     if (Object.keys(errs).length) { setErrors(errs); return; }
     setErrors({});
     const turno = { ...form, id: Date.now().toString(), notified: false };
-    onSave({ ...data, turnos: [...(data.turnos || []), turno] });
-    setModal(false); setForm(emptyF);
+    let newData = { ...data, turnos: [...(data.turnos || []), turno] };
+    if (addToCalendar && form.date) {
+      const [, , dayStr] = form.date.split('-');
+      const dayNum = parseInt(dayStr, 10);
+      if (!isNaN(dayNum) && dayNum >= 1 && dayNum <= 31) {
+        const calEvent = { id: (Date.now() + 1).toString(), title: form.description, day: dayNum, type: 'recordatorio', notifyDaysBefore: 1 };
+        newData = { ...newData, events: [...(newData.events || []), calEvent] };
+      }
+    }
+    onSave(newData);
+    setModal(false); setForm(emptyF); setAddToCalendar(false);
   };
 
   const delTurno = (id) => Alert.alert('Cancelar turno', '¿Cancelar este turno?', [
@@ -92,6 +102,13 @@ export default function Turnos({ data, onSave }) {
             <Chip key={t} label={t} active={form.turnoType===t} onPress={() => setForm(f => ({ ...f, turnoType:t }))} style={{ marginRight:8 }}/>
           ))}
         </ScrollView>
+        <TouchableOpacity onPress={() => setAddToCalendar(v => !v)}
+          style={{ flexDirection:'row', alignItems:'center', gap:10, paddingVertical:12, marginBottom:4 }}>
+          <View style={{ width:22, height:22, borderRadius:6, borderWidth:1.5, borderColor:addToCalendar?C.accent:C.border, backgroundColor:addToCalendar?C.accent:'transparent', alignItems:'center', justifyContent:'center' }}>
+            {addToCalendar && <Text style={{ color:'#fff', fontSize:13, fontWeight:'800' }}>✓</Text>}
+          </View>
+          <Text style={{ fontSize:13, color:C.text, fontWeight:'600' }}>Agregar al calendario</Text>
+        </TouchableOpacity>
         <View style={{ flexDirection:'row', gap:10 }}>
           <Btn label="Cancelar" variant="ghost" style={{ flex:1 }} onPress={() => setModal(false)}/>
           <Btn label="Guardar" style={{ flex:1 }} onPress={addTurno}/>

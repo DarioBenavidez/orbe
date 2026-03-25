@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Alert, RefreshControl } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Alert, RefreshControl, TextInput } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useC } from '../../lib/theme';
 import { fmt, parseDateParts, DEFAULT_CATEGORIES, MONTH_NAMES, cMonth, cYear } from '../../lib/constants';
@@ -7,6 +7,7 @@ import { Card, TxRow, ScreenWithHeader, EmptyState } from '../../components/ui';
 
 export default function InicioTab({ data, onSave, onMonthPress, nombre, onOpenPanel, onEditTx, txFilter, setTxFilter, onRefresh, refreshing }) {
   const C = useC();
+  const [search, setSearch] = useState('');
   const txs = data.transactions.filter(t => {
     const { month, year } = parseDateParts(t.date);
     return month === data.selectedMonth && year === data.selectedYear;
@@ -34,11 +35,19 @@ export default function InicioTab({ data, onSave, onMonthPress, nombre, onOpenPa
     return txs;
   })();
 
+  const searchedTxs = search.trim()
+    ? filteredTxs.filter(t => {
+        const q = search.trim().toLowerCase();
+        return (t.description||'').toLowerCase().includes(q) || (t.category||'').toLowerCase().includes(q);
+      })
+    : filteredTxs;
+
   const totalIncome  = txs.filter(t => t.type==='ingreso'||t.type==='sueldo').reduce((a,t) => a+t.amount, 0);
   const totalExpense = txs.filter(t => t.type==='gasto' || t.type==='ahorro_meta').reduce((a,t) => a+t.amount, 0);
   const totalBudget  = data.budgets.reduce((s,b) => s+b.limit, 0);
   const pct          = totalBudget > 0 ? Math.min((totalExpense/totalBudget)*100, 100) : 0;
   const balance      = totalIncome - totalExpense;
+  const savingsRate  = totalIncome > 0 ? ((totalIncome - totalExpense) / totalIncome) * 100 : null;
   const cats         = data.categories || DEFAULT_CATEGORIES;
   const today        = new Date().getDate();
   const isCurrentMonth = data.selectedMonth === cMonth && data.selectedYear === cYear;
@@ -78,6 +87,12 @@ export default function InicioTab({ data, onSave, onMonthPress, nombre, onOpenPa
               <View style={{ width:8, height:8, borderRadius:4, backgroundColor:'#F87171' }}/>
               <Text style={{ fontSize:13, color: totalExpense>totalBudget&&totalBudget>0 ? '#ffa0a0' : '#ffffffbb', fontWeight:'600' }}>Gastos {fmt(totalExpense)}</Text>
             </View>
+            {savingsRate !== null && (
+              <View style={{ flexDirection:'row', alignItems:'center', gap:6 }}>
+                <View style={{ width:8, height:8, borderRadius:4, backgroundColor:'#C9A84C' }}/>
+                <Text style={{ fontSize:13, color:'#ffffffbb', fontWeight:'600' }}>Ahorro {savingsRate.toFixed(0)}%</Text>
+              </View>
+            )}
           </View>
         </View>
         {totalBudget > 0 && (
@@ -106,7 +121,8 @@ export default function InicioTab({ data, onSave, onMonthPress, nombre, onOpenPa
               { key:'prestamos',  label:'Préstamos',  icon:'🤝' },
               { key:'turnos',     label:'Turnos',     icon:'📅' },
               { key:'calendario', label:'Eventos',    icon:'🗓️' },
-              { key:'proyeccion', label:'Proyección', icon:'📈' },
+              { key:'proyeccion',    label:'Proyección',    icon:'📈' },
+              { key:'suscripciones', label:'Suscripciones', icon:'📺' },
             ].map(m => (
               <TouchableOpacity key={m.key} onPress={() => onOpenPanel(m.key)}
                 style={{ backgroundColor:C.accent, borderWidth:1, borderColor:C.gold, borderRadius:16, padding:14, marginRight:10, alignItems:'center', width:90, shadowColor:'#C9A84C', shadowOffset:{ width:0, height:4 }, shadowOpacity:0.25, shadowRadius:8, elevation:6 }}>
@@ -175,9 +191,16 @@ export default function InicioTab({ data, onSave, onMonthPress, nombre, onOpenPa
               </TouchableOpacity>
             ))}
           </View>
-          {filteredTxs.length === 0
-            ? <EmptyState icon="💸" title="Sin movimientos" subtitle="Registrá tu primer ingreso o gasto con el botón +"/>
-            : filteredTxs.slice().reverse().slice(0,20).map(t => <TxRow key={t.id} tx={t} cats={cats} onEdit={onEditTx} onDelete={id => Alert.alert('Eliminar','¿Eliminar esta transacción?',[{text:'Cancelar'},{text:'Eliminar',style:'destructive',onPress:()=>onSave({...data,transactions:data.transactions.filter(t=>t.id!==id)})}])}/>)
+          <TextInput
+            value={search}
+            onChangeText={setSearch}
+            placeholder="Buscar por descripción o categoría..."
+            placeholderTextColor={C.textMuted}
+            style={{ backgroundColor:C.surface2, borderRadius:14, paddingHorizontal:14, paddingVertical:10, fontSize:13, color:C.text, marginBottom:12, borderWidth:1, borderColor:C.border }}
+          />
+          {searchedTxs.length === 0
+            ? <EmptyState icon="💸" title="Sin movimientos" subtitle={search ? 'Sin resultados para tu búsqueda' : 'Registrá tu primer ingreso o gasto con el botón +'}/>
+            : searchedTxs.slice().reverse().slice(0,20).map(t => <TxRow key={t.id} tx={t} cats={cats} onEdit={onEditTx} onDelete={id => Alert.alert('Eliminar','¿Eliminar esta transacción?',[{text:'Cancelar'},{text:'Eliminar',style:'destructive',onPress:()=>onSave({...data,transactions:data.transactions.filter(t=>t.id!==id)})}])}/>)
           }
         </Card>
       </ScrollView>

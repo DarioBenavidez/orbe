@@ -141,8 +141,11 @@ export default function AnalisisTab({ data, onSave }) {
           {Object.keys(cats).map(cat => {
             const b = data.budgets.find(x => x.cat === cat) || { cat, limit: 0 };
             const spent = expByCat[b.cat] || 0;
-            const pct   = b.limit > 0 ? Math.min((spent/b.limit)*100, 100) : 0;
-            const over  = b.limit > 0 && spent > b.limit;
+            const rawPct = b.limit > 0 ? (spent/b.limit)*100 : 0;
+            const pct    = Math.min(rawPct, 100);
+            const over   = b.limit > 0 && spent > b.limit;
+            const warn   = b.limit > 0 && rawPct >= 80 && !over;
+            const barColor = over ? C.red : warn ? '#F97316' : C.accent;
             return (
               <View key={b.cat} style={{ marginBottom:14 }}>
                 <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', marginBottom:6 }}>
@@ -150,7 +153,14 @@ export default function AnalisisTab({ data, onSave }) {
                     <Text style={{ fontSize:13, color:C.text }}>{cats[b.cat]||'📦'} {b.cat} ✏️</Text>
                   </TouchableOpacity>
                   <View style={{ flexDirection:'row', alignItems:'center', gap:8 }}>
-                    <Text style={{ fontSize:11, color:C.textMuted }}>{fmt(spent)} /</Text>
+                    <View style={{ alignItems:'flex-end' }}>
+                      <Text style={{ fontSize:11, color:C.textMuted }}>{fmt(spent)} / {editing[b.cat] ? null : fmt(b.limit)}</Text>
+                      {b.limit > 0 && (
+                        <Text style={{ fontSize:10, fontWeight:'700', color: over ? C.red : warn ? '#F97316' : C.textMuted }}>
+                          {over ? `⚠ ${rawPct.toFixed(0)}% — superado` : warn ? `⚠ ${rawPct.toFixed(0)}%` : `${rawPct.toFixed(0)}%`}
+                        </Text>
+                      )}
+                    </View>
                     {editing[b.cat]
                       ? <TextInput
                           style={{ borderWidth:1, borderColor:C.border, borderRadius:8, padding:4, width:80, fontSize:13, color:C.text, textAlign:'right', backgroundColor:C.surface2 }}
@@ -164,7 +174,7 @@ export default function AnalisisTab({ data, onSave }) {
                           }}
                         />
                       : <TouchableOpacity onPress={() => setEditing(ed => ({ ...ed, [b.cat]:true }))}>
-                          <Text style={{ fontSize:13, color:C.accent, fontWeight:'600' }}>{fmt(b.limit)} ✏️</Text>
+                          <Text style={{ fontSize:13, color:C.accent, fontWeight:'600' }}>✏️</Text>
                         </TouchableOpacity>
                     }
                     <TouchableOpacity onPress={() => deleteCategory(b.cat)}>
@@ -173,8 +183,8 @@ export default function AnalisisTab({ data, onSave }) {
                   </View>
                 </View>
                 {b.limit > 0 && (
-                  <View style={{ backgroundColor:C.surface2, borderRadius:99, height:6 }}>
-                    <View style={{ backgroundColor:over?C.red:C.accent, height:6, borderRadius:99, width:`${pct}%` }}/>
+                  <View style={{ backgroundColor:C.surface2, borderRadius:99, height:8 }}>
+                    <View style={{ backgroundColor:barColor, height:8, borderRadius:99, width:`${pct}%` }}/>
                   </View>
                 )}
               </View>
