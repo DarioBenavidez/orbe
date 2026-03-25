@@ -45,9 +45,10 @@ app.use('/webhook', webhookRouter);
 app.get('/', (req, res) => res.json({ status: 'ok' }));
 
 // ── Scheduler ──────────────────────────────────────────────
-if (process.env.NODE_ENV !== 'test') {
-  scheduleDaily();
-}
+// Desactivado hasta tener número de WhatsApp Business verificado
+// if (process.env.NODE_ENV !== 'test') {
+//   scheduleDaily();
+// }
 
 // ── Servidor ───────────────────────────────────────────────
 if (process.env.NODE_ENV !== 'test') {
