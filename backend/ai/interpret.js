@@ -353,8 +353,7 @@ CÓMO MANEJAR "conversacion":
 
 NUNCA devuelvas texto fuera del JSON. Devolvé SOLO el JSON.`;
 
-  const isComplex = userMessage.length > 150 || /comparar|analiz|estrategia|simul|proyect/i.test(userMessage);
-  const text = await callClaude(systemPrompt, history, userMessage, isComplex);
+  const text = await callClaude(systemPrompt, history, userMessage);
   try { return JSON.parse(text); } catch {
     // Extraer el primer objeto JSON balanceado (ignora texto extra antes/después)
     const start = text.indexOf('{');
