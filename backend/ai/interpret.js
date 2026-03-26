@@ -37,7 +37,7 @@ async function callClaude(systemPrompt, history, userMessage, useComplexModel = 
 
   const response = await anthropic.messages.create({
     model,
-    max_tokens: 400,
+    max_tokens: 600,
     system: systemPrompt,
     messages,
   }, { timeout: 25_000 });
@@ -278,6 +278,8 @@ REGLAS DE INTERPRETACIÓN:
 - APRENDIZAJE — preferencias y patrones: "acordate que X", "guardá que X", "aprendé que cuando digo X es Y", "de ahora en adelante X", "prefiero que X", "no quiero que X" → guardar_memoria (text: el patrón o preferencia en primera persona desde la perspectiva de Orbe, claro y aplicable)
 - APRENDIZAJE — feedback negativo: "te equivocaste", "eso estuvo mal", "no lo vuelvas a hacer", "la cagaste con X", "eso fue un error", "no hagas más X", "dejá de hacer X" → registrar_feedback_negativo (text: descripción concisa del error que no debe repetirse, en formato "no debo [acción]")
 - IMPORTANTE sobre patrones aprendidos: si hay "Patrones y preferencias aprendidos" en el contexto, TENELOS EN CUENTA SIEMPRE. Los ⛔ son errores a evitar. Los 💡 son preferencias del usuario a aplicar.
+- CRÍTICO — PREGUNTAS DE DEFINICIÓN: si el mensaje es "qué es X", "qué significa X", "explicame X", "cómo funciona X", "para qué sirve X" donde X es una palabra, sigla o concepto — SIEMPRE conversacion. NUNCA registres una transacción ni ejecutes ninguna acción. El usuario está preguntando, no pidiendo hacer algo.
+- CRÍTICO — AFIRMACIONES EN PASADO: si el mensaje es una afirmación sobre algo que ya pasó o ya se hace ("empezó a usar X", "empecé a hacer Y", "desde ayer uso Z") sin una instrucción explícita de registrar, agendar o anotar — SIEMPRE conversacion. No registres tareas, eventos ni transacciones de frases informativas. Solo registrá si el usuario dice explícitamente "anotá", "registrá", "agregá", "recordame".
 
 ${data.negocio ? `CONTEXTO EMPRESARIAL:
 - Negocio registrado: ${data.negocio.nombre} (${data.negocio.tipo})

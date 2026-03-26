@@ -1711,8 +1711,17 @@ Sin listas. Máximo 8 líneas. Tono cálido, directo y que inspire confianza en 
       return `Anotado${name ? ', ' + name : ''}. No lo vuelvo a hacer. 🙏`;
     }
 
-    case 'conversacion':
-      return action.respuesta || `Contame, ¿en qué te puedo ayudar${name ? ', ' + name : ''}? 💚`;
+    case 'conversacion': {
+      let resp = action.respuesta || `Contame, ¿en qué te puedo ayudar${name ? ', ' + name : ''}? 💚`;
+      // Sanitizar por si Claude devolvió JSON crudo como respuesta
+      if (typeof resp === 'string' && resp.trim().startsWith('{')) {
+        try {
+          const parsed = JSON.parse(resp.trim());
+          if (parsed.respuesta) resp = parsed.respuesta;
+        } catch {}
+      }
+      return resp;
+    }
 
     default: {
       const invites = [

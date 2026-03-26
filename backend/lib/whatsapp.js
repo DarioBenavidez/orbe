@@ -11,6 +11,10 @@ const WHATSAPP_TOKEN   = process.env.WHATSAPP_TOKEN;
 
 // ── Enviar mensaje de texto ───────────────────────────────
 async function sendWhatsAppMessage(to, body, { throwOnError = false } = {}) {
+  // WhatsApp API tiene límite de 4096 chars — truncar si es necesario
+  if (typeof body === 'string' && body.length > 4000) {
+    body = body.slice(0, 3950) + '\n\n_(mensaje muy largo, continuá preguntándome si necesitás más)_';
+  }
   try {
     const response = await fetch(`https://graph.facebook.com/v18.0/${PHONE_NUMBER_ID}/messages`, {
       method: 'POST',
