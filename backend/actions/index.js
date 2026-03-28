@@ -834,7 +834,17 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       const loans = data.loans || [];
       const credits = { ...(data.credits || {}) };
       const personKey = action.name.toLowerCase();
-      let remaining = parseFloat(action.amount);
+      let usdLoanNote = '';
+      let amountARS;
+      if (action.currency === 'usd' && action.amountUSD) {
+        const dolar = await getDolarPrice();
+        const rate = action.source === 'tarjeta' ? (dolar.tarjeta || dolar.blue * 1.6) : dolar.blue;
+        amountARS = Math.round(parseFloat(action.amountUSD) * rate);
+        usdLoanNote = `\n💱 USD ${action.amountUSD} × $${Math.round(rate)} = ${fmt(amountARS)}`;
+      } else {
+        amountARS = parseFloat(action.amount) || 0;
+      }
+      let remaining = amountARS;
       let creditNote = '';
 
       // Descontar saldo a favor existente
@@ -864,7 +874,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
         loanId,
       };
       await saveData(userId, { ...data, loans: [...loans, loan], credits, transactions: [...(data.transactions || []), loanTx] });
-      return `📋 *Préstamo registrado!*\n\n👤 ${action.name} te debe ${fmt(remaining)}${action.reason ? `\n📝 Por: ${action.reason}` : ''}\n📅 ${today()}${creditNote}\n💸 Desconté ${fmt(remaining)} de tu balance.\n\nCuando pague algo, avisame y lo registro.`;
+      return `📋 *Préstamo registrado!*\n\n👤 ${action.name} te debe ${fmt(remaining)}${action.reason ? `\n📝 Por: ${action.reason}` : ''}\n📅 ${today()}${usdLoanNote}${creditNote}\n💸 Desconté ${fmt(remaining)} de tu balance.\n\nCuando pague algo, avisame y lo registro.`;
     }
 
     case 'registrar_pago_prestamo': {

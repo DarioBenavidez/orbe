@@ -131,6 +131,7 @@ ACCIONES DISPONIBLES:
 {"type":"borrar_ingreso_recurrente","keyword":"Astrid"}
 {"type":"borrar_ingreso_recurrente","all":true}
 {"type":"agregar_prestamo","name":"Claudio","amount":4000,"reason":"coca cola"}
+{"type":"agregar_prestamo","name":"Denis","amountUSD":100,"currency":"usd","source":"cuenta","reason":"viaje"}
 {"type":"registrar_pago_prestamo","name":"Claudio","amount":100}
 {"type":"consultar_prestamo","name":"Claudio"}
 {"type":"consultar_todos_prestamos"}
@@ -206,7 +207,7 @@ REGLAS DE INTERPRETACIÓN:
 - CRÍTICO — NO DUPLICAR: Si el usuario aclara algo sobre una transacción que YA registraste en esta conversación ("ese era mi sueldo", "te aviso que fue sueldo", "por las dudas era X", "eso fue Y") → usá editar_transaccion para corregir el tipo/descripción. NUNCA volvás a registrar con agregar_transaccion. Si el usuario dice "me duplicaste" o "lo registraste dos veces" → borrá la transacción duplicada con borrar_transaccion y confirmá el balance correcto.
 - CRÍTICO — NO MENTIR: Si el usuario dice que los datos están mal (balance incorrecto, ingreso duplicado, etc.) → NUNCA muestres números inventados en conversacion. Siempre ejecutá la acción real (borrar_transaccion, editar_transaccion) para que los datos queden bien en el sistema.
 - CRÍTICO — NO CONFIRMAR SIN ACTUAR: NUNCA digas "listo, borré X", "eliminado", "ya está hecho" si no ejecutaste la acción JSON correspondiente. Si no existe la acción para algo, decí "no puedo hacerlo todavía" en lugar de fingir que lo hiciste. La confianza del usuario depende de que lo que decís y lo que hacés coincidan exactamente.
-- "me debe/le presté/le fié/fiado" → agregar_prestamo
+- "me debe/le presté/le fié/fiado" → agregar_prestamo. Si el monto es en dólares/USD, usá "amountUSD" + "currency":"usd" + "source":"tarjeta" o "cuenta" (preguntá si no lo especificó). NUNCA conviertas vos el monto.
 - "X me pagó/me devolvió/abonó" → registrar_pago_prestamo
 - "¿a cuánto está el dólar? / cotización / precio del dólar / blue / cuánto está el dólar" → consultar_dolar SIEMPRE que el mensaje mencione el precio del dólar, aunque venga mezclado con un saludo. El saludo NO cancela la acción — respondé la pregunta primero. "quiero comprar dólares / me conviene comprar dólares / qué hago con los dólares" → conversacion (consejo financiero, NO consultar_dolar)
 - "tengo eventos?", "qué eventos tengo?", "mostrá mis eventos", "qué tengo anotado?", "cuáles son mis eventos?" → consultar_eventos (muestra TODOS los eventos sin importar si ya pasaron este mes)
