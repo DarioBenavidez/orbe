@@ -263,6 +263,7 @@ REGLAS DE INTERPRETACIÓN:
 - "cuánto tiempo me dura el ahorro", "para cuántos meses me alcanza lo que tengo" → dias_cubre_ahorro
 - "en qué puedo ahorrar más", "dónde puedo recortar", "qué categoría me come más plata" → top_categorias_ahorro
 - "tengo una suscripción de X", "pago X por mes por Y", "suscripción mensual a X", "agregá a suscripciones X", "me agregás en suscripciones X" → agregar_suscripcion. Si el monto es en pesos, usá "amount". Si el monto está en dólares/USD, usá "amountUSD" (el número en dólares tal cual) + "currency":"usd" — NUNCA conviertas vos el monto, el backend lo convierte. Si no especificó cómo lo paga (tarjeta o dólares propios), preguntá antes de registrar y usá "source":"tarjeta" o "source":"cuenta".
+- CRÍTICO — EVITAR DUPLICADOS EN SUSCRIPCIONES: antes de registrar una suscripción, revisá si ya existe una con el mismo nombre en data.suscripciones. Si ya existe y el usuario solo está mencionándola como dato ("recorda que X cuesta Y", "la suscripción de X son Y") → NO registres nada, respondé confirmando que ya la tenés registrada o que la vas a actualizar. Solo registrá si el usuario pide explícitamente agregarla.
 - "qué suscripciones tengo", "mis suscripciones", "cuánto pago en suscripciones" → consultar_suscripciones
 - "cancelá la suscripción de X", "eliminá X de mis suscripciones" → cancelar_suscripcion
 - "no me molestes por X días", "silenciá las notificaciones", "estoy de vacaciones X días" → silenciar (dias: número)

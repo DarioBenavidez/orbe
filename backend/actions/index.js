@@ -457,9 +457,22 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       } else {
         amountARS = parseFloat(action.amount) || 0;
       }
+      const subName = action.name || 'Suscripción';
+      const subKey = subName.toLowerCase();
+      // Evitar duplicados — si ya existe una con ese nombre, actualizarla
+      const existingSubs = data.suscripciones || [];
+      const existingIdx = existingSubs.findIndex(s => s.name.toLowerCase() === subKey);
+      if (existingIdx !== -1) {
+        const updated = existingSubs.map((s, i) => i === existingIdx ? { ...s, amount: amountARS, active: true, day: parseInt(action.day) || s.day } : s);
+        const updatedExpenses = (data.recurringExpenses || []).map(g =>
+          g.description?.toLowerCase() === subKey ? { ...g, amount: amountARS, active: true } : g
+        );
+        await saveData(userId, { ...data, suscripciones: updated, recurringExpenses: updatedExpenses });
+        return `✅ Suscripción *${subName}* actualizada — ${fmt(amountARS)}/mes.${usdNote}`;
+      }
       const sub = {
         id: crypto.randomUUID(),
-        name: action.name || 'Suscripción',
+        name: subName,
         amount: amountARS,
         day: parseInt(action.day) || 1,
         category: action.category || 'Entretenimiento',
@@ -467,7 +480,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       };
       // Agregar también como gasto fijo si no existe uno igual
       const yaExisteGastoFijo = (data.recurringExpenses || []).some(g =>
-        g.description?.toLowerCase() === sub.name.toLowerCase()
+        g.description?.toLowerCase() === subKey
       );
       const gastoFijo = !yaExisteGastoFijo ? {
         id: crypto.randomUUID(),
@@ -479,7 +492,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       } : null;
       const newData = {
         ...data,
-        suscripciones: [...(data.suscripciones || []), sub],
+        suscripciones: [...existingSubs, sub],
         recurringExpenses: gastoFijo
           ? [...(data.recurringExpenses || []), gastoFijo]
           : (data.recurringExpenses || []),
@@ -498,12 +511,16 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
 
     case 'cancelar_suscripcion': {
       const keyword = (action.keyword || '').toLowerCase();
+      const cancelada = (data.suscripciones || []).find(s => s.name.toLowerCase().includes(keyword) && s.active);
+      if (!cancelada) return `🤔 No encontré ninguna suscripción con ese nombre.`;
+      // Desactivar suscripción y eliminar gasto fijo asociado
       const suscripciones = (data.suscripciones || []).map(s =>
         s.name.toLowerCase().includes(keyword) ? { ...s, active: false } : s
       );
-      const cancelada = (data.suscripciones || []).find(s => s.name.toLowerCase().includes(keyword) && s.active);
-      if (!cancelada) return `🤔 No encontré ninguna suscripción con ese nombre.`;
-      await saveData(userId, { ...data, suscripciones });
+      const recurringExpenses = (data.recurringExpenses || []).filter(g =>
+        !g.description?.toLowerCase().includes(keyword)
+      );
+      await saveData(userId, { ...data, suscripciones, recurringExpenses });
       return `🗑️ Suscripción *${cancelada.name}* (${fmt(cancelada.amount)}/mes) cancelada. Te ahorrás ${fmt(cancelada.amount * 12)} por año.`;
     }
 
