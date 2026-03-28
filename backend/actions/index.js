@@ -453,9 +453,27 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
         category: action.category || 'Entretenimiento',
         active: true,
       };
-      const suscripciones = [...(data.suscripciones || []), sub];
-      await saveData(userId, { ...data, suscripciones });
-      return `✅ Suscripción *${sub.name}* registrada — ${fmt(sub.amount)}/mes (día ${sub.day}).`;
+      // Agregar también como gasto fijo si no existe uno igual
+      const yaExisteGastoFijo = (data.recurringExpenses || []).some(g =>
+        g.description?.toLowerCase() === sub.name.toLowerCase()
+      );
+      const gastoFijo = !yaExisteGastoFijo ? {
+        id: crypto.randomUUID(),
+        description: sub.name,
+        amount: sub.amount,
+        category: sub.category,
+        day: sub.day,
+        active: true,
+      } : null;
+      const newData = {
+        ...data,
+        suscripciones: [...(data.suscripciones || []), sub],
+        recurringExpenses: gastoFijo
+          ? [...(data.recurringExpenses || []), gastoFijo]
+          : (data.recurringExpenses || []),
+      };
+      await saveData(userId, newData);
+      return `✅ Suscripción *${sub.name}* registrada — ${fmt(sub.amount)}/mes (día ${sub.day}).${gastoFijo ? '\n📌 También la agregué a tus gastos fijos para que figure en la proyección.' : ''}`;
     }
 
     case 'consultar_suscripciones': {
