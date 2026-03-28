@@ -135,6 +135,7 @@ ACCIONES DISPONIBLES:
 {"type":"agregar_fiado","name":"Marcos","amount":2500,"reason":"pan y leche"}
 {"type":"agregar_fiado","name":"Luisa","amountUSD":50,"currency":"usd","reason":"producto"}
 {"type":"registrar_pago_prestamo","name":"Claudio","amount":100}
+{"type":"borrar_prestamo","name":"Denis"}
 {"type":"consultar_prestamo","name":"Claudio"}
 {"type":"consultar_todos_prestamos"}
 {"type":"registrar_gastos_fijos","date":"YYYY-MM-DD"}
@@ -223,6 +224,7 @@ REGLAS DE INTERPRETACIÓN:
 - "cambiá el nombre de X a Y / el préstamo de X se llama Y / guardá como Y en vez de X" → renombrar_prestamo (oldName=X, newName=Y)
 - "quiénes me deben / quiénes tienen deuda / listá los préstamos / mostrá todos los que me deben" → SIEMPRE consultar_todos_prestamos (NUNCA conversacion, NUNCA consultar_prestamo con nombre específico)
 - "cuánto me debe X / qué debe X / el préstamo de X" → consultar_prestamo (con el nombre de la persona)
+- "borrá los préstamos de X / eliminá las deudas de X / sacá todo de X / borrá todo lo de X" → borrar_prestamo (name: nombre de la persona)
 - Si alguien pagó de más y tiene saldo a favor (credits en el sistema), mencionálo cuando sea relevante. Si vuelven a pedir fiado, Orbe debe informar que tiene crédito y usarlo primero.
 - "nueva deuda/debo/tengo una deuda/saqué una tarjeta/cuota" → agregar_deuda
 - "pagué la deuda/pagué la cuota/aboné la tarjeta" → pagar_deuda

@@ -977,6 +977,16 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       return `💵 *Pago registrado!*\n\n👤 ${action.name} pagó ${fmt(parseFloat(action.amount))}\n💰 Le queda pendiente: ${fmt(totalDespues)}\n✅ Se sumó ${fmt(pagado)} a tu balance.`;
     }
 
+    case 'borrar_prestamo': {
+      const key = (action.name || '').toLowerCase();
+      const before = (data.loans || []).length;
+      const loans = (data.loans || []).filter(l => !l.name.toLowerCase().includes(key));
+      if (loans.length === before) return `🤔 No encontré ningún préstamo a nombre de *${action.name}*.`;
+      const borrados = before - loans.length;
+      await saveData(userId, { ...data, loans });
+      return `🗑️ Listo, eliminé ${borrados} préstamo${borrados !== 1 ? 's' : ''} de *${action.name}*.`;
+    }
+
     case 'consultar_prestamo': {
       const loans = data.loans || [];
       const key = action.name.toLowerCase();
