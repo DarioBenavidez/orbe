@@ -6,7 +6,7 @@ import { Card, EmptyState } from '../../components/ui';
 
 export default function Suscripciones({ data }) {
   const C = useC();
-  const suscripciones = data.suscripciones || [];
+  const suscripciones = (data.suscripciones || []).filter(s => s.active !== false);
   const totalMensual = suscripciones.reduce((s, sub) => s + (sub.amount || 0), 0);
 
   return (
