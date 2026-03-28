@@ -39,14 +39,16 @@ export default function Proyeccion({ data, onSave }) {
   const recurringIncomes = data.recurringIncomes || [];
   const budgetItems = useMemo(() => data.budgets.filter(b=>b.limit>0), [data.budgets]);
   const budgetTotal = useMemo(() => budgetItems.reduce((s,b)=>s+b.limit,0), [budgetItems]);
+  const gastosFijos = useMemo(() => (data.recurringExpenses || []).filter(g=>g.active), [data.recurringExpenses]);
+  const gastosFijosTotal = useMemo(() => gastosFijos.reduce((s,g)=>s+(g.amount||0),0), [gastosFijos]);
   const activeDebts = useMemo(() => data.debts.filter(d=>d.installment>0&&d.remainingInstallments>0), [data.debts]);
   const months = useMemo(() => Array.from({length:12},(_,i)=>{
     const m=(startMonth+i)%12; const y=startYear+Math.floor((startMonth+i)/12);
     const income = getIncome(m, y);
     const cuotas=activeDebts.filter(d=>i<d.remainingInstallments).map(d=>({name:d.name,amount:d.installment}));
     const totalCuotas=cuotas.reduce((s,d)=>s+d.amount,0);
-    return {label:MONTH_NAMES[m],year:y,income,cuotas,totalCuotas,balance:income-budgetTotal-totalCuotas};
-  }), [activeDebts, budgetTotal, avgIncome, overrides]);
+    return {label:MONTH_NAMES[m],year:y,income,cuotas,totalCuotas,balance:income-budgetTotal-gastosFijosTotal-totalCuotas};
+  }), [activeDebts, budgetTotal, gastosFijosTotal, avgIncome, overrides]);
 
   const saveOverride = () => {
     const amount = parseAmt(newSalary);
@@ -73,7 +75,7 @@ export default function Proyeccion({ data, onSave }) {
       <View style={{ flexDirection:'row', gap:10, flexWrap:'wrap', marginBottom:14 }}>
         {[
           { label:'Ingreso base', val:avgIncome, sub:'Prom. 3 meses' },
-          { label:'Gastos fijos', val:budgetTotal, sub:`${budgetItems.length} categorías` },
+          { label:'Gastos fijos', val:budgetTotal+gastosFijosTotal, sub:`${budgetItems.length} categorías · ${gastosFijos.length} fijos` },
           { label:'Cuotas este mes', val:months[0].totalCuotas, sub:`${months[0].cuotas.length} cuota(s)` },
           { label:'Balance estimado', val:months[0].balance, sub:months[0].balance>=0?'Superávit':'Déficit' },
         ].map(k => (
@@ -148,6 +150,12 @@ export default function Proyeccion({ data, onSave }) {
                   <View key={b.cat} style={{ flexDirection:'row', justifyContent:'space-between' }}>
                     <Text style={{ fontSize:13, color:C.textMuted }}>{cats[b.cat]||'📦'} {b.cat}</Text>
                     <Text style={{ fontSize:13, color:C.red }}>-{fmt(b.limit)}</Text>
+                  </View>
+                ))}
+                {gastosFijos.map(g => (
+                  <View key={g.id||g.description} style={{ flexDirection:'row', justifyContent:'space-between' }}>
+                    <Text style={{ fontSize:13, color:C.textMuted }}>📌 {g.description}</Text>
+                    <Text style={{ fontSize:13, color:C.red }}>-{fmt(g.amount)}</Text>
                   </View>
                 ))}
                 {mo.cuotas.map((c,ci) => (
