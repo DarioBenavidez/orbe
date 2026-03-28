@@ -862,7 +862,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       }
 
       const loanId = crypto.randomUUID();
-      const loan = { id: loanId, name: action.name, reason: action.reason || '', amount: remaining, remaining, payments: [], createdAt: today() };
+      const loan = { id: loanId, name: action.name, reason: action.reason || '', amount: remaining, remaining, payments: [], loanType: 'prestamo', createdAt: today() };
       // Registrar como gasto para que impacte en el balance
       const loanTx = {
         id: crypto.randomUUID(),
@@ -875,6 +875,43 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       };
       await saveData(userId, { ...data, loans: [...loans, loan], credits, transactions: [...(data.transactions || []), loanTx] });
       return `📋 *Préstamo registrado!*\n\n👤 ${action.name} te debe ${fmt(remaining)}${action.reason ? `\n📝 Por: ${action.reason}` : ''}\n📅 ${today()}${usdLoanNote}${creditNote}\n💸 Desconté ${fmt(remaining)} de tu balance.\n\nCuando pague algo, avisame y lo registro.`;
+    }
+
+    case 'agregar_fiado': {
+      const loans = data.loans || [];
+      const credits = { ...(data.credits || {}) };
+      const personKey = action.name.toLowerCase();
+      let usdNote = '';
+      let amountARS;
+      if (action.currency === 'usd' && action.amountUSD) {
+        const dolar = await getDolarPrice();
+        const rate = dolar.blue;
+        amountARS = Math.round(parseFloat(action.amountUSD) * rate);
+        usdNote = `\n💱 USD ${action.amountUSD} × $${Math.round(rate)} = ${fmt(amountARS)}`;
+      } else {
+        amountARS = parseFloat(action.amount) || 0;
+      }
+
+      // Descontar saldo a favor existente
+      let remaining = amountARS;
+      let creditNote = '';
+      if (credits[personKey] && credits[personKey].amount > 0) {
+        const credito = credits[personKey].amount;
+        if (credito >= remaining) {
+          credits[personKey].amount -= remaining;
+          await saveData(userId, { ...data, loans, credits });
+          return `ℹ️ *${action.name}* tiene un saldo a favor de ${fmt(credito)}. Este fiado (${fmt(remaining)}) queda cubierto con ese saldo.`;
+        } else {
+          remaining -= credito;
+          credits[personKey].amount = 0;
+          creditNote = `\n_⚡ Se descontó un saldo a favor de ${fmt(credito)} que tenía._`;
+        }
+      }
+
+      const loan = { id: crypto.randomUUID(), name: action.name, reason: action.reason || '', amount: remaining, remaining, payments: [], loanType: 'fiado', createdAt: today() };
+      // Fiado NO crea transacción — no sale plata del balance
+      await saveData(userId, { ...data, loans: [...loans, loan], credits });
+      return `🤝 *Fiado registrado!*\n\n👤 ${action.name} te debe ${fmt(remaining)}${action.reason ? `\n📝 Por: ${action.reason}` : ''}\n📅 ${today()}${usdNote}${creditNote}\n_No se descontó del balance — fue mercadería/servicio._\n\nCuando pague, avisame y lo registro.`;
     }
 
     case 'registrar_pago_prestamo': {
