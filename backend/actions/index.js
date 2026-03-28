@@ -3,6 +3,7 @@
 const { supabase, loadData, saveData, getPendingSuggestion, savePendingSuggestion, clearPendingSuggestion } = require('../lib/supabase');
 const { sendWhatsAppMessage } = require('../lib/whatsapp');
 const { fmt, fmtSigned, fmtDate, today, currentMonth, arDay, arNow, parseDateParts, getDolarPrice, MONTH_NAMES, getGreeting, truncate } = require('../lib/helpers');
+const fmtUSD = (n) => { const num = Number(n) || 0; return `USD ${num % 1 === 0 ? num : num.toFixed(2)}`; };
 const { callClaude } = require('../ai/interpret');
 const { filterByMonth, monthlyTotals } = require('./helpers');
 
@@ -1015,7 +1016,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       };
       await saveData(userId, { ...data, savings: [...savings, sv] });
       if (isUSD) {
-        return `🐷 *Meta de ahorro en dólares creada!*\n\n📝 ${sv.name}\n🎯 Objetivo: USD ${sv.target} (≈ ${fmt(Math.round(sv.target * arsRate))})\n${sv.current > 0 ? `💰 Ya tenés: USD ${sv.current} (≈ ${fmt(Math.round(sv.current * arsRate))})\n` : ''}\nCuando quieras depositar, decime: *"depositá $X dólares en ${sv.name}"*`;
+        return `🐷 *Meta de ahorro en dólares creada!*\n\n📝 ${sv.name}\n🎯 Objetivo: ${fmtUSD(sv.target)} (≈ ${fmt(Math.round(sv.target * arsRate))})\n${sv.current > 0 ? `💰 Ya tenés: ${fmtUSD(sv.current)} (≈ ${fmt(Math.round(sv.current * arsRate))})\n` : ''}\nCuando quieras depositar, decime: *"depositá X dólares en ${sv.name}"*`;
       }
       return `🐷 *Meta de ahorro creada!*\n\n📝 ${sv.name}\n🎯 Objetivo: ${fmt(sv.target)}${sv.current > 0 ? `\n💰 Ya tenés: ${fmt(sv.current)}` : ''}\n\nCuando quieras depositar, decime: *"depositá $X en ${sv.name}"*`;
     }
@@ -1036,8 +1037,9 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
         savings[idx] = sv;
         const pct = Math.round((sv.current / sv.target) * 100);
         await saveData(userId, { ...data, savings });
-        if (sv.current >= sv.target) return `🎉 *¡Meta cumplida!*\n\n🐷 ${sv.name}: USD ${sv.current} / USD ${sv.target} (100%)\n\n¡Llegaste a tu objetivo!`;
-        return `🐷 *Depósito registrado!*\n\n📝 ${sv.name}\n💵 Depositaste: USD ${monto} (≈ ${fmt(Math.round(monto * dolar.blue))})\n📊 Acumulado: USD ${sv.current} / USD ${sv.target} (${pct}%)\n≈ ${fmt(Math.round(sv.current * dolar.blue))} ARS al blue de hoy\n${pct >= 80 ? '¡Ya casi llegás! 🔥' : `Falta USD ${sv.target - sv.current} para la meta.`}`;
+        if (sv.current >= sv.target) return `🎉 *¡Meta cumplida!*\n\n🐷 ${sv.name}: ${fmtUSD(sv.current)} / ${fmtUSD(sv.target)} (100%)\n\n¡Llegaste a tu objetivo!`;
+        const falta = parseFloat((sv.target - sv.current).toFixed(2));
+        return `🐷 *Depósito registrado!*\n\n📝 ${sv.name}\n💵 Depositaste: ${fmtUSD(monto)} (≈ ${fmt(Math.round(monto * dolar.blue))})\n📊 Acumulado: ${fmtUSD(sv.current)} / ${fmtUSD(sv.target)} (${pct}%)\n≈ ${fmt(Math.round(sv.current * dolar.blue))} ARS al blue de hoy\n${pct >= 80 ? '¡Ya casi llegás! 🔥' : `Falta ${fmtUSD(falta)} para la meta.`}`;
       }
 
       sv.current = (sv.current || 0) + monto;

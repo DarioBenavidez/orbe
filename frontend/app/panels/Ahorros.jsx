@@ -2,6 +2,11 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useC } from '../../lib/theme';
 import { fmt, parseAmt } from '../../lib/constants';
+
+const fmtUSD = (n) => {
+  const num = Number(n) || 0;
+  return num % 1 === 0 ? `USD ${num}` : `USD ${num.toFixed(2)}`;
+};
 import { BACKEND_URL } from '../../constants/supabase';
 import { Card, Btn, Input, FAB, ModalSheet, IconCircle } from '../../components/ui';
 
@@ -70,7 +75,7 @@ export default function Ahorros({ data, onSave }) {
                       </View>
                       {isUSD
                         ? <>
-                            <Text style={{ fontSize:13, fontWeight:'700', color:C.text }}>USD {sv.current} / USD {sv.target}</Text>
+                            <Text style={{ fontSize:13, fontWeight:'700', color:C.text }}>{fmtUSD(sv.current)} / {fmtUSD(sv.target)}</Text>
                             {arsEquiv !== null && <Text style={{ fontSize:11, color:C.textMuted }}>≈ {fmt(arsEquiv)} de {fmt(arsTarget)} ARS</Text>}
                           </>
                         : <Text style={{ fontSize:12, color:C.textMuted }}>{fmt(sv.current)} de {fmt(sv.target)}</Text>
@@ -92,7 +97,7 @@ export default function Ahorros({ data, onSave }) {
                         <View key={i} style={{ flexDirection:'row', justifyContent:'space-between', paddingVertical:2 }}>
                           <Text style={{ fontSize:11, color:C.textMuted }}>{h.date}</Text>
                           <Text style={{ fontSize:11, color: isUSD ? '#22c55e' : C.accent, fontWeight:'600' }}>
-                            +{isUSD ? `USD ${h.amount}${h.arsRate ? ` (≈ ${fmt(Math.round(h.amount * h.arsRate))})` : ''}` : fmt(h.amount)}
+                            +{isUSD ? `${fmtUSD(h.amount)}${h.arsRate ? ` (≈ ${fmt(Math.round(h.amount * h.arsRate))})` : ''}` : fmt(h.amount)}
                           </Text>
                         </View>
                       ))}
