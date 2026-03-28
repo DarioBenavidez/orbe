@@ -467,8 +467,16 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
         const updatedExpenses = (data.recurringExpenses || []).map(g =>
           g.description?.toLowerCase() === subKey ? { ...g, amount: amountARS, active: true } : g
         );
-        await saveData(userId, { ...data, suscripciones: updated, recurringExpenses: updatedExpenses });
-        return `✅ Suscripción *${subName}* actualizada — ${fmt(amountARS)}/mes.${usdNote}`;
+        const updateTx = {
+          id: crypto.randomUUID(),
+          type: 'gasto',
+          amount: amountARS,
+          description: `Suscripción ${subName}`,
+          category: action.category || 'Entretenimiento',
+          date: today(),
+        };
+        await saveData(userId, { ...data, suscripciones: updated, recurringExpenses: updatedExpenses, transactions: [...(data.transactions || []), updateTx] });
+        return `✅ Suscripción *${subName}* actualizada — ${fmt(amountARS)}/mes.${usdNote}\n💸 Registré el gasto de este mes en tu historial.`;
       }
       const sub = {
         id: crypto.randomUUID(),
@@ -497,8 +505,17 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
           ? [...(data.recurringExpenses || []), gastoFijo]
           : (data.recurringExpenses || []),
       };
-      await saveData(userId, newData);
-      return `✅ Suscripción *${sub.name}* registrada — ${fmt(sub.amount)}/mes (día ${sub.day}).${usdNote}${gastoFijo ? '\n📌 También la agregué a tus gastos fijos para que figure en la proyección.' : ''}`;
+      // Registrar gasto del mes actual
+      const subTx = {
+        id: crypto.randomUUID(),
+        type: 'gasto',
+        amount: sub.amount,
+        description: `Suscripción ${sub.name}`,
+        category: sub.category,
+        date: today(),
+      };
+      await saveData(userId, { ...newData, transactions: [...(data.transactions || []), subTx] });
+      return `✅ Suscripción *${sub.name}* registrada — ${fmt(sub.amount)}/mes (día ${sub.day}).${usdNote}${gastoFijo ? '\n📌 También la agregué a tus gastos fijos.' : ''}\n💸 Registré el gasto de este mes en tu historial.`;
     }
 
     case 'consultar_suscripciones': {
