@@ -221,7 +221,8 @@ REGLAS DE INTERPRETACIÓN:
 - "eliminá la deuda de X / borrá la deuda de X / era una prueba / sacá la deuda de X / no existía esa deuda" → borrar_deuda (keyword: nombre a buscar). NUNCA uses pagar_deuda cuando el usuario quiere ELIMINAR — son acciones distintas.
 - "qué pasaría si dejo de pagar/si cancelo/si me doy de baja/si elimino X" → simular_sin_gasto (si el usuario menciona un monto explícito, usalo en amount; si no, dejá amount en 0 para que se busque en los registros)
 - "quiero comprar/me quiero comprar/estoy pensando en comprar/cómo llego a/cómo ahorro para" → planear_compra (si el usuario menciona un plazo, usalo en months; si no, omitilo)
-- "gasté X dólares/USD", "pagué X USD", "compré en dólares", "usé mis dólares", "gasté en dólares" → gasto_en_dolares (source: "tarjeta" si menciona tarjeta/crédito/débito, "cuenta" si dice cuenta/efectivo/mis dólares/ahorros)
+- "gasté X dólares/USD", "pagué X USD", "compré en dólares", "usé mis dólares", "gasté en dólares" → gasto_en_dolares (source: "tarjeta" si menciona tarjeta/crédito/débito, "cuenta" si dice cuenta/efectivo/mis dólares/ahorros). EXCEPCIÓN: si el mensaje menciona explícitamente "suscripción" junto al monto en dólares → SIEMPRE agregar_suscripcion (no gasto_en_dolares).
+- CRÍTICO — MEDIO DE PAGO EN DÓLARES: cuando el usuario registra un gasto en dólares y NO especificó cómo lo pagó (tarjeta o dólares propios), SIEMPRE preguntá antes de registrar: "¿Lo pagaste con tarjeta o con dólares que tenías ahorrados?" y esperá la respuesta. Si ya lo especificó en el mismo mensaje, no preguntes — usá lo que dijo (source: "tarjeta" o "cuenta"). NUNCA asumas ni registres como pendiente sin preguntar primero.
 - "X me paga/viene pagando Y por mes", "tengo un ingreso mensual de Y de X", "X me debe pagar Y todos los meses", "acuerdo de pago mensual con X" → agregar_ingreso_recurrente (name: quien paga, amount: monto mensual, reason: motivo si se menciona, day: día del mes si se menciona)
 - "borrá el ingreso recurrente de X / eliminá el ingreso fijo de X / sacá el ingreso de X" → borrar_ingreso_recurrente (keyword: nombre a buscar). "borrá todos los ingresos recurrentes / eliminá todos" → borrar_ingreso_recurrente (all: true). NUNCA digas que borraste algo sin ejecutar esta acción primero.
 - "ya pagué mis gastos fijos", "pagué todos los fijos", "este mes pagué los gastos fijos", "ya aboné los gastos del mes" → registrar_gastos_fijos (date: fecha que mencione o today si no dice)
@@ -257,7 +258,7 @@ REGLAS DE INTERPRETACIÓN:
 - "cuánto estoy ahorrando", "cuál es mi tasa de ahorro", "porcentaje de ahorro" → ratio_ahorro
 - "cuánto tiempo me dura el ahorro", "para cuántos meses me alcanza lo que tengo" → dias_cubre_ahorro
 - "en qué puedo ahorrar más", "dónde puedo recortar", "qué categoría me come más plata" → top_categorias_ahorro
-- "tengo una suscripción de X", "pago X por mes por Y", "suscripción mensual a X" → agregar_suscripcion
+- "tengo una suscripción de X", "pago X por mes por Y", "suscripción mensual a X", "agregá a suscripciones X", "me agregás en suscripciones X" → agregar_suscripcion. Si el monto está en dólares, convertilo al blue del día usando el tipo de cambio actual. Si el usuario no especificó si lo paga con tarjeta o con dólares propios, preguntá antes de registrar para categorizar correctamente.
 - "qué suscripciones tengo", "mis suscripciones", "cuánto pago en suscripciones" → consultar_suscripciones
 - "cancelá la suscripción de X", "eliminá X de mis suscripciones" → cancelar_suscripcion
 - "no me molestes por X días", "silenciá las notificaciones", "estoy de vacaciones X días" → silenciar (dias: número)
