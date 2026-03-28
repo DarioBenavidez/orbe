@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useC } from '../../lib/theme';
 import { fmt, parseAmt } from '../../lib/constants';
+import { BACKEND_URL } from '../../constants/supabase';
 import { Card, Btn, Input, FAB, ModalSheet, IconCircle } from '../../components/ui';
 
 export default function Ahorros({ data, onSave }) {
@@ -12,6 +13,14 @@ export default function Ahorros({ data, onSave }) {
   const emptyF = { name:'', target:'', current:'' };
   const [form, setForm]         = useState(emptyF);
   const [editForm, setEditForm] = useState(emptyF);
+  const [dolarBlue, setDolarBlue] = useState(null);
+
+  useEffect(() => {
+    fetch(`${BACKEND_URL}/api/dolar`)
+      .then(r => r.json())
+      .then(d => { if (d.blue) setDolarBlue(d.blue); })
+      .catch(() => {});
+  }, []);
 
   const addAhorro = () => {
     if (!form.name||!form.target) return;
@@ -45,14 +54,27 @@ export default function Ahorros({ data, onSave }) {
               <Text style={{ color:C.textMuted, fontSize:14, textAlign:'center' }}>No hay metas de ahorro aún</Text>
             </View>
           : data.savings.map(sv => {
+              const isUSD = sv.currency === 'usd';
               const pct = sv.target > 0 ? Math.min((sv.current/sv.target)*100, 100) : 0;
+              const rate = dolarBlue || sv.arsRate;
+              const arsEquiv = isUSD && rate ? Math.round(sv.current * rate) : null;
+              const arsTarget = isUSD && rate ? Math.round(sv.target * rate) : null;
               return (
                 <Card key={sv.id} style={{ marginBottom:12 }}>
                   <View style={{ flexDirection:'row', alignItems:'center', marginBottom:12 }}>
-                    <IconCircle icon="🐷" bg={C.accent+'22'} size={44}/>
+                    <IconCircle icon={isUSD ? '💵' : '🐷'} bg={C.accent+'22'} size={44}/>
                     <View style={{ flex:1, marginLeft:12 }}>
-                      <Text style={{ fontSize:15, fontWeight:'700', color:C.text }}>{sv.name}</Text>
-                      <Text style={{ fontSize:12, color:C.textMuted }}>{fmt(sv.current)} de {fmt(sv.target)}</Text>
+                      <View style={{ flexDirection:'row', alignItems:'center', gap:6 }}>
+                        <Text style={{ fontSize:15, fontWeight:'700', color:C.text }}>{sv.name}</Text>
+                        {isUSD && <Text style={{ fontSize:10, fontWeight:'700', color:'#22c55e', backgroundColor:'#22c55e22', paddingHorizontal:6, paddingVertical:2, borderRadius:8 }}>USD</Text>}
+                      </View>
+                      {isUSD
+                        ? <>
+                            <Text style={{ fontSize:13, fontWeight:'700', color:C.text }}>USD {sv.current} / USD {sv.target}</Text>
+                            {arsEquiv !== null && <Text style={{ fontSize:11, color:C.textMuted }}>≈ {fmt(arsEquiv)} de {fmt(arsTarget)} ARS</Text>}
+                          </>
+                        : <Text style={{ fontSize:12, color:C.textMuted }}>{fmt(sv.current)} de {fmt(sv.target)}</Text>
+                      }
                     </View>
                     <View style={{ gap:4, alignItems:'flex-end' }}>
                       <TouchableOpacity onPress={() => openEdit(sv)}><Text style={{ color:C.accent, fontSize:11, fontWeight:'600' }}>Editar</Text></TouchableOpacity>
@@ -60,16 +82,18 @@ export default function Ahorros({ data, onSave }) {
                     </View>
                   </View>
                   <View style={{ backgroundColor:C.surface2, borderRadius:99, height:8, marginBottom:4 }}>
-                    <View style={{ backgroundColor:C.accent, height:8, borderRadius:99, width:`${pct}%` }}/>
+                    <View style={{ backgroundColor:isUSD ? '#22c55e' : C.accent, height:8, borderRadius:99, width:`${pct}%` }}/>
                   </View>
-                  <Text style={{ color:C.accent, fontSize:11, textAlign:'right', fontWeight:'600' }}>{pct.toFixed(0)}%</Text>
+                  <Text style={{ color: isUSD ? '#22c55e' : C.accent, fontSize:11, textAlign:'right', fontWeight:'600' }}>{pct.toFixed(0)}%</Text>
                   {sv.history && sv.history.length>0 && (
                     <View style={{ marginTop:10, borderTopWidth:1, borderTopColor:C.border, paddingTop:8 }}>
                       <Text style={{ fontSize:9, fontWeight:'700', color:C.textMuted, letterSpacing:0.5, marginBottom:6 }}>HISTORIAL DE DEPÓSITOS</Text>
                       {sv.history.slice().reverse().slice(0,3).map((h,i) => (
                         <View key={i} style={{ flexDirection:'row', justifyContent:'space-between', paddingVertical:2 }}>
                           <Text style={{ fontSize:11, color:C.textMuted }}>{h.date}</Text>
-                          <Text style={{ fontSize:11, color:C.accent, fontWeight:'600' }}>+{fmt(h.amount)}</Text>
+                          <Text style={{ fontSize:11, color: isUSD ? '#22c55e' : C.accent, fontWeight:'600' }}>
+                            +{isUSD ? `USD ${h.amount}${h.arsRate ? ` (≈ ${fmt(Math.round(h.amount * h.arsRate))})` : ''}` : fmt(h.amount)}
+                          </Text>
                         </View>
                       ))}
                     </View>

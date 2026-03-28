@@ -7,7 +7,7 @@ const router = express.Router();
 const { supabase, linkPhoneToUser } = require('../lib/supabase');
 const { generateLinkingCode, generatePhoneOTP, getPhoneOTP, deletePhoneOTP } = require('../lib/auth');
 const { sendWhatsAppMessage } = require('../lib/whatsapp');
-const { getGreeting } = require('../lib/helpers');
+const { getGreeting, getDolarPrice } = require('../lib/helpers');
 
 
 // ── Rate limit para generación de códigos ─────────────────
@@ -22,7 +22,7 @@ const linkCodeLimiter = rateLimit({
 // ── CORS para /api/* ───────────────────────────────────────
 router.use((req, res, next) => {
   res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || 'http://localhost:3000');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
@@ -105,6 +105,17 @@ router.post('/verify-phone-otp', async (req, res) => {
     res.json({ ok: true });
   } catch (err) {
     console.error('❌ Error verificando OTP:', err.message);
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+// ── Cotización del dólar (para el frontend) ───────────────
+router.get('/dolar', async (req, res) => {
+  try {
+    const dolar = await getDolarPrice();
+    if (!dolar) return res.status(503).json({ error: 'No disponible' });
+    res.json({ blue: dolar.blue, oficial: dolar.oficial, tarjeta: dolar.tarjeta || null });
+  } catch {
     res.status(500).json({ error: 'Error interno' });
   }
 });

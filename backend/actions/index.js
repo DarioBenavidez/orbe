@@ -998,14 +998,25 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
 
     case 'agregar_ahorro': {
       const savings = data.savings || [];
+      const isUSD = action.currency === 'usd';
+      let arsRate = null;
+      if (isUSD) {
+        const dolar = await getDolarPrice();
+        arsRate = dolar.blue;
+      }
       const sv = {
         id: crypto.randomUUID(),
         name: action.name,
-        target: parseFloat(action.target),
-        current: parseFloat(action.current || 0),
+        target: parseFloat(action.target || action.targetUSD || 0),
+        current: parseFloat(action.current || action.currentUSD || 0),
+        currency: isUSD ? 'usd' : 'ars',
+        arsRate,
         history: [],
       };
       await saveData(userId, { ...data, savings: [...savings, sv] });
+      if (isUSD) {
+        return `🐷 *Meta de ahorro en dólares creada!*\n\n📝 ${sv.name}\n🎯 Objetivo: USD ${sv.target} (≈ ${fmt(Math.round(sv.target * arsRate))})\n${sv.current > 0 ? `💰 Ya tenés: USD ${sv.current} (≈ ${fmt(Math.round(sv.current * arsRate))})\n` : ''}\nCuando quieras depositar, decime: *"depositá $X dólares en ${sv.name}"*`;
+      }
       return `🐷 *Meta de ahorro creada!*\n\n📝 ${sv.name}\n🎯 Objetivo: ${fmt(sv.target)}${sv.current > 0 ? `\n💰 Ya tenés: ${fmt(sv.current)}` : ''}\n\nCuando quieras depositar, decime: *"depositá $X en ${sv.name}"*`;
     }
 
@@ -1015,6 +1026,20 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       if (idx === -1) return `🤔 No encontré ninguna meta de ahorro que coincida con *${action.keyword}*. ¿Cómo se llama exactamente?`;
       const sv = { ...savings[idx] };
       const monto = parseFloat(action.amount);
+      const isUSD = sv.currency === 'usd';
+
+      if (isUSD) {
+        const dolar = await getDolarPrice();
+        sv.arsRate = dolar.blue;
+        sv.current = (sv.current || 0) + monto;
+        sv.history = [...(sv.history || []), { date: today(), amount: monto, arsRate: dolar.blue }];
+        savings[idx] = sv;
+        const pct = Math.round((sv.current / sv.target) * 100);
+        await saveData(userId, { ...data, savings });
+        if (sv.current >= sv.target) return `🎉 *¡Meta cumplida!*\n\n🐷 ${sv.name}: USD ${sv.current} / USD ${sv.target} (100%)\n\n¡Llegaste a tu objetivo!`;
+        return `🐷 *Depósito registrado!*\n\n📝 ${sv.name}\n💵 Depositaste: USD ${monto} (≈ ${fmt(Math.round(monto * dolar.blue))})\n📊 Acumulado: USD ${sv.current} / USD ${sv.target} (${pct}%)\n≈ ${fmt(Math.round(sv.current * dolar.blue))} ARS al blue de hoy\n${pct >= 80 ? '¡Ya casi llegás! 🔥' : `Falta USD ${sv.target - sv.current} para la meta.`}`;
+      }
+
       sv.current = (sv.current || 0) + monto;
       sv.history = [...(sv.history || []), { date: today(), amount: monto }];
       savings[idx] = sv;
