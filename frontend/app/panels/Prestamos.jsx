@@ -24,7 +24,7 @@ export default function Prestamos({ data, onSave }) {
     },
   ]);
 
-  if (loans.length === 0 && Object.keys(credits).length === 0) {
+  if (loans.length === 0 && Object.values(credits).filter(c => c.amount > 0).length === 0) {
     return (
       <View style={{ flex:1, padding:16 }}>
         <View style={{ padding:40, alignItems:'center' }}>
@@ -54,10 +54,10 @@ export default function Prestamos({ data, onSave }) {
           </View>
         )}
 
-        {Object.values(credits).length > 0 && (
+        {Object.values(credits).filter(c => c.amount > 0).length > 0 && (
           <Card style={{ marginBottom:14, borderLeftWidth:3, borderLeftColor:C.green }}>
             <Text style={{ fontSize:14, fontWeight:'700', color:C.text, marginBottom:12 }}>✅ Saldo a favor</Text>
-            {Object.values(credits).map(c => (
+            {Object.values(credits).filter(c => c.amount > 0).map(c => (
               <View key={c.name} style={{ flexDirection:'row', justifyContent:'space-between', paddingVertical:8, borderBottomWidth:1, borderBottomColor:C.border }}>
                 <Text style={{ fontSize:14, color:C.text, fontWeight:'500' }}>{c.name}</Text>
                 <Text style={{ fontSize:14, color:C.green, fontWeight:'700' }}>{fmt(c.amount)}</Text>
