@@ -68,7 +68,7 @@ export default function Prestamos({ data, onSave }) {
           const pct       = total > 0 ? Math.min(((total - remaining) / total) * 100, 100) : 0;
           const pagado    = total - remaining;
           return (
-            <Card key={l.name} style={{ marginBottom:12 }}>
+            <Card key={l.id || l.name} style={{ marginBottom:12 }}>
               <View style={{ flexDirection:'row', alignItems:'flex-start', marginBottom:12 }}>
                 <IconCircle icon="🤝" bg={C.accent+'18'} size={44}/>
                 <View style={{ flex:1, marginLeft:12 }}>
