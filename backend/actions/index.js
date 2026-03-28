@@ -4,6 +4,7 @@ const { supabase, loadData, saveData, getPendingSuggestion, savePendingSuggestio
 const { sendWhatsAppMessage } = require('../lib/whatsapp');
 const { fmt, fmtSigned, fmtDate, today, currentMonth, arDay, arNow, parseDateParts, getDolarPrice, MONTH_NAMES, getGreeting, truncate } = require('../lib/helpers');
 const fmtUSD = (n) => { const num = Number(n) || 0; return `USD ${num % 1 === 0 ? num : num.toFixed(2)}`; };
+const fmtLoan = (loan) => loan.currency === 'usd' && loan.amountUSD ? `${fmtUSD(loan.amountUSD)} (≈ ${fmt(loan.remaining)})` : fmt(loan.remaining);
 const { callClaude } = require('../ai/interpret');
 const { filterByMonth, monthlyTotals } = require('./helpers');
 
@@ -862,7 +863,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       }
 
       const loanId = crypto.randomUUID();
-      const loan = { id: loanId, name: action.name, reason: action.reason || '', amount: remaining, remaining, payments: [], loanType: 'prestamo', createdAt: today() };
+      const loan = { id: loanId, name: action.name, reason: action.reason || '', amount: remaining, remaining, payments: [], loanType: 'prestamo', createdAt: today(), ...(action.currency === 'usd' ? { currency: 'usd', amountUSD: parseFloat(action.amountUSD) } : {}) };
       // Registrar como gasto para que impacte en el balance
       const loanTx = {
         id: crypto.randomUUID(),
@@ -908,7 +909,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
         }
       }
 
-      const loan = { id: crypto.randomUUID(), name: action.name, reason: action.reason || '', amount: remaining, remaining, payments: [], loanType: 'fiado', createdAt: today() };
+      const loan = { id: crypto.randomUUID(), name: action.name, reason: action.reason || '', amount: remaining, remaining, payments: [], loanType: 'fiado', createdAt: today(), ...(action.currency === 'usd' ? { currency: 'usd', amountUSD: parseFloat(action.amountUSD) } : {}) };
       // Fiado NO crea transacción — no sale plata del balance
       await saveData(userId, { ...data, loans: [...loans, loan], credits });
       return `🤝 *Fiado registrado!*\n\n👤 ${action.name} te debe ${fmt(remaining)}${action.reason ? `\n📝 Por: ${action.reason}` : ''}\n📅 ${today()}${usdNote}${creditNote}\n_No se descontó del balance — fue mercadería/servicio._\n\nCuando pague, avisame y lo registro.`;
@@ -992,11 +993,12 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
 
       let resp = `📋 *Deuda de ${matching[0].name}*\n\n`;
       if (activos.length > 1) {
-        resp += activos.map(l => `• ${l.reason || 'Préstamo'}: ${fmt(l.remaining)}`).join('\n') + '\n';
+        resp += activos.map(l => `• ${l.reason || (l.loanType === 'fiado' ? 'Fiado' : 'Préstamo')}: ${fmtLoan(l)}`).join('\n') + '\n';
         resp += `\n💰 Total pendiente: ${fmt(totalRest)}\n`;
       } else {
-        resp += `💰 Original: ${fmt(totalOrig)}\n💸 Pagado: ${fmt(pagadoTotal)}\n⏳ Queda: ${fmt(totalRest)}\n`;
+        resp += `💰 Original: ${fmtLoan(activos[0])}\n💸 Pagado: ${fmt(pagadoTotal)}\n⏳ Queda: ${fmtLoan(activos[0])}\n`;
         if (activos[0]?.reason) resp += `📝 Por: ${activos[0].reason}\n`;
+        if (activos[0]?.loanType) resp += `📌 Tipo: ${activos[0].loanType === 'fiado' ? 'Fiado' : 'Préstamo'}\n`;
       }
       if (todosLosPagos.length > 0) {
         resp += `\n📜 *Historial de pagos:*\n${todosLosPagos.map(p => `• ${p.date}: ${fmt(p.amount)}`).join('\n')}`;
@@ -1012,10 +1014,11 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       // Agrupar por persona y sumar sólo los registros con remaining > 0
       const porPersona = {};
       for (const loan of loans) {
-        if (loan.remaining <= 0) continue; // ignorar pagados
+        if (loan.remaining <= 0) continue;
         const key = loan.name.toLowerCase();
-        if (!porPersona[key]) porPersona[key] = { name: loan.name, total: 0, items: [] };
+        if (!porPersona[key]) porPersona[key] = { name: loan.name, total: 0, items: [], loans: [] };
         porPersona[key].total += loan.remaining;
+        porPersona[key].loans.push(loan);
         if (loan.reason) porPersona[key].items.push(loan.reason);
       }
 
@@ -1025,8 +1028,14 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
 
       const totalGlobal = activos.reduce((s, p) => s + p.total, 0);
       const lineas = activos.map(p => {
-        const detalle = p.items.length > 0 ? ` (${p.items.join(', ')})` : '';
-        return `👤 *${p.name}*: ${fmt(p.total)}${detalle}`;
+        // Si todos sus loans son en la misma moneda USD, mostrarlo
+        const usdLoans = p.loans.filter(l => l.currency === 'usd');
+        const totalUSD = usdLoans.reduce((s, l) => s + (l.amountUSD || 0), 0);
+        const montoStr = usdLoans.length === p.loans.length && totalUSD > 0
+          ? `${fmtUSD(totalUSD)} (≈ ${fmt(p.total)})`
+          : fmt(p.total);
+        const detalle = p.items.length > 0 ? ` — ${p.items.join(', ')}` : '';
+        return `👤 *${p.name}*: ${montoStr}${detalle}`;
       });
       let resp = `📋 *Préstamos pendientes*\n\n`;
       if (activos.length) resp += lineas.join('\n') + `\n\n💰 Total que te deben: ${fmt(totalGlobal)}`;
