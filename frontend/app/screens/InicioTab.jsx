@@ -123,6 +123,7 @@ export default function InicioTab({ data, onSave, onMonthPress, nombre, onOpenPa
               { key:'calendario', label:'Eventos',    icon:'🗓️' },
               { key:'proyeccion',    label:'Proyección',    icon:'📈' },
               { key:'suscripciones', label:'Suscripciones', icon:'📺' },
+              { key:'gastosfijos',   label:'Gastos Fijos',  icon:'📌' },
             ].map(m => (
               <TouchableOpacity key={m.key} onPress={() => onOpenPanel(m.key)}
                 style={{ backgroundColor:C.accent, borderWidth:1, borderColor:C.gold, borderRadius:16, padding:14, marginRight:10, alignItems:'center', width:90, shadowColor:'#C9A84C', shadowOffset:{ width:0, height:4 }, shadowOpacity:0.25, shadowRadius:8, elevation:6 }}>
