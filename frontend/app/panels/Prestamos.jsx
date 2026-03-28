@@ -2,6 +2,11 @@ import React from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useC } from '../../lib/theme';
 import { fmt } from '../../lib/constants';
+
+const fmtUSD = (n) => { const num = Number(n)||0; return `USD ${num%1===0?num:num.toFixed(2)}`; };
+const fmtLoan = (l, amount) => l.currency==='usd' && l.amountUSD
+  ? `${fmtUSD(l.amountUSD)} (≈ ${fmt(amount)})`
+  : fmt(amount);
 import { Card, IconCircle } from '../../components/ui';
 
 export default function Prestamos({ data, onSave }) {
@@ -72,9 +77,13 @@ export default function Prestamos({ data, onSave }) {
               <View style={{ flexDirection:'row', alignItems:'flex-start', marginBottom:12 }}>
                 <IconCircle icon="🤝" bg={C.accent+'18'} size={44}/>
                 <View style={{ flex:1, marginLeft:12 }}>
-                  <Text style={{ fontSize:15, fontWeight:'700', color:C.text }}>{l.name}</Text>
+                  <View style={{ flexDirection:'row', alignItems:'center', gap:6 }}>
+                    <Text style={{ fontSize:15, fontWeight:'700', color:C.text }}>{l.name}</Text>
+                    {l.currency==='usd' && <Text style={{ fontSize:10, fontWeight:'700', color:'#22c55e', backgroundColor:'#22c55e22', paddingHorizontal:6, paddingVertical:2, borderRadius:8 }}>USD</Text>}
+                    {l.loanType==='fiado' && <Text style={{ fontSize:10, fontWeight:'700', color:C.accent, backgroundColor:C.accent+'22', paddingHorizontal:6, paddingVertical:2, borderRadius:8 }}>Fiado</Text>}
+                  </View>
                   <Text style={{ fontSize:12, color:C.textMuted, marginTop:2 }}>
-                    Pagado: {fmt(pagado)} · Pendiente: {fmt(remaining)}
+                    Pagado: {fmt(pagado)} · Pendiente: {fmtLoan(l, remaining)}
                   </Text>
                 </View>
                 <TouchableOpacity onPress={() => delLoan(i)}>
@@ -85,7 +94,7 @@ export default function Prestamos({ data, onSave }) {
                 <View style={{ backgroundColor: remaining === 0 ? C.green : C.accent, height:8, borderRadius:99, width:`${pct}%` }}/>
               </View>
               <View style={{ flexDirection:'row', justifyContent:'space-between' }}>
-                <Text style={{ fontSize:11, color:C.textMuted }}>{fmt(total)} total</Text>
+                <Text style={{ fontSize:11, color:C.textMuted }}>{fmtLoan(l, total)} total</Text>
                 <Text style={{ fontSize:11, color: remaining===0 ? C.green : C.accent, fontWeight:'700' }}>
                   {remaining===0 ? '✅ Saldado' : `${pct.toFixed(0)}% cobrado`}
                 </Text>
