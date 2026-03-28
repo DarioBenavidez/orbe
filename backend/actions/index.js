@@ -1155,19 +1155,31 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
 
     case 'agregar_deuda': {
       const debts = data.debts || [];
-      const installment = parseFloat(action.installment || 0);
-      const remaining = parseFloat(action.remaining);
-      const ri = installment > 0 ? Math.ceil(remaining / installment) : 0;
+      let usdDeudaNote = '';
+      let remainingARS;
+      let installmentARS;
+      if (action.currency === 'usd' && action.remainingUSD) {
+        const dolar = await getDolarPrice();
+        const rate = action.source === 'tarjeta' ? (dolar.tarjeta || dolar.blue * 1.6) : dolar.blue;
+        remainingARS = Math.round(parseFloat(action.remainingUSD) * rate);
+        installmentARS = action.installmentUSD ? Math.round(parseFloat(action.installmentUSD) * rate) : 0;
+        usdDeudaNote = `\n💱 USD ${action.remainingUSD} × $${Math.round(rate)} = ${fmt(remainingARS)}`;
+      } else {
+        remainingARS = parseFloat(action.remaining || 0);
+        installmentARS = parseFloat(action.installment || 0);
+      }
+      const ri = installmentARS > 0 ? Math.ceil(remainingARS / installmentARS) : 0;
       const deuda = {
         id: crypto.randomUUID(),
         name: action.name,
-        total: remaining,
-        remaining,
-        installment,
+        total: remainingARS,
+        remaining: remainingARS,
+        installment: installmentARS,
         remainingInstallments: ri,
+        ...(action.currency === 'usd' ? { currency: 'usd', amountUSD: parseFloat(action.remainingUSD) } : {}),
       };
       await saveData(userId, { ...data, debts: [...debts, deuda] });
-      return `💳 *Deuda registrada!*\n\n📝 ${deuda.name}\n💸 Monto: ${fmt(remaining)}${installment > 0 ? `\n📆 Cuota mensual: ${fmt(installment)}\n🗓️ Cuotas estimadas: ${ri}` : ''}\n\nCuando hagas un pago, avisame y lo descuento del total.`;
+      return `💳 *Deuda registrada!*\n\n📝 ${deuda.name}\n💸 Monto: ${action.currency === 'usd' ? `${fmtUSD(action.remainingUSD)} (≈ ${fmt(remainingARS)})` : fmt(remainingARS)}${usdDeudaNote}${installmentARS > 0 ? `\n📆 Cuota mensual: ${fmt(installmentARS)}\n🗓️ Cuotas estimadas: ${ri}` : ''}\n\nCuando hagas un pago, avisame y lo descuento del total.`;
     }
 
     case 'borrar_deuda': {

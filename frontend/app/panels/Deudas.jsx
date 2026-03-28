@@ -2,6 +2,11 @@ import React, { useState } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert, TextInput } from 'react-native';
 import { useC } from '../../lib/theme';
 import { fmt, fmtAmt, parseAmt, MONTH_NAMES, DEFAULT_CATEGORIES } from '../../lib/constants';
+
+const fmtUSD = (n) => { const num = Number(n)||0; return `USD ${num%1===0?num:num.toFixed(2)}`; };
+const fmtDeuda = (d, amount) => d.currency==='usd' && d.amountUSD
+  ? `${fmtUSD(d.amountUSD)} (≈ ${fmt(amount)})`
+  : fmt(amount);
 import { Card, Btn, Input, FAB, ModalSheet, IconCircle, EmptyState } from '../../components/ui';
 
 export default function Deudas({ data, onSave }) {
@@ -105,8 +110,11 @@ export default function Deudas({ data, onSave }) {
                   <View style={{ flexDirection:'row', alignItems:'flex-start', marginBottom:10 }}>
                     <IconCircle icon="💳" bg={C.red+'22'} size={44}/>
                     <View style={{ flex:1, marginLeft:12 }}>
-                      <Text style={{ fontSize:15, fontWeight:'700', color:C.text }}>{d.name}</Text>
-                      <Text style={{ fontSize:12, color:C.textMuted }}>Restante: {fmt(d.remaining)}{d.installment>0 ? ` · Cuota: ${fmt(d.installment)}` : ''}</Text>
+                      <View style={{ flexDirection:'row', alignItems:'center', gap:6 }}>
+                        <Text style={{ fontSize:15, fontWeight:'700', color:C.text }}>{d.name}</Text>
+                        {d.currency==='usd' && <Text style={{ fontSize:10, fontWeight:'700', color:'#22c55e', backgroundColor:'#22c55e22', paddingHorizontal:6, paddingVertical:2, borderRadius:8 }}>USD</Text>}
+                      </View>
+                      <Text style={{ fontSize:12, color:C.textMuted }}>Restante: {fmtDeuda(d, d.remaining)}{d.installment>0 ? ` · Cuota: ${fmt(d.installment)}` : ''}</Text>
                       {d.remainingInstallments>0 && (
                         <Text style={{ fontSize:11, color:C.accent, marginTop:2 }}>📅 {d.remainingInstallments} cuotas · {endMonth(d.remainingInstallments.toString())}</Text>
                       )}

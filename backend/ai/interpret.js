@@ -149,6 +149,7 @@ ACCIONES DISPONIBLES:
 {"type":"depositar_ahorro","keyword":"vacaciones","amount":5000}
 {"type":"depositar_ahorro","keyword":"dólares","amount":20}
 {"type":"agregar_deuda","name":"Tarjeta Visa","remaining":30000,"installment":5000}
+{"type":"agregar_deuda","name":"Préstamo USD","remainingUSD":500,"installmentUSD":50,"currency":"usd","source":"cuenta"}
 {"type":"pagar_deuda","keyword":"visa","amount":5000}
 {"type":"borrar_deuda","keyword":"bbva"}
 {"type":"consultar_dolar"}
@@ -226,7 +227,7 @@ REGLAS DE INTERPRETACIÓN:
 - "cuánto me debe X / qué debe X / el préstamo de X" → consultar_prestamo (con el nombre de la persona)
 - "borrá los préstamos de X / eliminá las deudas de X / sacá todo de X / borrá todo lo de X" → borrar_prestamo (name: nombre de la persona)
 - Si alguien pagó de más y tiene saldo a favor (credits en el sistema), mencionálo cuando sea relevante. Si vuelven a pedir fiado, Orbe debe informar que tiene crédito y usarlo primero.
-- "nueva deuda/debo/tengo una deuda/saqué una tarjeta/cuota" → agregar_deuda
+- "nueva deuda/debo/tengo una deuda/saqué una tarjeta/cuota" → agregar_deuda. Si el monto es en dólares/USD, usá "remainingUSD" + "installmentUSD" (si hay cuota) + "currency":"usd". NUNCA conviertas vos.
 - "pagué la deuda/pagué la cuota/aboné la tarjeta" → pagar_deuda
 - "eliminá la deuda de X / borrá la deuda de X / era una prueba / sacá la deuda de X / no existía esa deuda" → borrar_deuda (keyword: nombre a buscar). NUNCA uses pagar_deuda cuando el usuario quiere ELIMINAR — son acciones distintas.
 - "qué pasaría si dejo de pagar/si cancelo/si me doy de baja/si elimino X" → simular_sin_gasto (si el usuario menciona un monto explícito, usalo en amount; si no, dejá amount en 0 para que se busque en los registros)
