@@ -31,7 +31,7 @@
         "expo-splash-screen",
         {
           "image": "./assets/images/orbe-logo.png",
-          "imageWidth": 280,
+          "imageWidth": 180,
           "resizeMode": "contain",
           "backgroundColor": "#005247",
           "dark": {

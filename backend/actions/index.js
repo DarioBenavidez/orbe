@@ -445,10 +445,21 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
     }
 
     case 'agregar_suscripcion': {
+      let amountARS;
+      let usdNote = '';
+      if (action.currency === 'usd' && action.amountUSD) {
+        const usdAmt = parseFloat(action.amountUSD);
+        const dolar = await getDolarPrice();
+        const rate = action.source === 'tarjeta' ? (dolar.tarjeta || dolar.blue * 1.6) : dolar.blue;
+        amountARS = Math.round(usdAmt * rate);
+        usdNote = `\n💱 USD ${usdAmt} × $${Math.round(rate)} (${action.source === 'tarjeta' ? 'tarjeta' : 'blue'}) = ${fmt(amountARS)}`;
+      } else {
+        amountARS = parseFloat(action.amount) || 0;
+      }
       const sub = {
         id: crypto.randomUUID(),
         name: action.name || 'Suscripción',
-        amount: parseFloat(action.amount) || 0,
+        amount: amountARS,
         day: parseInt(action.day) || 1,
         category: action.category || 'Entretenimiento',
         active: true,
@@ -473,7 +484,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
           : (data.recurringExpenses || []),
       };
       await saveData(userId, newData);
-      return `✅ Suscripción *${sub.name}* registrada — ${fmt(sub.amount)}/mes (día ${sub.day}).${gastoFijo ? '\n📌 También la agregué a tus gastos fijos para que figure en la proyección.' : ''}`;
+      return `✅ Suscripción *${sub.name}* registrada — ${fmt(sub.amount)}/mes (día ${sub.day}).${usdNote}${gastoFijo ? '\n📌 También la agregué a tus gastos fijos para que figure en la proyección.' : ''}`;
     }
 
     case 'consultar_suscripciones': {
@@ -805,9 +816,20 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
         }
       }
 
-      const loan = { id: crypto.randomUUID(), name: action.name, reason: action.reason || '', amount: remaining, remaining, payments: [], createdAt: today() };
-      await saveData(userId, { ...data, loans: [...loans, loan], credits });
-      return `📋 *Préstamo registrado!*\n\n👤 ${action.name} te debe ${fmt(remaining)}${action.reason ? `\n📝 Por: ${action.reason}` : ''}\n📅 ${today()}${creditNote}\n\nCuando pague algo, avisame y lo registro.`;
+      const loanId = crypto.randomUUID();
+      const loan = { id: loanId, name: action.name, reason: action.reason || '', amount: remaining, remaining, payments: [], createdAt: today() };
+      // Registrar como gasto para que impacte en el balance
+      const loanTx = {
+        id: crypto.randomUUID(),
+        type: 'gasto',
+        amount: remaining,
+        description: `Préstamo a ${action.name}${action.reason ? ` — ${action.reason}` : ''}`,
+        category: 'Préstamos',
+        date: today(),
+        loanId,
+      };
+      await saveData(userId, { ...data, loans: [...loans, loan], credits, transactions: [...(data.transactions || []), loanTx] });
+      return `📋 *Préstamo registrado!*\n\n👤 ${action.name} te debe ${fmt(remaining)}${action.reason ? `\n📝 Por: ${action.reason}` : ''}\n📅 ${today()}${creditNote}\n💸 Desconté ${fmt(remaining)} de tu balance.\n\nCuando pague algo, avisame y lo registro.`;
     }
 
     case 'registrar_pago_prestamo': {
@@ -851,15 +873,25 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
         credits[personKey] = { name: action.name, amount: (credits[personKey]?.amount || 0) + restante };
       }
 
-      await saveData(userId, { ...data, loans, credits });
+      const pagado = parseFloat(action.amount) - Math.max(restante, 0);
+      // Registrar el cobro como ingreso para que impacte en el balance
+      const pagoTx = {
+        id: crypto.randomUUID(),
+        type: 'ingreso',
+        amount: pagado,
+        description: `Cobro préstamo — ${action.name}`,
+        category: 'Préstamos',
+        date: today(),
+      };
+      await saveData(userId, { ...data, loans, credits, transactions: [...(data.transactions || []), pagoTx] });
 
       if (totalDespues === 0 && restante > 0) {
-        return `🎉 *${action.name} saldó todo!*\n\nPagó ${fmt(parseFloat(action.amount))}, quedó en cero y tiene un *saldo a favor de ${fmt(restante)}*. Si te hace otro pedido, podés descontarlo de ese saldo.`;
+        return `🎉 *${action.name} saldó todo!*\n\nPagó ${fmt(parseFloat(action.amount))}, quedó en cero y tiene un *saldo a favor de ${fmt(restante)}*. Se sumó ${fmt(pagado)} a tu balance.`;
       }
       if (totalDespues === 0) {
-        return `🎉 *${action.name} saldó todo!*\n\nPagó ${fmt(parseFloat(action.amount))} y quedó en cero. ¡Cerramos esa deuda!`;
+        return `🎉 *${action.name} saldó todo!*\n\nPagó ${fmt(parseFloat(action.amount))} y quedó en cero. Se sumó ${fmt(pagado)} a tu balance.`;
       }
-      return `💵 *Pago registrado!*\n\n👤 ${action.name} pagó ${fmt(parseFloat(action.amount))}\n💰 Le queda pendiente: ${fmt(totalDespues)}`;
+      return `💵 *Pago registrado!*\n\n👤 ${action.name} pagó ${fmt(parseFloat(action.amount))}\n💰 Le queda pendiente: ${fmt(totalDespues)}\n✅ Se sumó ${fmt(pagado)} a tu balance.`;
     }
 
     case 'consultar_prestamo': {

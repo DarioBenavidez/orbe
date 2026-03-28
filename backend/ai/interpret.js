@@ -165,6 +165,7 @@ ACCIONES DISPONIBLES:
 {"type":"dias_cubre_ahorro"}
 {"type":"top_categorias_ahorro"}
 {"type":"agregar_suscripcion","name":"Netflix","amount":3500,"day":15,"category":"Entretenimiento"}
+{"type":"agregar_suscripcion","name":"Claude","amountUSD":20,"currency":"usd","source":"tarjeta","day":28,"category":"Tecnología"}
 {"type":"consultar_suscripciones"}
 {"type":"cancelar_suscripcion","keyword":"netflix"}
 {"type":"silenciar","dias":3}
@@ -259,7 +260,7 @@ REGLAS DE INTERPRETACIÓN:
 - "cuánto estoy ahorrando", "cuál es mi tasa de ahorro", "porcentaje de ahorro" → ratio_ahorro
 - "cuánto tiempo me dura el ahorro", "para cuántos meses me alcanza lo que tengo" → dias_cubre_ahorro
 - "en qué puedo ahorrar más", "dónde puedo recortar", "qué categoría me come más plata" → top_categorias_ahorro
-- "tengo una suscripción de X", "pago X por mes por Y", "suscripción mensual a X", "agregá a suscripciones X", "me agregás en suscripciones X" → agregar_suscripcion. Si el monto está en dólares, convertilo al blue del día usando el tipo de cambio actual. Si el usuario no especificó si lo paga con tarjeta o con dólares propios, preguntá antes de registrar para categorizar correctamente.
+- "tengo una suscripción de X", "pago X por mes por Y", "suscripción mensual a X", "agregá a suscripciones X", "me agregás en suscripciones X" → agregar_suscripcion. Si el monto es en pesos, usá "amount". Si el monto está en dólares/USD, usá "amountUSD" (el número en dólares tal cual) + "currency":"usd" — NUNCA conviertas vos el monto, el backend lo convierte. Si no especificó cómo lo paga (tarjeta o dólares propios), preguntá antes de registrar y usá "source":"tarjeta" o "source":"cuenta".
 - "qué suscripciones tengo", "mis suscripciones", "cuánto pago en suscripciones" → consultar_suscripciones
 - "cancelá la suscripción de X", "eliminá X de mis suscripciones" → cancelar_suscripcion
 - "no me molestes por X días", "silenciá las notificaciones", "estoy de vacaciones X días" → silenciar (dias: número)

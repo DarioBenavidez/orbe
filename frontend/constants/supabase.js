@@ -63,8 +63,10 @@ export async function loadData(uid) {
     loans:            Array.isArray(d.loans)            ? d.loans           : [],
     credits:          d.credits && typeof d.credits === 'object' ? d.credits : {},
     vocabulario:      Array.isArray(d.vocabulario)      ? d.vocabulario     : [],
-    recurringIncomes: Array.isArray(d.recurringIncomes) ? d.recurringIncomes : [],
-    salaryOverrides:  Array.isArray(d.salaryOverrides)  ? d.salaryOverrides : [],
+    recurringIncomes:   Array.isArray(d.recurringIncomes)   ? d.recurringIncomes   : [],
+    salaryOverrides:    Array.isArray(d.salaryOverrides)    ? d.salaryOverrides    : [],
+    suscripciones:      Array.isArray(d.suscripciones)      ? d.suscripciones      : [],
+    recurringExpenses:  Array.isArray(d.recurringExpenses)  ? d.recurringExpenses  : [],
     selectedMonth:    typeof d.selectedMonth === 'number' ? d.selectedMonth : new Date().getMonth(),
     selectedYear:     typeof d.selectedYear  === 'number' ? d.selectedYear  : new Date().getFullYear(),
   };
