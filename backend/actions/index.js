@@ -873,6 +873,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
         category: 'Préstamos',
         date: today(),
         loanId,
+        ...(action.currency === 'usd' ? { currency: 'usd', amountUSD: parseFloat(action.amountUSD) } : {}),
       };
       await saveData(userId, { ...data, loans: [...loans, loan], credits, transactions: [...(data.transactions || []), loanTx] });
       return `📋 *Préstamo registrado!*\n\n👤 ${action.name} te debe ${fmt(remaining)}${action.reason ? `\n📝 Por: ${action.reason}` : ''}\n📅 ${today()}${usdLoanNote}${creditNote}\n💸 Desconté ${fmt(remaining)} de tu balance.\n\nCuando pague algo, avisame y lo registro.`;

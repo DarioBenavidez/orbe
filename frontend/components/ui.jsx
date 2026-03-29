@@ -229,14 +229,19 @@ export function TxRow({ tx, cats, onDelete, onEdit }) {
       </View>
       <View style={{ alignItems: 'flex-end' }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          {(tx.source === 'gasto_en_dolares' || tx.currency === 'USD') && (
-            <View style={{ backgroundColor: '#C9A84C22', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2, borderWidth: 1, borderColor: '#C9A84C' }}>
-              <Text style={{ fontSize: 9, fontWeight: '800', color: '#C9A84C', letterSpacing: 0.5 }}>USD</Text>
+          {(tx.source === 'gasto_en_dolares' || tx.currency === 'USD' || tx.currency === 'usd') && (
+            <View style={{ backgroundColor: '#22c55e22', borderRadius: 6, paddingHorizontal: 5, paddingVertical: 2, borderWidth: 1, borderColor: '#22c55e' }}>
+              <Text style={{ fontSize: 9, fontWeight: '800', color: '#22c55e', letterSpacing: 0.5 }}>USD</Text>
             </View>
           )}
-          <Text style={{ fontSize: 15, fontWeight: '800', color: isGasto ? C.red : C.green, letterSpacing: -0.3 }}>
-            {isGasto ? '-' : '+'}{fmt(tx.amount)}
-          </Text>
+          <View style={{ alignItems: 'flex-end' }}>
+            <Text style={{ fontSize: 15, fontWeight: '800', color: isGasto ? C.red : C.green, letterSpacing: -0.3 }}>
+              {isGasto ? '-' : '+'}{tx.currency === 'usd' && tx.amountUSD ? `USD ${tx.amountUSD}` : fmt(tx.amount)}
+            </Text>
+            {tx.currency === 'usd' && tx.amountUSD && (
+              <Text style={{ fontSize: 10, color: C.textMuted }}>≈ {fmt(tx.amount)}</Text>
+            )}
+          </View>
         </View>
         <View style={{ flexDirection: 'row', gap: 12, marginTop: 4 }}>
           {onEdit && (
