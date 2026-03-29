@@ -59,7 +59,7 @@ async function handlePending(pendingRaw, incomingMsg, data, userId, history, fro
         description: `${parsed.description}${nota ? ' (' + nota + ')' : ''}`,
         amount: amountARS,
         amountUSD: parsed.amountUSD,
-        currency: 'USD',
+        currency: 'usd',
         dolarBlue: parsed.dolarBlue,
         pendingConversion: isPending,
         category: parsed.category,

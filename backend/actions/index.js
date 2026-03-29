@@ -15,8 +15,8 @@ const READ_ONLY_ACTIONS = new Set([
   'consultar_presupuesto', 'consultar_presupuesto_categoria',
   'consultar_vencimientos', 'consultar_eventos', 'consultar_dolar',
   'resumen_general', 'planear_compra', 'simular_sin_gasto',
-  'calcular_margen', 'calcular_fin_deuda', 'proyeccion_mensual',
-  'consultar_ahorro', 'consultar_deudas', 'consultar_turnos',
+  'calcular_margen', 'consultar_fin_deudas', 'proyectar_fin_de_mes',
+  'consultar_ahorros', 'consultar_deudas', 'consultar_turnos',
 ]);
 
 async function processAction(action, data, userId, userName, history = [], phone = null) {
@@ -128,6 +128,7 @@ Tu tarea: escribí un saludo natural, breve y conversacional. Pensá qué es lo 
     case 'agregar_transaccion': {
       const txAmount = parseFloat(action.amount);
       if (!txAmount || txAmount <= 0) return `🤔 No entendí el monto. ¿Cuánto fue exactamente?`;
+      if (!action.description) return `🤔 No entendí de qué fue el gasto. ¿Me das más detalle?`;
       const tx = {
         id: crypto.randomUUID(),
         type: action.txType || 'gasto',
@@ -485,16 +486,8 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
         const updatedExpenses = (data.recurringExpenses || []).map(g =>
           g.description?.toLowerCase() === subKey ? { ...g, amount: amountARS, active: true } : g
         );
-        const updateTx = {
-          id: crypto.randomUUID(),
-          type: 'gasto',
-          amount: amountARS,
-          description: `Suscripción ${subName}`,
-          category: action.category || 'Entretenimiento',
-          date: today(),
-        };
-        await saveData(userId, { ...data, suscripciones: updated, recurringExpenses: updatedExpenses, transactions: [...(data.transactions || []), updateTx] });
-        return `✅ Suscripción *${subName}* actualizada — ${fmt(amountARS)}/mes.${usdNote}\n💸 Registré el gasto de este mes en tu historial.`;
+        await saveData(userId, { ...data, suscripciones: updated, recurringExpenses: updatedExpenses });
+        return `✅ Suscripción *${subName}* actualizada — ${fmt(amountARS)}/mes.${usdNote}`;
       }
       const sub = {
         id: crypto.randomUUID(),
@@ -717,15 +710,17 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
     }
 
     case 'actualizar_presupuesto': {
+      const budgetLimit = parseFloat(action.limit);
+      if (!budgetLimit || budgetLimit < 0) return `🤔 El presupuesto debe ser un monto positivo. ¿Cuánto querés asignar para *${action.category}*?`;
       const budgets = data.budgets.map(b =>
         b.cat.toLowerCase() === action.category.toLowerCase()
-          ? { ...b, limit: parseFloat(action.limit) }
+          ? { ...b, limit: budgetLimit }
           : b
       );
       const exists = data.budgets.some(b => b.cat.toLowerCase() === action.category.toLowerCase());
-      if (!exists) budgets.push({ cat: action.category, limit: parseFloat(action.limit) });
+      if (!exists) budgets.push({ cat: action.category, limit: budgetLimit });
       await saveData(userId, { ...data, budgets });
-      return `🎯 *Presupuesto actualizado!*\n\n📦 ${action.category}: ${fmt(action.limit)} por mes`;
+      return `🎯 *Presupuesto actualizado!*\n\n📦 ${action.category}: ${fmt(budgetLimit)} por mes`;
     }
 
     case 'consultar_presupuesto_categoria': {
@@ -835,7 +830,9 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
     }
 
     case 'agregar_evento': {
-      const ev = { id: crypto.randomUUID(), title: action.title, day: parseInt(action.day), type: action.eventType || 'recordatorio', notifyDaysBefore: action.notify ? 3 : 0 };
+      const evDay = parseInt(action.day);
+      if (!evDay || evDay < 1 || evDay > 31) return `🤔 El día debe ser un número entre 1 y 31. ¿Qué día del mes es el evento?`;
+      const ev = { id: crypto.randomUUID(), title: action.title, day: evDay, type: action.eventType || 'recordatorio', notifyDaysBefore: action.notify ? 3 : 0 };
       await saveData(userId, { ...data, events: [...(data.events || []), ev] });
       return `📅 *Evento agregado!*\n\n📝 ${ev.title}\n📆 Día ${ev.day} de cada mes${action.notify ? '\n🔔 Te aviso 3 días antes.' : ''}`;
     }
@@ -1212,7 +1209,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
         remaining: remainingARS,
         installment: installmentARS,
         remainingInstallments: ri,
-        ...(action.currency === 'usd' ? { currency: 'usd', amountUSD: parseFloat(action.remainingUSD) } : {}),
+        ...(action.currency === 'usd' ? { currency: 'usd', amountUSD: parseFloat(action.remainingUSD), remainingUSD: parseFloat(action.remainingUSD) } : {}),
       };
       await saveData(userId, { ...data, debts: [...debts, deuda] });
       return `💳 *Deuda registrada!*\n\n📝 ${deuda.name}\n💸 Monto: ${action.currency === 'usd' ? `${fmtUSD(action.remainingUSD)} (≈ ${fmt(remainingARS)})` : fmt(remainingARS)}${usdDeudaNote}${installmentARS > 0 ? `\n📆 Cuota mensual: ${fmt(installmentARS)}\n🗓️ Cuotas estimadas: ${ri}` : ''}\n\nCuando hagas un pago, avisame y lo descuento del total.`;
@@ -1262,6 +1259,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       const recurringExpenses = data.recurringExpenses || [];
       const gastoAmount = parseFloat(action.amount);
       if (!gastoAmount || gastoAmount <= 0) return `🤔 No entendí el monto del gasto fijo. ¿Cuánto es por mes?`;
+      if (!action.description) return `🤔 No entendí el nombre del gasto fijo. ¿Cómo se llama?`;
       const gasto = { id: crypto.randomUUID(), description: truncate(action.description, 100), amount: gastoAmount, category: action.category || 'Otros', day: parseInt(action.day) || 1, active: true };
       await saveData(userId, { ...data, recurringExpenses: [...recurringExpenses, gasto] });
       return `🔄 *Gasto fijo agregado!*\n\n📝 ${gasto.description}: ${fmt(gasto.amount)}/mes\n📆 Se registra el día ${gasto.day} automáticamente.`;
