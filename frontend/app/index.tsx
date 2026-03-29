@@ -1,5 +1,8 @@
-import { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet, Alert, Image } from 'react-native';
+import { useState, useEffect, useRef } from 'react';
+import { View, Text, TouchableOpacity, ActivityIndicator, StyleSheet, Alert, Image, AppState } from 'react-native';
+
+// Bloquear la app si estuvo en background más de 3 minutos
+const INACTIVITY_TIMEOUT_MS = 3 * 60 * 1000;
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { supabase } from '../constants/supabase';
@@ -19,6 +22,7 @@ export default function Index() {
   const [locked, setLocked] = useState(false);
   const [bioAvailable, setBioAvailable] = useState(false);
   const [bioEnabled, setBioEnabled] = useState(false);
+  const bgTimeRef = useRef<number | null>(null);
   const [onboarded, setOnboarded]           = useState<boolean | null>(null);
   const [financialOnboarded, setFinancialOnboarded] = useState<boolean | null>(null);
 
@@ -54,6 +58,22 @@ export default function Index() {
     return () => subscription.unsubscribe();
   }, []);
 
+  // Bloquear por inactividad: si la app estuvo en background más de INACTIVITY_TIMEOUT_MS
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (nextState) => {
+      if (nextState === 'background' || nextState === 'inactive') {
+        bgTimeRef.current = Date.now();
+      } else if (nextState === 'active' && bgTimeRef.current !== null) {
+        const elapsed = Date.now() - bgTimeRef.current;
+        bgTimeRef.current = null;
+        if (elapsed > INACTIVITY_TIMEOUT_MS && bioEnabled && user) {
+          setLocked(true);
+        }
+      }
+    });
+    return () => sub.remove();
+  }, [bioEnabled, user]);
+
   // Auto-trigger biometric when locked screen appears
   useEffect(() => {
     if (locked && bioAvailable) {
@@ -67,7 +87,7 @@ export default function Index() {
         promptMessage: 'Desbloqueá Orbe',
         fallbackLabel: 'Usar contraseña',
         cancelLabel: 'Cancelar',
-        disableDeviceFallback: false,
+        disableDeviceFallback: true,
       });
       if (result.success) {
         setLocked(false);

@@ -55,8 +55,11 @@ async function transcribeWhatsAppAudio(mediaId, mimeType) {
     headers: { Authorization: `Bearer ${WHATSAPP_TOKEN}` },
   });
   if (!audioRes.ok) throw new Error(`Error descargando audio: ${audioRes.status}`);
-  const buffer = Buffer.from(await audioRes.arrayBuffer());
   const MAX_AUDIO_BYTES = 150 * 1024; // 150KB ≈ 10 segundos de nota de voz (Opus)
+  // Verificar Content-Length ANTES de bajar el archivo para no cargar archivos grandes en RAM
+  const contentLength = parseInt(audioRes.headers.get('content-length') || '0', 10);
+  if (contentLength > MAX_AUDIO_BYTES) throw new Error('audio_demasiado_largo');
+  const buffer = Buffer.from(await audioRes.arrayBuffer());
   if (buffer.length > MAX_AUDIO_BYTES) throw new Error('audio_demasiado_largo');
 
   const ext = mimeType?.includes('ogg') ? 'ogg' : mimeType?.includes('mp4') ? 'mp4' : 'ogg';

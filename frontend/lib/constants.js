@@ -1,3 +1,6 @@
+// Número del bot de WhatsApp — actualizar acá si cambia
+export const WA_BOT_NUMBER = '5491125728211';
+
 export const DEFAULT_CATEGORIES = {
   'Vivienda':'🏠','Alimentación':'🛒','Transporte':'🚗','Salud':'💊',
   'Entretenimiento':'🎬','Ropa':'👗','Educación':'📚','Servicios':'💡',

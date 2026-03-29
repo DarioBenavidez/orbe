@@ -5,7 +5,7 @@ import { FontAwesome5 } from '@expo/vector-icons';
 import { loadData, saveData, supabase, BACKEND_URL } from '../constants/supabase';
 
 import { ThemeCtx, mkTheme } from '../lib/theme';
-import { defaultData, MONTH_NAMES } from '../lib/constants';
+import { defaultData, MONTH_NAMES, WA_BOT_NUMBER } from '../lib/constants';
 import { ModalSheet, Chip, Btn, Input, SaveIndicator } from '../components/ui';
 import AddTxModal  from '../components/AddTxModal';
 import InicioTab   from './screens/InicioTab';
@@ -83,7 +83,7 @@ export default function MainApp({ user, onLogout }) {
 
   const connectWhatsApp = () => {
     if (waLinked) {
-      Linking.openURL('https://wa.me/5491125728211').catch(() => Alert.alert('Error', 'No se pudo abrir WhatsApp.'));
+      Linking.openURL(`https://wa.me/${WA_BOT_NUMBER}`).catch(() => Alert.alert('Error', 'No se pudo abrir WhatsApp.'));
       return;
     }
     setWaStep('phone'); setWaPhone(''); setWaOtp(''); setWaCode(''); setWaError('');

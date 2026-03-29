@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('crypto');
 const { saveData, saveHistory, savePendingSuggestion, clearPendingSuggestion } = require('../lib/supabase');
 const { sendWhatsAppMessage } = require('../lib/whatsapp');
 const { fmt, today, currentMonth, parseDateParts } = require('../lib/helpers');

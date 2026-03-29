@@ -21,7 +21,8 @@ const linkCodeLimiter = rateLimit({
 
 // ── CORS para /api/* ───────────────────────────────────────
 router.use((req, res, next) => {
-  res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || 'http://localhost:3000');
+  // App móvil: CORS no aplica para requests nativos, * es seguro en este contexto
+  res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN || '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Authorization, Content-Type');
   if (req.method === 'OPTIONS') return res.sendStatus(204);

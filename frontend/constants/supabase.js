@@ -8,28 +8,63 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // URL del backend en Railway — actualizar si cambia el dominio
 export const BACKEND_URL = 'https://orbe-bot-production.up.railway.app';
 
-// Usa AsyncStorage para valores grandes, SecureStore para los pequeños
+// SecureStore tiene límite de 2048 bytes por item.
+// Este adapter divide valores grandes en chunks encriptados en lugar de
+// caer a AsyncStorage en plaintext.
+const CHUNK_SIZE = 1900; // margen bajo el límite de 2048
+
 const LargeSecureStore = {
   async getItem(key) {
     try {
-      const value = await SecureStore.getItemAsync(key);
-      if (value) return value;
-    } catch {}
-    return AsyncStorage.getItem(key);
+      // Intentar lectura directa primero
+      const direct = await SecureStore.getItemAsync(key);
+      if (direct !== null) return direct;
+      // Intentar lectura chunked
+      const countStr = await SecureStore.getItemAsync(`${key}__n`);
+      if (!countStr) return AsyncStorage.getItem(key); // fallback legacy
+      const count = parseInt(countStr, 10);
+      const chunks = await Promise.all(
+        Array.from({ length: count }, (_, i) => SecureStore.getItemAsync(`${key}__${i}`))
+      );
+      if (chunks.some(c => c === null)) return null;
+      return chunks.join('');
+    } catch {
+      return AsyncStorage.getItem(key);
+    }
   },
   async setItem(key, value) {
-    if (value.length > 2048) {
-      return AsyncStorage.setItem(key, value);
-    }
     try {
-      return await SecureStore.setItemAsync(key, value);
+      if (value.length <= CHUNK_SIZE) {
+        await this._deleteChunks(key); // limpiar chunks viejos si existían
+        return SecureStore.setItemAsync(key, value);
+      }
+      // Dividir en chunks y guardar cada uno encriptado
+      const chunks = [];
+      for (let i = 0; i < value.length; i += CHUNK_SIZE) {
+        chunks.push(value.slice(i, i + CHUNK_SIZE));
+      }
+      await Promise.all(chunks.map((chunk, i) => SecureStore.setItemAsync(`${key}__${i}`, chunk)));
+      await SecureStore.setItemAsync(`${key}__n`, String(chunks.length));
+      await SecureStore.deleteItemAsync(key).catch(() => {}); // eliminar versión directa si existía
     } catch {
       return AsyncStorage.setItem(key, value);
     }
   },
   async removeItem(key) {
+    await this._deleteChunks(key);
+    await SecureStore.deleteItemAsync(key).catch(() => {});
     await AsyncStorage.removeItem(key);
-    try { await SecureStore.deleteItemAsync(key); } catch {}
+  },
+  async _deleteChunks(key) {
+    try {
+      const countStr = await SecureStore.getItemAsync(`${key}__n`);
+      if (!countStr) return;
+      const count = parseInt(countStr, 10);
+      await Promise.all([
+        ...Array.from({ length: count }, (_, i) => SecureStore.deleteItemAsync(`${key}__${i}`).catch(() => {})),
+        SecureStore.deleteItemAsync(`${key}__n`).catch(() => {}),
+      ]);
+    } catch {}
   },
 };
 

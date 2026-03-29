@@ -8,9 +8,26 @@ const fmtLoan = (loan) => loan.currency === 'usd' && loan.amountUSD ? `${fmtUSD(
 const { callClaude } = require('../ai/interpret');
 const { filterByMonth, monthlyTotals } = require('./helpers');
 
+// Acciones de solo lectura — no modifican datos, no necesitan recargar
+const READ_ONLY_ACTIONS = new Set([
+  'saludo', 'conversacion', 'unknown',
+  'consultar_balance', 'consultar_prestamo', 'consultar_todos_prestamos',
+  'consultar_presupuesto', 'consultar_presupuesto_categoria',
+  'consultar_vencimientos', 'consultar_eventos', 'consultar_dolar',
+  'resumen_general', 'planear_compra', 'simular_sin_gasto',
+  'calcular_margen', 'calcular_fin_deuda', 'proyeccion_mensual',
+  'consultar_ahorro', 'consultar_deudas', 'consultar_turnos',
+]);
+
 async function processAction(action, data, userId, userName, history = [], phone = null) {
   const { month, year } = currentMonth();
   const name = userName ? userName.split(' ')[0] : '';
+
+  // Para acciones de escritura, recargar datos frescos de Supabase
+  // Evita race conditions cuando el usuario edita desde la app simultáneamente
+  if (!READ_ONLY_ACTIONS.has(action.type)) {
+    data = await loadData(userId);
+  }
 
   switch (action.type) {
 
@@ -832,10 +849,8 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
     }
 
     case 'agregar_prestamo': {
-      // Recargar datos frescos para evitar race condition con ediciones desde la app
-      const freshData1 = await loadData(userId);
-      const loans = freshData1.loans || [];
-      const credits = { ...(freshData1.credits || {}) };
+      const loans = data.loans || [];
+      const credits = { ...(data.credits || {}) };
       const personKey = action.name.toLowerCase();
       let usdLoanNote = '';
       let amountARS;
@@ -855,7 +870,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
         const credito = credits[personKey].amount;
         if (credito >= remaining) {
           credits[personKey].amount -= remaining;
-          await saveData(userId, { ...freshData1, loans, credits });
+          await saveData(userId, { ...data, loans, credits });
           return `ℹ️ *${action.name}* tiene un saldo a favor de ${fmt(credito)}. Este nuevo pedido (${fmt(remaining)}) queda cubierto. Le queda un saldo a favor de ${fmt(credito - remaining)}.`;
         } else {
           remaining -= credito;
@@ -877,15 +892,13 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
         loanId,
         ...(action.currency === 'usd' ? { currency: 'usd', amountUSD: parseFloat(action.amountUSD) } : {}),
       };
-      await saveData(userId, { ...freshData1, loans: [...loans, loan], credits, transactions: [...(freshData1.transactions || []), loanTx] });
+      await saveData(userId, { ...data, loans: [...loans, loan], credits, transactions: [...(data.transactions || []), loanTx] });
       return `📋 *Préstamo registrado!*\n\n👤 ${action.name} te debe ${fmt(remaining)}${action.reason ? `\n📝 Por: ${action.reason}` : ''}\n📅 ${today()}${usdLoanNote}${creditNote}\n💸 Desconté ${fmt(remaining)} de tu balance.\n\nCuando pague algo, avisame y lo registro.`;
     }
 
     case 'agregar_fiado': {
-      // Recargar datos frescos para evitar race condition con ediciones desde la app
-      const freshData2 = await loadData(userId);
-      const loans = freshData2.loans || [];
-      const credits = { ...(freshData2.credits || {}) };
+      const loans = data.loans || [];
+      const credits = { ...(data.credits || {}) };
       const personKey = action.name.toLowerCase();
       let usdNote = '';
       let amountARS;
@@ -905,7 +918,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
         const credito = credits[personKey].amount;
         if (credito >= remaining) {
           credits[personKey].amount -= remaining;
-          await saveData(userId, { ...freshData2, loans, credits });
+          await saveData(userId, { ...data, loans, credits });
           return `ℹ️ *${action.name}* tiene un saldo a favor de ${fmt(credito)}. Este fiado (${fmt(remaining)}) queda cubierto con ese saldo.`;
         } else {
           remaining -= credito;
@@ -916,13 +929,12 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
 
       const loan = { id: crypto.randomUUID(), name: action.name, reason: action.reason || '', amount: remaining, remaining, payments: [], loanType: 'fiado', createdAt: today(), ...(action.currency === 'usd' ? { currency: 'usd', amountUSD: parseFloat(action.amountUSD) } : {}) };
       // Fiado NO crea transacción — no sale plata del balance
-      await saveData(userId, { ...freshData2, loans: [...loans, loan], credits });
+      await saveData(userId, { ...data, loans: [...loans, loan], credits });
       return `🤝 *Fiado registrado!*\n\n👤 ${action.name} te debe ${fmt(remaining)}${action.reason ? `\n📝 Por: ${action.reason}` : ''}\n📅 ${today()}${usdNote}${creditNote}\n_No se descontó del balance — fue mercadería/servicio._\n\nCuando pague, avisame y lo registro.`;
     }
 
     case 'registrar_pago_prestamo': {
-      const freshData3 = await loadData(userId);
-      const loans = [...(freshData3.loans || [])];
+      const loans = [...(data.loans || [])];
       const key = action.name.toLowerCase();
 
       // Verificar que exista algún préstamo activo (remaining > 0) para esa persona
@@ -972,7 +984,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
         .reduce((s, l) => s + l.remaining, 0);
 
       // Si pagó de más, registrar saldo a favor
-      const credits = { ...(freshData3.credits || {}) };
+      const credits = { ...(data.credits || {}) };
       const personKey = action.name.toLowerCase();
       if (restante > 0) {
         credits[personKey] = { name: action.name, amount: (credits[personKey]?.amount || 0) + restante };
@@ -989,7 +1001,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
         date: today(),
         ...(action.currency === 'usd' && action.amountUSD ? { currency: 'usd', amountUSD: parseFloat(action.amountUSD) } : {}),
       };
-      await saveData(userId, { ...freshData3, loans, credits, transactions: [...(freshData3.transactions || []), pagoTx] });
+      await saveData(userId, { ...data, loans, credits, transactions: [...(data.transactions || []), pagoTx] });
 
       const pagadoLabel = action.currency === 'usd' && action.amountUSD ? `USD ${action.amountUSD}` : fmt(pagado);
       if (totalDespues === 0 && restante > 0) {
@@ -1002,13 +1014,12 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
     }
 
     case 'borrar_prestamo': {
-      const freshData4 = await loadData(userId);
       const key = (action.name || '').toLowerCase();
-      const before = (freshData4.loans || []).length;
-      const loans = (freshData4.loans || []).filter(l => !l.name.toLowerCase().includes(key));
+      const before = (data.loans || []).length;
+      const loans = (data.loans || []).filter(l => !l.name.toLowerCase().includes(key));
       if (loans.length === before) return `🤔 No encontré ningún préstamo a nombre de *${action.name}*.`;
       const borrados = before - loans.length;
-      await saveData(userId, { ...freshData4, loans });
+      await saveData(userId, { ...data, loans });
       return `🗑️ Listo, eliminé ${borrados} préstamo${borrados !== 1 ? 's' : ''} de *${action.name}*.`;
     }
 
