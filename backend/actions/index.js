@@ -934,16 +934,32 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
         return `✅ ${action.name} ya no tiene deudas pendientes con vos.`;
       }
 
+      // Resolver monto en ARS (soporta pagos en USD)
+      let amountARS;
+      let usdPayNote = '';
+      if (action.currency === 'usd' && action.amountUSD) {
+        const dolar = await getDolarPrice();
+        amountARS = Math.round(parseFloat(action.amountUSD) * dolar.blue);
+        usdPayNote = `\n💱 USD ${action.amountUSD} × $${Math.round(dolar.blue)} = ${fmt(amountARS)}`;
+      } else {
+        amountARS = parseFloat(action.amount) || 0;
+      }
+
       // Aplicar el pago distribuido entre los préstamos activos (FIFO)
-      let restante = parseFloat(action.amount);
-      let totalAntes = 0;
+      let restante = amountARS;
       for (let i = 0; i < loans.length; i++) {
         if (!loans[i].name.toLowerCase().includes(key)) continue;
         if (loans[i].remaining <= 0) continue;
-        totalAntes += loans[i].remaining;
         const aplicar = Math.min(loans[i].remaining, restante);
+        // Si el préstamo es en USD y el pago también, actualizar remainingUSD
+        let usdUpdates = {};
+        if (loans[i].currency === 'usd' && loans[i].amountUSD && action.currency === 'usd' && action.amountUSD) {
+          const paidUSD = Math.min(parseFloat(action.amountUSD), loans[i].remainingUSD ?? loans[i].amountUSD);
+          usdUpdates = { remainingUSD: Math.max(0, (loans[i].remainingUSD ?? loans[i].amountUSD) - paidUSD) };
+        }
         loans[i] = {
           ...loans[i],
+          ...usdUpdates,
           remaining: loans[i].remaining - aplicar,
           payments: [...(loans[i].payments || []), { date: today(), amount: aplicar }],
         };
@@ -962,7 +978,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
         credits[personKey] = { name: action.name, amount: (credits[personKey]?.amount || 0) + restante };
       }
 
-      const pagado = parseFloat(action.amount) - Math.max(restante, 0);
+      const pagado = amountARS - Math.max(restante, 0);
       // Registrar el cobro como ingreso para que impacte en el balance
       const pagoTx = {
         id: crypto.randomUUID(),
@@ -971,16 +987,18 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
         description: `Cobro préstamo — ${action.name}`,
         category: 'Préstamos',
         date: today(),
+        ...(action.currency === 'usd' && action.amountUSD ? { currency: 'usd', amountUSD: parseFloat(action.amountUSD) } : {}),
       };
       await saveData(userId, { ...freshData3, loans, credits, transactions: [...(freshData3.transactions || []), pagoTx] });
 
+      const pagadoLabel = action.currency === 'usd' && action.amountUSD ? `USD ${action.amountUSD}` : fmt(pagado);
       if (totalDespues === 0 && restante > 0) {
-        return `🎉 *${action.name} saldó todo!*\n\nPagó ${fmt(parseFloat(action.amount))}, quedó en cero y tiene un *saldo a favor de ${fmt(restante)}*. Se sumó ${fmt(pagado)} a tu balance.`;
+        return `🎉 *${action.name} saldó todo!*\n\nPagó ${pagadoLabel}, quedó en cero y tiene un *saldo a favor de ${fmt(restante)}*. Se sumó ${fmt(pagado)} a tu balance.${usdPayNote}`;
       }
       if (totalDespues === 0) {
-        return `🎉 *${action.name} saldó todo!*\n\nPagó ${fmt(parseFloat(action.amount))} y quedó en cero. Se sumó ${fmt(pagado)} a tu balance.`;
+        return `🎉 *${action.name} saldó todo!*\n\nPagó ${pagadoLabel} y quedó en cero. Se sumó ${fmt(pagado)} a tu balance.${usdPayNote}`;
       }
-      return `💵 *Pago registrado!*\n\n👤 ${action.name} pagó ${fmt(parseFloat(action.amount))}\n💰 Le queda pendiente: ${fmt(totalDespues)}\n✅ Se sumó ${fmt(pagado)} a tu balance.`;
+      return `💵 *Pago registrado!*\n\n👤 ${action.name} pagó ${pagadoLabel}\n💰 Le queda pendiente: ${fmt(totalDespues)}\n✅ Se sumó ${fmt(pagado)} a tu balance.${usdPayNote}`;
     }
 
     case 'borrar_prestamo': {
