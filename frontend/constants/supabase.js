@@ -2,11 +2,11 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import * as SecureStore from 'expo-secure-store';
 
-const SUPABASE_URL = 'https://cvazbnthpsntqoatzswj.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImN2YXpibnRocHNudHFvYXR6c3dqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzIyMzkyMTMsImV4cCI6MjA4NzgxNTIxM30.KLevD2MfnMD0lndOhvngaG5JR76VKTBg_ofCmerRCRg';
+const SUPABASE_URL      = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
-// URL del backend en Railway — actualizar si cambia el dominio
-export const BACKEND_URL = 'https://orbe-bot-production.up.railway.app';
+// URL del backend en Railway — actualizar en variables de entorno si cambia
+export const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL || 'https://orbe-bot-production.up.railway.app';
 
 // SecureStore tiene límite de 2048 bytes por item.
 // Este adapter divide valores grandes en chunks encriptados en lugar de
