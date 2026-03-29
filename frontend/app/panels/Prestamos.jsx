@@ -1,21 +1,54 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert } from 'react-native';
 import { useC } from '../../lib/theme';
 import { fmt } from '../../lib/constants';
+import { BACKEND_URL } from '../../constants/supabase';
 
 const fmtUSD = (n) => { const num = Number(n)||0; return `USD ${num%1===0?num:num.toFixed(2)}`; };
-const fmtLoan = (l, amount) => l.currency==='usd' && l.amountUSD
-  ? `${fmtUSD(l.amountUSD)} (≈ ${fmt(amount)})`
-  : fmt(amount);
+const fmtLoan = (l, dolarBlue) => {
+  if (l.currency==='usd' && l.amountUSD) {
+    const arsRate = dolarBlue || l.arsRate || null;
+    const arsAmt  = arsRate ? l.amountUSD * arsRate : null;
+    return arsAmt ? `${fmtUSD(l.amountUSD)} (≈ ${fmt(arsAmt)})` : fmtUSD(l.amountUSD);
+  }
+  return fmt(l.amount || 0);
+};
+const fmtLoanRemaining = (l, dolarBlue) => {
+  if (l.currency==='usd' && l.amountUSD) {
+    const arsRate    = dolarBlue || l.arsRate || null;
+    const remainUSD  = l.remainingUSD ?? l.amountUSD;
+    const arsAmt     = arsRate ? remainUSD * arsRate : null;
+    return arsAmt ? `${fmtUSD(remainUSD)} (≈ ${fmt(arsAmt)})` : fmtUSD(remainUSD);
+  }
+  return fmt(l.remaining ?? l.amount ?? 0);
+};
 import { Card, IconCircle } from '../../components/ui';
 
 export default function Prestamos({ data, onSave }) {
   const C = useC();
+  const [dolarBlue, setDolarBlue] = useState(null);
+
+  useEffect(() => {
+    fetch(`${BACKEND_URL}/api/dolar`)
+      .then(r => r.json())
+      .then(d => { if (d.blue) setDolarBlue(d.blue); })
+      .catch(() => {});
+  }, []);
+
   const loans   = data.loans   || [];
   const credits = data.credits || {};
 
-  const totalPrestado  = loans.reduce((s, l) => s + (l.amount || 0), 0);
-  const totalPendiente = loans.reduce((s, l) => s + (l.remaining ?? l.amount ?? 0), 0);
+  const loanARS = (l, field) => {
+    const raw = l[field] ?? 0;
+    if (l.currency === 'usd') {
+      const rate = dolarBlue || l.arsRate || 0;
+      const usdAmt = field === 'amount' ? l.amountUSD : (l.remainingUSD ?? l.amountUSD ?? 0);
+      return rate ? usdAmt * rate : raw;
+    }
+    return raw;
+  };
+  const totalPrestado  = loans.reduce((s, l) => s + loanARS(l, 'amount'), 0);
+  const totalPendiente = loans.reduce((s, l) => s + loanARS(l, 'remaining'), 0);
 
   const delLoan = (index) => Alert.alert('Eliminar préstamo', `¿Eliminar el préstamo de ${loans[index].name}?`, [
     { text: 'Cancelar' },
@@ -83,7 +116,7 @@ export default function Prestamos({ data, onSave }) {
                     {l.loanType==='fiado' && <Text style={{ fontSize:10, fontWeight:'700', color:C.accent, backgroundColor:C.accent+'22', paddingHorizontal:6, paddingVertical:2, borderRadius:8 }}>Fiado</Text>}
                   </View>
                   <Text style={{ fontSize:12, color:C.textMuted, marginTop:2 }}>
-                    Pagado: {fmt(pagado)} · Pendiente: {fmtLoan(l, remaining)}
+                    Pagado: {fmt(pagado)} · Pendiente: {fmtLoanRemaining(l, dolarBlue)}
                   </Text>
                 </View>
                 <TouchableOpacity onPress={() => delLoan(i)}>
@@ -94,7 +127,7 @@ export default function Prestamos({ data, onSave }) {
                 <View style={{ backgroundColor: remaining === 0 ? C.green : C.accent, height:8, borderRadius:99, width:`${pct}%` }}/>
               </View>
               <View style={{ flexDirection:'row', justifyContent:'space-between' }}>
-                <Text style={{ fontSize:11, color:C.textMuted }}>{fmtLoan(l, total)} total</Text>
+                <Text style={{ fontSize:11, color:C.textMuted }}>{fmtLoan(l, dolarBlue)} total</Text>
                 <Text style={{ fontSize:11, color: remaining===0 ? C.green : C.accent, fontWeight:'700' }}>
                   {remaining===0 ? '✅ Saldado' : `${pct.toFixed(0)}% cobrado`}
                 </Text>

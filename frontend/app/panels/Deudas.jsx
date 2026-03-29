@@ -1,16 +1,32 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Alert, TextInput } from 'react-native';
 import { useC } from '../../lib/theme';
 import { fmt, fmtAmt, parseAmt, MONTH_NAMES, DEFAULT_CATEGORIES } from '../../lib/constants';
+import { BACKEND_URL } from '../../constants/supabase';
 
 const fmtUSD = (n) => { const num = Number(n)||0; return `USD ${num%1===0?num:num.toFixed(2)}`; };
-const fmtDeuda = (d, amount) => d.currency==='usd' && d.amountUSD
-  ? `${fmtUSD(d.amountUSD)} (≈ ${fmt(amount)})`
-  : fmt(amount);
+const fmtDeuda = (d, dolarBlue) => {
+  if (d.currency === 'usd') {
+    const rate    = dolarBlue || d.arsRate || null;
+    const usdAmt  = d.remainingUSD ?? d.amountUSD ?? 0;
+    const arsAmt  = rate ? usdAmt * rate : null;
+    return arsAmt ? `${fmtUSD(usdAmt)} (≈ ${fmt(arsAmt)})` : fmtUSD(usdAmt);
+  }
+  return fmt(d.remaining ?? 0);
+};
 import { Card, Btn, Input, FAB, ModalSheet, IconCircle, EmptyState } from '../../components/ui';
 
 export default function Deudas({ data, onSave }) {
   const C = useC();
+  const [dolarBlue, setDolarBlue] = useState(null);
+
+  useEffect(() => {
+    fetch(`${BACKEND_URL}/api/dolar`)
+      .then(r => r.json())
+      .then(d => { if (d.blue) setDolarBlue(d.blue); })
+      .catch(() => {});
+  }, []);
+
   const emptyF = { name:'', remaining:'', installment:'', remainingInstallments:'' };
   const [modal, setModal]           = useState(false);
   const [editModal, setEditModal]   = useState(false);
@@ -20,8 +36,17 @@ export default function Deudas({ data, onSave }) {
   const [payAmt, setPayAmt]         = useState({});
   const [addErrors, setAddErrors]   = useState({});
 
-  const totalDebt       = data.debts.reduce((s,d) => s+d.remaining, 0);
-  const monthlyPayments = data.debts.reduce((s,d) => s+d.installment, 0);
+  const debtARS = (d, field) => {
+    const raw = d[field] ?? 0;
+    if (d.currency === 'usd') {
+      const rate   = dolarBlue || d.arsRate || 0;
+      const usdAmt = field === 'remaining' ? (d.remainingUSD ?? d.amountUSD ?? 0) : (d.installmentUSD ?? 0);
+      return rate ? usdAmt * rate : raw;
+    }
+    return raw;
+  };
+  const totalDebt       = data.debts.reduce((s,d) => s + debtARS(d, 'remaining'), 0);
+  const monthlyPayments = data.debts.reduce((s,d) => s + debtARS(d, 'installment'), 0);
 
   const calcInst = (rem, inst) => {
     if (!rem||!inst||parseAmt(inst)===0) return '';
@@ -114,7 +139,7 @@ export default function Deudas({ data, onSave }) {
                         <Text style={{ fontSize:15, fontWeight:'700', color:C.text }}>{d.name}</Text>
                         {d.currency==='usd' && <Text style={{ fontSize:10, fontWeight:'700', color:'#22c55e', backgroundColor:'#22c55e22', paddingHorizontal:6, paddingVertical:2, borderRadius:8 }}>USD</Text>}
                       </View>
-                      <Text style={{ fontSize:12, color:C.textMuted }}>Restante: {fmtDeuda(d, d.remaining)}{d.installment>0 ? ` · Cuota: ${fmt(d.installment)}` : ''}</Text>
+                      <Text style={{ fontSize:12, color:C.textMuted }}>Restante: {fmtDeuda(d, dolarBlue)}{d.installment>0 ? ` · Cuota: ${fmt(debtARS(d, 'installment'))}` : ''}</Text>
                       {d.remainingInstallments>0 && (
                         <Text style={{ fontSize:11, color:C.accent, marginTop:2 }}>📅 {d.remainingInstallments} cuotas · {endMonth(d.remainingInstallments.toString())}</Text>
                       )}
