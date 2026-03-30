@@ -889,8 +889,20 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
         loanId,
         ...(action.currency === 'usd' ? { currency: 'usd', amountUSD: parseFloat(action.amountUSD) } : {}),
       };
-      await saveData(userId, { ...data, loans: [...loans, loan], credits, transactions: [...(data.transactions || []), loanTx] });
-      return `📋 *Préstamo registrado!*\n\n👤 ${action.name} te debe ${fmt(remaining)}${action.reason ? `\n📝 Por: ${action.reason}` : ''}\n📅 ${today()}${usdLoanNote}${creditNote}\n💸 Desconté ${fmt(remaining)} de tu balance.\n\nCuando pague algo, avisame y lo registro.`;
+      const updatedLoans = [...loans, loan];
+      await saveData(userId, { ...data, loans: updatedLoans, credits, transactions: [...(data.transactions || []), loanTx] });
+      // Calcular total acumulado que esa persona debe
+      const allActiveLoans = updatedLoans.filter(l => l.name.toLowerCase() === personKey && l.remaining > 0);
+      const totalOwedARS = allActiveLoans.reduce((s, l) => s + l.remaining, 0);
+      const allUSD = allActiveLoans.filter(l => l.currency === 'usd');
+      const totalUSD = allUSD.reduce((s, l) => s + (l.amountUSD || 0), 0);
+      const totalStr = allActiveLoans.length > 1
+        ? (allUSD.length === allActiveLoans.length && totalUSD > 0
+            ? `*${fmtUSD(totalUSD)} en total* (≈ ${fmt(totalOwedARS)})`
+            : `*${fmt(totalOwedARS)} en total*`)
+        : fmt(remaining);
+      const yaDebia = allActiveLoans.length > 1 ? ' ahora' : '';
+      return `📋 *Préstamo registrado!*\n\n👤 ${action.name} te debe${yaDebia} ${totalStr}${action.reason ? `\n📝 Por: ${action.reason}` : ''}\n📅 ${today()}${usdLoanNote}${creditNote}\n💸 Desconté ${fmt(remaining)} de tu balance.\n\nCuando pague algo, avisame y lo registro.`;
     }
 
     case 'agregar_fiado': {
@@ -1036,8 +1048,24 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
 
       let resp = `📋 *Deuda de ${matching[0].name}*\n\n`;
       if (activos.length > 1) {
-        resp += activos.map(l => `• ${l.reason || (l.loanType === 'fiado' ? 'Fiado' : 'Préstamo')}: ${fmtLoan(l)}`).join('\n') + '\n';
-        resp += `\n💰 Total pendiente: ${fmt(totalRest)}\n`;
+        resp += activos.map((l, i) => {
+          const tipo = l.loanType === 'fiado' ? 'Fiado' : 'Préstamo';
+          const label = l.reason ? `${tipo} (${l.reason})` : tipo;
+          return `*${i + 1}.* ${label}: ${fmtLoan(l)}`;
+        }).join('\n') + '\n';
+        // Total: si hay mezcla USD+ARS, mostrar ambos
+        const usdLoans = activos.filter(l => l.currency === 'usd');
+        const totalUSD = usdLoans.reduce((s, l) => s + (l.amountUSD || 0), 0);
+        const arsOnlyLoans = activos.filter(l => l.currency !== 'usd');
+        const totalARS = arsOnlyLoans.reduce((s, l) => s + l.remaining, 0);
+        if (usdLoans.length > 0 && arsOnlyLoans.length > 0) {
+          resp += `\n💰 Total: ${fmtUSD(totalUSD)} + ${fmt(totalARS)} en pesos (≈ ${fmt(totalRest)} ARS)\n`;
+        } else {
+          const totalStr = usdLoans.length === activos.length && totalUSD > 0
+            ? `${fmtUSD(totalUSD)} (≈ ${fmt(totalRest)})`
+            : fmt(totalRest);
+          resp += `\n💰 Total pendiente: ${totalStr}\n`;
+        }
       } else {
         resp += `💰 Original: ${fmtLoan(activos[0])}\n💸 Pagado: ${fmt(pagadoTotal)}\n⏳ Queda: ${fmtLoan(activos[0])}\n`;
         if (activos[0]?.reason) resp += `📝 Por: ${activos[0].reason}\n`;
@@ -1071,12 +1099,19 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
 
       const totalGlobal = activos.reduce((s, p) => s + p.total, 0);
       const lineas = activos.map(p => {
-        // Si todos sus loans son en la misma moneda USD, mostrarlo
         const usdLoans = p.loans.filter(l => l.currency === 'usd');
+        const arsLoans = p.loans.filter(l => l.currency !== 'usd');
         const totalUSD = usdLoans.reduce((s, l) => s + (l.amountUSD || 0), 0);
-        const montoStr = usdLoans.length === p.loans.length && totalUSD > 0
-          ? `${fmtUSD(totalUSD)} (≈ ${fmt(p.total)})`
-          : fmt(p.total);
+        const totalARS = arsLoans.reduce((s, l) => s + l.remaining, 0);
+        let montoStr;
+        if (usdLoans.length > 0 && arsLoans.length > 0) {
+          // Mezcla: mostrar USD + pesos
+          montoStr = `${fmtUSD(totalUSD)} + ${fmt(totalARS)} (≈ ${fmt(p.total)} ARS)`;
+        } else if (usdLoans.length === p.loans.length && totalUSD > 0) {
+          montoStr = `${fmtUSD(totalUSD)} (≈ ${fmt(p.total)})`;
+        } else {
+          montoStr = fmt(p.total);
+        }
         const detalle = p.items.length > 0 ? ` — ${p.items.join(', ')}` : '';
         return `👤 *${p.name}*: ${montoStr}${detalle}`;
       });

@@ -66,7 +66,8 @@ async function loadData(uid) {
 }
 
 async function saveData(uid, payload) {
-  await supabaseAdmin.from('finanzas').upsert({ id: uid, data: payload, updated_at: new Date().toISOString() });
+  const { error } = await supabaseAdmin.from('finanzas').upsert({ id: uid, data: payload, updated_at: new Date().toISOString() });
+  if (error) throw new Error(`saveData failed: ${error.message}`);
 }
 
 // ── Usuarios de WhatsApp ───────────────────────────────────
