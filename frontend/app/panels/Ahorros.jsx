@@ -15,7 +15,7 @@ export default function Ahorros({ data, onSave }) {
   const [modal, setModal]         = useState(false);
   const [editModal, setEditModal] = useState(false);
   const [editTarget, setEditTarget] = useState(null);
-  const emptyF = { name:'', target:'', current:'' };
+  const emptyF = { name:'', target:'', current:'', currency:'ars' };
   const [form, setForm]         = useState(emptyF);
   const [editForm, setEditForm] = useState(emptyF);
   const [dolarBlue, setDolarBlue] = useState(null);
@@ -29,7 +29,16 @@ export default function Ahorros({ data, onSave }) {
 
   const addAhorro = () => {
     if (!form.name||!form.target) return;
-    onSave({ ...data, savings:[...data.savings, { ...form, id:Date.now().toString(), target:parseAmt(form.target), current:parseAmt(form.current||'0'), history:[] }] });
+    const isUSD = form.currency === 'usd';
+    onSave({ ...data, savings:[...data.savings, {
+      id: Date.now().toString(),
+      name: form.name,
+      target: parseAmt(form.target),
+      current: parseAmt(form.current||'0'),
+      currency: isUSD ? 'usd' : 'ars',
+      arsRate: isUSD && dolarBlue ? dolarBlue : null,
+      history: [],
+    }] });
     setModal(false); setForm(emptyF);
   };
   const openEdit = (sv) => { setEditTarget(sv.id); setEditForm({ name:sv.name, target:sv.target.toString(), current:sv.current.toString() }); setEditModal(true); };
@@ -42,13 +51,30 @@ export default function Ahorros({ data, onSave }) {
     { text:'Eliminar', style:'destructive', onPress: () => onSave({ ...data, savings:data.savings.filter(sv => sv.id!==id) }) },
   ]);
 
-  const AhorroForm = ({ frm, setFrm }) => (
-    <>
-      <Input label="Nombre" value={frm.name} onChangeText={v => setFrm(f => ({ ...f, name:v }))} placeholder="Ej: Vacaciones"/>
-      <Input label="Meta" value={frm.target} onChangeText={v => setFrm(f => ({ ...f, target:v }))} placeholder="0" keyboardType="numeric" prefix="$"/>
-      <Input label="Ya tengo" value={frm.current} onChangeText={v => setFrm(f => ({ ...f, current:v }))} placeholder="0" keyboardType="numeric" prefix="$"/>
-    </>
-  );
+  const AhorroForm = ({ frm, setFrm, showCurrency = false }) => {
+    const isUSD = frm.currency === 'usd';
+    return (
+      <>
+        <Input label="Nombre" value={frm.name} onChangeText={v => setFrm(f => ({ ...f, name:v }))} placeholder="Ej: Vacaciones"/>
+        {showCurrency && (
+          <View style={{ flexDirection:'row', gap:8, marginBottom:14 }}>
+            {['ars','usd'].map(cur => (
+              <TouchableOpacity key={cur} onPress={() => setFrm(f => ({ ...f, currency:cur }))}
+                style={{ flex:1, paddingVertical:10, borderRadius:12, alignItems:'center',
+                  backgroundColor: frm.currency===cur ? C.accent : C.surface2,
+                  borderWidth:1, borderColor: frm.currency===cur ? C.gold : C.border }}>
+                <Text style={{ fontWeight:'700', fontSize:13, color: frm.currency===cur ? '#fff' : C.textMuted }}>
+                  {cur === 'ars' ? '🇦🇷 ARS' : '🇺🇸 USD'}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+        <Input label="Meta" value={frm.target} onChangeText={v => setFrm(f => ({ ...f, target:v }))} placeholder="0" keyboardType="numeric" prefix={isUSD ? 'USD' : '$'}/>
+        <Input label="Ya tengo" value={frm.current} onChangeText={v => setFrm(f => ({ ...f, current:v }))} placeholder="0" keyboardType="numeric" prefix={isUSD ? 'USD' : '$'}/>
+      </>
+    );
+  };
 
   return (
     <View style={{ flex:1 }}>
@@ -110,7 +136,7 @@ export default function Ahorros({ data, onSave }) {
       </ScrollView>
       <FAB onPress={() => setModal(true)}/>
       <ModalSheet visible={modal} onClose={() => setModal(false)} title="Nueva meta de ahorro">
-        <AhorroForm frm={form} setFrm={setForm}/>
+        <AhorroForm frm={form} setFrm={setForm} showCurrency/>
         <View style={{ flexDirection:'row', gap:10 }}>
           <Btn label="Cancelar" variant="ghost" style={{ flex:1 }} onPress={() => setModal(false)}/>
           <Btn label="Guardar" style={{ flex:1 }} onPress={addAhorro}/>

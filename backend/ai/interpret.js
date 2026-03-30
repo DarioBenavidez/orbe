@@ -49,9 +49,10 @@ async function callClaude(systemPrompt, history, userMessage, useComplexModel = 
 async function interpretMessage(userMessage, data, history, userName) {
   const { month, year } = currentMonth();
   const greeting = getGreeting();
-  // Sanitizar nombre antes de embeber en system prompt (prevenir prompt injection)
+  // Sanitizar datos del usuario antes de embeber en system prompt (prevenir prompt injection)
   const rawName = userName ? userName.split(' ')[0] : '';
-  const name = rawName.replace(/[`\\{}]/g, '').slice(0, 30);
+  const name = rawName.replace(/[`\\{}\[\]]/g, '').slice(0, 30);
+  const sanitize = (s) => String(s || '').replace(/[`\\{}\[\]]/g, '').slice(0, 100);
 
   // Calcular contexto financiero actual
   const txsMes = data.transactions.filter(t => {
@@ -92,7 +93,7 @@ CONTEXTO ACTUAL:
 - Categorías disponibles: ${Object.keys(data.categories || {}).join(', ') || 'ninguna aún'}
 - Presupuestos activos del usuario (usá EXACTAMENTE estos nombres como categoría cuando un gasto encaje): ${(data.budgets || []).filter(b => b.limit > 0).map(b => `"${b.cat}" (límite ${fmt(b.limit)})`).join(', ') || 'ninguno configurado'}
 - IMPORTANTE: si el usuario tiene un presupuesto con nombre propio (ej. "Auto", "Viajes", "Perro"), PRIORIZÁ ese nombre como categoría del gasto antes que las categorías genéricas. El presupuesto "Auto" debe recibir nafta, peajes, estacionamiento. "Transporte" solo si no hay presupuesto más específico.
-- Vocabulario personalizado del usuario: ${(data.vocabulario || []).length > 0 ? (data.vocabulario || []).map(v => `"${v.expresion}" → ${v.descripcion} (${v.categoria})`).join(', ') : 'ninguno aún — si usá expresiones propias, pedíle confirmación'}
+- Vocabulario personalizado del usuario: ${(data.vocabulario || []).length > 0 ? (data.vocabulario || []).map(v => `"${sanitize(v.expresion)}" → ${sanitize(v.descripcion)} (${sanitize(v.categoria)})`).join(', ') : 'ninguno aún — si usá expresiones propias, pedíle confirmación'}
 - Metas de ahorro: ${data.savings?.length || 0} (total acumulado: ${fmt((data.savings || []).reduce((s, sv) => s + (sv.current || 0), 0))})${data.savings?.length > 0 ? ' — ' + data.savings.map(sv => `${sv.name}: ${fmt(sv.current)}/${fmt(sv.target)}`).join(', ') : ''}
 - Deudas: ${data.debts?.length || 0} (total pendiente: ${fmt((data.debts || []).reduce((s, d) => s + d.remaining, 0))})${data.debts?.length > 0 ? ' — ' + data.debts.map(d => `${d.name}: ${fmt(d.remaining)}`).join(', ') : ''}
 - Préstamos pendientes (te deben): ${(data.loans || []).filter(l => l.remaining > 0).length}${(data.loans || []).filter(l => l.remaining > 0).length > 0 ? ' — ' + (data.loans || []).filter(l => l.remaining > 0).map(l => `${l.name}: ${fmt(l.remaining)}`).join(', ') : ''}
@@ -101,7 +102,7 @@ CONTEXTO ACTUAL:
 - Mes anterior (${MONTH_NAMES[prevMonth]}): ingresos ${fmt(ingresosPrev)}, gastos ${fmt(gastosPrev)}${gastosPrev > 0 && gastos > gastosPrev ? ' ← este mes está gastando más que el anterior' : gastosPrev > 0 && gastos < gastosPrev * 0.8 ? ' ← este mes está gastando menos, buen dato' : ''}
 ${proxVenc.length > 0 ? `- Vencimientos próximos (7 días): ${proxVenc.map(ev => ev.title).join(', ')} ← mencionálos si viene al caso` : ''}
 - Tareas pendientes: ${(data.tasks || data.tareas || []).filter(t => t.status === 'pendiente').length}${(data.tasks || data.tareas || []).filter(t => t.status === 'pendiente').length > 0 ? ' — ' + (data.tasks || data.tareas || []).filter(t => t.status === 'pendiente').map(t => `"${t.description}"${t.dueDate ? ' (vence ' + t.dueDate + ')' : ''}`).join(', ') : ''}
-- Patrones y preferencias aprendidos: ${(data.memoria || []).length > 0 ? (data.memoria || []).map(m => `[${m.type === 'feedback' ? '⛔' : '💡'}] ${m.text}`).join(' | ') : 'ninguno aún'}
+- Patrones y preferencias aprendidos: ${(data.memoria || []).length > 0 ? (data.memoria || []).map(m => `[${m.type === 'feedback' ? '⛔' : '💡'}] ${sanitize(m.text)}`).join(' | ') : 'ninguno aún'}
 ${data.balanceAlert > 0 ? `- Alerta de balance configurada: avisa cuando baje de ${fmt(data.balanceAlert)}` : ''}
 ${(data.reminders || []).filter(r => !r.notified).length > 0 ? `- Recordatorios pendientes: ${(data.reminders || []).filter(r => !r.notified).map(r => `"${r.description}" el ${r.date}`).join(', ')}` : ''}
 

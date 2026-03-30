@@ -57,10 +57,13 @@ export default function AnalisisTab({ data, onSave }) {
   const saveEditCat = () => {
     if (!editCat) return;
     const nc = {...cats};
-    if (editCat.newName && editCat.newName !== editCat.key) {
-      nc[editCat.newName] = editCat.icon; delete nc[editCat.key];
-      const budgets = data.budgets.map(b => b.cat===editCat.key ? { ...b, cat:editCat.newName } : b);
-      onSave({ ...data, categories:nc, budgets });
+    if (editCat.newName && editCat.newName.trim() && editCat.newName !== editCat.key) {
+      const newKey = editCat.newName.trim();
+      nc[newKey] = editCat.icon; delete nc[editCat.key];
+      // Migrar transacciones y presupuestos al nuevo nombre
+      const budgets = data.budgets.map(b => b.cat===editCat.key ? { ...b, cat:newKey } : b);
+      const transactions = data.transactions.map(t => t.category===editCat.key ? { ...t, category:newKey } : t);
+      onSave({ ...data, categories:nc, budgets, transactions });
     } else {
       nc[editCat.key] = editCat.icon;
       onSave({ ...data, categories:nc });

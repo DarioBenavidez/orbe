@@ -62,9 +62,10 @@ export default function Deudas({ data, onSave }) {
     const errs = {};
     if (!form.name) errs.name = 'Ingresá un nombre o acreedor';
     if (!form.remaining || parseAmt(form.remaining) <= 0) errs.remaining = 'Ingresá el monto pendiente';
+    const inst = parseAmt(form.installment) || 0;
+    if (inst > 0 && inst > parseAmt(form.remaining)) errs.installment = 'La cuota no puede ser mayor al monto total';
     if (Object.keys(errs).length) { setAddErrors(errs); return; }
     setAddErrors({});
-    const inst = parseAmt(form.installment)||0;
     const ri = parseInt(form.remainingInstallments)||(inst>0?Math.ceil(parseAmt(form.remaining)/inst):0);
     onSave({ ...data, debts:[...data.debts, { name:form.name, total:parseAmt(form.remaining), remaining:parseAmt(form.remaining), installment:inst, remainingInstallments:ri, id:Date.now().toString() }] });
     setModal(false); setForm(emptyF);
@@ -100,7 +101,7 @@ export default function Deudas({ data, onSave }) {
     <>
       <Input label="Nombre / Acreedor" value={frm.name} onChangeText={v => { setFrm(f => ({ ...f, name:v })); if (errors.name) setAddErrors(e => ({ ...e, name:null })); }} placeholder="Ej: Tarjeta Visa" error={errors.name}/>
       <Input label="Monto pendiente" value={frm.remaining} onChangeText={v => { setFrm(f => ({ ...f, remaining:v, remainingInstallments:calcInst(v,f.installment) })); if (errors.remaining) setAddErrors(e => ({ ...e, remaining:null })); }} placeholder="0" keyboardType="numeric" prefix="$" error={errors.remaining}/>
-      <Input label="Cuota mensual" value={frm.installment} onChangeText={v => setFrm(f => ({ ...f, installment:v, remainingInstallments:calcInst(f.remaining,v) }))} placeholder="0" keyboardType="numeric" prefix="$"/>
+      <Input label="Cuota mensual" value={frm.installment} onChangeText={v => { setFrm(f => ({ ...f, installment:v, remainingInstallments:calcInst(f.remaining,v) })); if (errors.installment) setAddErrors(e => ({ ...e, installment:null })); }} placeholder="0" keyboardType="numeric" prefix="$" error={errors.installment}/>
       <View style={{ backgroundColor:C.surface2, borderRadius:12, padding:12, marginBottom:14 }}>
         <Text style={{ fontSize:13, color:C.accent }}>
           📅 {frm.remainingInstallments ? `${frm.remainingInstallments} cuotas · Termina ${endMonth(frm.remainingInstallments)}` : 'Ingresá monto y cuota para calcular'}

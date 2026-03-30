@@ -43,6 +43,7 @@ app.use(rateLimit({
 app.use('/api', apiRouter);
 app.use('/webhook', webhookRouter);
 app.get('/', (req, res) => res.json({ status: 'ok' }));
+app.get('/health', (req, res) => res.json({ status: 'ok', uptime: Math.floor(process.uptime()), ts: new Date().toISOString() }));
 
 // ── Scheduler ──────────────────────────────────────────────
 // Desactivado hasta tener número de WhatsApp Business verificado

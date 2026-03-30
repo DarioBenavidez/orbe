@@ -15,7 +15,10 @@ function currentMonth() {
   return { month: ar.getMonth(), year: ar.getFullYear() };
 }
 function parseDateParts(dateStr) {
-  const [y, m, d] = dateStr.split('-').map(Number);
+  if (!dateStr || typeof dateStr !== 'string') return { year: 0, month: 0, day: 1 };
+  const parts = dateStr.split('-').map(Number);
+  if (parts.length < 3 || parts.some(isNaN)) return { year: 0, month: 0, day: 1 };
+  const [y, m, d] = parts;
   return { year: y, month: m - 1, day: d };
 }
 
@@ -48,11 +51,16 @@ async function getDolarPrice() {
   try {
     const res = await fetch('https://api.bluelytics.com.ar/v2/latest');
     const data = await res.json();
-    _dolarCache = { oficial: data.oficial?.value_sell, blue: data.blue?.value_sell };
+    _dolarCache = { oficial: data.oficial?.value_sell, blue: data.blue?.value_sell, fetchedAt: Date.now() };
     _dolarCacheAt = Date.now();
     return _dolarCache;
   } catch {
-    return _dolarCache || null; // devuelve cache viejo si hay, mejor que null
+    if (_dolarCache) {
+      const ageMin = Math.round((Date.now() - _dolarCacheAt) / 60_000);
+      console.warn(`[dolar] API no disponible, usando cache de hace ${ageMin} min`);
+      return _dolarCache;
+    }
+    return null;
   }
 }
 

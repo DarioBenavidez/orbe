@@ -57,7 +57,9 @@ router.post('/send-phone-otp', async (req, res) => {
     const { data: { user }, error } = await supabase.auth.getUser(token);
     if (error || !user) return res.status(401).json({ error: 'Token inválido' });
     const phone = (req.body?.phone || '').replace(/\D/g, '');
-    if (phone.length < 10) return res.status(400).json({ error: 'Número inválido' });
+    // Números argentinos: 549 + 10 dígitos (ej: 5491140001234) — también acepta sin 549 si ya viene limpio
+    const validPhone = /^(549\d{10}|0?[1-9]\d{9,10})$/.test(phone);
+    if (!validPhone) return res.status(400).json({ error: 'Número inválido. Usá formato argentino: 549XXXXXXXXXX' });
     const existing = await getPhoneOTP(phone);
     if (existing && Date.now() < existing.expires - 4.5 * 60_000) {
       return res.status(429).json({ error: 'Esperá unos segundos antes de volver a pedir el código.' });
