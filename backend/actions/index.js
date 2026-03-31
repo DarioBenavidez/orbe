@@ -476,6 +476,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       } else {
         amountARS = parseFloat(action.amount) || 0;
       }
+      if (!amountARS || amountARS <= 0) return `🤔 ¿Cuánto pagás por mes de *${action.name || 'esa suscripción'}*?`;
       const subName = action.name || 'Suscripción';
       const subKey = subName.toLowerCase();
       // Evitar duplicados — si ya existe una con ese nombre, actualizarla
