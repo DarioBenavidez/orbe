@@ -64,6 +64,32 @@ async function getDolarPrice() {
   }
 }
 
+// ── Precio del dólar histórico ─────────────────────────────
+async function getDolarHistory(dateStr) {
+  try {
+    // Calcular cuántos días atrás está la fecha pedida
+    const target = new Date(dateStr + 'T00:00:00Z');
+    const now = new Date();
+    const diffDays = Math.ceil((now - target) / (1000 * 60 * 60 * 24)) + 2;
+    const days = Math.max(diffDays, 7);
+    const res = await fetch(`https://api.bluelytics.com.ar/v2/evolution.json?days=${days}`);
+    const data = await res.json();
+    // Buscar la fecha exacta o la más cercana anterior
+    const entries = data.filter(e => e.date <= dateStr).sort((a, b) => b.date.localeCompare(a.date));
+    if (!entries.length) return null;
+    const closestDate = entries[0].date;
+    const oficial = entries.find(e => e.date === closestDate && e.source === 'Oficial');
+    const blue    = entries.find(e => e.date === closestDate && e.source === 'Blue');
+    return {
+      date: closestDate,
+      oficial: oficial?.value_sell || null,
+      blue:    blue?.value_sell    || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
 // ── Limitar longitud de strings del usuario ───────────────
 function truncate(str, max = 200) {
   if (typeof str !== 'string') return '';
@@ -75,6 +101,6 @@ const MONTH_NAMES = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','A
 module.exports = {
   arNow, arDay, today, currentMonth, parseDateParts,
   fmt, fmtSigned, fmtDate,
-  getGreeting, getDolarPrice, truncate,
+  getGreeting, getDolarPrice, getDolarHistory, truncate,
   MONTH_NAMES,
 };

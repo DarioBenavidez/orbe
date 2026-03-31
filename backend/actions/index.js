@@ -2,7 +2,7 @@
 
 const { supabase, loadData, saveData, getPendingSuggestion, savePendingSuggestion, clearPendingSuggestion } = require('../lib/supabase');
 const { sendWhatsAppMessage } = require('../lib/whatsapp');
-const { fmt, fmtSigned, fmtDate, today, currentMonth, arDay, arNow, parseDateParts, getDolarPrice, MONTH_NAMES, getGreeting, truncate } = require('../lib/helpers');
+const { fmt, fmtSigned, fmtDate, today, currentMonth, arDay, arNow, parseDateParts, getDolarPrice, getDolarHistory, MONTH_NAMES, getGreeting, truncate } = require('../lib/helpers');
 const fmtUSD = (n) => { const num = Number(n) || 0; return `USD ${num % 1 === 0 ? num : num.toFixed(2)}`; };
 const fmtLoan = (loan) => loan.currency === 'usd' && loan.amountUSD ? `${fmtUSD(loan.remainingUSD ?? loan.amountUSD)} (≈ ${fmt(loan.remaining)})` : fmt(loan.remaining);
 const { callClaude } = require('../ai/interpret');
@@ -120,6 +120,12 @@ Tu tarea: escribí un saludo natural, breve y conversacional. Pensá qué es lo 
     }
 
     case 'consultar_dolar': {
+      if (action.date && action.date !== today()) {
+        const hist = await getDolarHistory(action.date);
+        if (!hist) return `😓 No encontré cotización para esa fecha. Bluelytics solo tiene datos de los últimos meses.`;
+        const dateLabel = hist.date === action.date ? action.date : `${action.date} (dato más cercano: ${hist.date})`;
+        return `💵 *Cotización del dólar — ${dateLabel}*\n\n🏦 Oficial: ${hist.oficial ? fmt(hist.oficial) : 'no disponible'}\n🔵 Blue: ${hist.blue ? fmt(hist.blue) : 'no disponible'}\n\n_Fuente: Bluelytics_`;
+      }
       const dolar = await getDolarPrice();
       if (!dolar) return `😓 No pude obtener la cotización ahora. Intentá de nuevo en un rato.`;
       return `💵 *Cotización del dólar*\n\n🏦 Oficial: ${fmt(dolar.oficial)}\n🔵 Blue: ${fmt(dolar.blue)}\n\n_Fuente: Bluelytics_`;

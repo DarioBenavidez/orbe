@@ -154,6 +154,7 @@ ACCIONES DISPONIBLES:
 {"type":"pagar_deuda","keyword":"visa","amount":5000}
 {"type":"borrar_deuda","keyword":"bbva"}
 {"type":"consultar_dolar"}
+{"type":"consultar_dolar","date":"YYYY-MM-DD"}
 {"type":"simular_sin_gasto","keyword":"netflix","amount":0}
 {"type":"planear_compra","name":"auto","amount":5000000,"months":12}
 {"type":"gasto_en_dolares","description":"Netflix","amountUSD":15,"category":"Entretenimiento","date":"YYYY-MM-DD","source":"tarjeta"}
@@ -217,7 +218,8 @@ REGLAS DE INTERPRETACIÓN:
 - CRÍTICO — CAMPO reason EN PRÉSTAMOS/FIADOS: el campo "reason" solo va si el usuario mencionó explícitamente el motivo (ej: "para el viaje", "por la comida", "para el alquiler"). Si el usuario solo dijo "le presté/le fié X pesos/dólares a Y" sin dar motivo → NO incluyas "reason". NUNCA uses palabras genéricas como "préstamo", "fiado", "dinero", "plata" como reason — son redundantes.
 - Cuando te paguen un fiado o préstamo → registrar_pago_prestamo (suma al balance como ingreso). Si el usuario dice que le pagaron en dólares/USD → usá "amountUSD" + "currency":"usd" en la acción (igual que en préstamos). NUNCA conviertas vos.
 - "X me pagó/me devolvió/abonó" → registrar_pago_prestamo
-- "¿a cuánto está el dólar? / cotización / precio del dólar / blue / cuánto está el dólar" → consultar_dolar SIEMPRE que el mensaje mencione el precio del dólar, aunque venga mezclado con un saludo. El saludo NO cancela la acción — respondé la pregunta primero. "quiero comprar dólares / me conviene comprar dólares / qué hago con los dólares" → conversacion (consejo financiero, NO consultar_dolar)
+- "¿a cuánto está el dólar? / cotización / precio del dólar / blue / cuánto está el dólar" → consultar_dolar SIEMPRE que el mensaje mencione el precio del dólar, aunque venga mezclado con un saludo. El saludo NO cancela la acción — respondé la pregunta primero. "quiero comprar dólares / me conviene comprar dólares / qué hago con los dólares" → conversacion (consejo financiero, NO consultar_dolar).
+- Si el usuario pregunta por el dólar en una fecha pasada ("el lunes", "el viernes", "el 27", "ayer", "la semana pasada") → consultar_dolar con "date" resuelto en formato YYYY-MM-DD usando la fecha actual (${today()}) como referencia. Si dice "el lunes" calculá el lunes más reciente, "ayer" = ${(()=>{const d=new Date(today());d.setDate(d.getDate()-1);return d.toISOString().slice(0,10)})()}, etc.
 - "tengo eventos?", "qué eventos tengo?", "mostrá mis eventos", "qué tengo anotado?", "cuáles son mis eventos?" → consultar_eventos (muestra TODOS los eventos sin importar si ya pasaron este mes)
 - "qué vence?", "qué tengo que pagar?", "vencimientos del mes?", "qué me vence este mes?" → consultar_vencimientos (solo próximos del mes actual)
 - "quiero ahorrar X para Y / quiero juntar X para Y / estoy ahorrando para Y" → SIEMPRE agregar_ahorro (target=X, name=Y). NUNCA agregar_evento. Si el monto es en dólares/USD, agregá "currency":"usd" y usá el monto en USD en target/current (NO conviertas vos, el backend lo hace).
