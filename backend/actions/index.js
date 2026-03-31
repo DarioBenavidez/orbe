@@ -4,7 +4,7 @@ const { supabase, loadData, saveData, getPendingSuggestion, savePendingSuggestio
 const { sendWhatsAppMessage } = require('../lib/whatsapp');
 const { fmt, fmtSigned, fmtDate, today, currentMonth, arDay, arNow, parseDateParts, getDolarPrice, MONTH_NAMES, getGreeting, truncate } = require('../lib/helpers');
 const fmtUSD = (n) => { const num = Number(n) || 0; return `USD ${num % 1 === 0 ? num : num.toFixed(2)}`; };
-const fmtLoan = (loan) => loan.currency === 'usd' && loan.amountUSD ? `${fmtUSD(loan.amountUSD)} (≈ ${fmt(loan.remaining)})` : fmt(loan.remaining);
+const fmtLoan = (loan) => loan.currency === 'usd' && loan.amountUSD ? `${fmtUSD(loan.remainingUSD ?? loan.amountUSD)} (≈ ${fmt(loan.remaining)})` : fmt(loan.remaining);
 const { callClaude } = require('../ai/interpret');
 const { filterByMonth, monthlyTotals } = require('./helpers');
 
