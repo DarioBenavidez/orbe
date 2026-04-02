@@ -544,6 +544,16 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       return `📱 *Tus suscripciones*\n\n${subs.map(s => `• *${s.name}*: ${fmt(s.amount)}/mes (día ${s.day})`).join('\n')}\n\n💸 Total mensual: ${fmt(total)}\n📅 Total anual: ${fmt(anual)}`;
     }
 
+    case 'cancelar_todas_suscripciones': {
+      const activas = (data.suscripciones || []).filter(s => s.active);
+      if (!activas.length) return `📭 No tenés suscripciones activas para cancelar.`;
+      const suscripciones = (data.suscripciones || []).map(s => ({ ...s, active: false }));
+      await saveData(userId, { ...data, suscripciones, recurringExpenses: [] });
+      const total = activas.reduce((s, sub) => s + sub.amount, 0);
+      const lista = activas.map(s => `• ${s.name}`).join('\n');
+      return `🗑️ Cancelé todas tus suscripciones:\n\n${lista}\n\n💸 Te liberás ${fmt(total)}/mes · ${fmt(total * 12)}/año.`;
+    }
+
     case 'cancelar_suscripcion': {
       const keyword = (action.keyword || '').toLowerCase();
       const cancelada = (data.suscripciones || []).find(s => s.name.toLowerCase().includes(keyword) && s.active);
@@ -1273,13 +1283,29 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       if (idx === -1) return `🤔 No encontré ninguna deuda que coincida con *${action.keyword}*. ¿Cómo se llama exactamente?`;
       const deuda = { ...debts[idx] };
       const monto = parseFloat(action.amount);
-      deuda.remaining = Math.max(0, deuda.remaining - monto);
+      let txAmount = monto;
+      let pagoLabel = fmt(monto);
+      let quedaLabel;
+      if (deuda.currency === 'usd') {
+        const dolar = await getDolarPrice();
+        const rate = dolar?.blue || deuda.arsRate || 0;
+        const prevUSD = deuda.remainingUSD ?? deuda.amountUSD ?? 0;
+        const usdPagado = Math.min(monto, prevUSD);
+        deuda.remainingUSD = Math.max(0, prevUSD - usdPagado);
+        txAmount = rate ? usdPagado * rate : 0;
+        deuda.remaining = Math.max(0, deuda.remaining - txAmount);
+        pagoLabel = `USD ${usdPagado}${rate ? ` (≈ ${fmt(txAmount)})` : ''}`;
+        quedaLabel = `USD ${deuda.remainingUSD}${rate ? ` (≈ ${fmt(deuda.remaining)})` : ''}`;
+      } else {
+        deuda.remaining = Math.max(0, deuda.remaining - monto);
+        quedaLabel = fmt(deuda.remaining);
+      }
       deuda.remainingInstallments = Math.max(0, (deuda.remainingInstallments || 0) - 1);
       debts[idx] = deuda;
-      const tx = { id: crypto.randomUUID(), type: 'gasto', description: `Pago: ${deuda.name}`, amount: monto, category: 'Préstamo tarjeta', date: today(), savingsId: '' };
+      const tx = { id: crypto.randomUUID(), type: 'gasto', description: `Pago: ${deuda.name}`, amount: txAmount, category: 'Préstamo tarjeta', date: today(), savingsId: '' };
       await saveData(userId, { ...data, debts, transactions: [...data.transactions, tx] });
-      if (deuda.remaining === 0) return `🎉 *¡Deuda saldada!*\n\n✅ *${deuda.name}* quedó en cero. Pagaste ${fmt(monto)} y cerramos esa deuda. ¡Una menos!`;
-      return `💳 *Pago registrado!*\n\n📝 ${deuda.name}\n💵 Pagaste: ${fmt(monto)}\n⏳ Queda: ${fmt(deuda.remaining)}${deuda.remainingInstallments > 0 ? `\n📆 Cuotas restantes: ${deuda.remainingInstallments}` : ''}`;
+      if (deuda.remaining === 0) return `🎉 *¡Deuda saldada!*\n\n✅ *${deuda.name}* quedó en cero. Pagaste ${pagoLabel} y cerramos esa deuda. ¡Una menos!`;
+      return `💳 *Pago registrado!*\n\n📝 ${deuda.name}\n💵 Pagaste: ${pagoLabel}\n⏳ Queda: ${quedaLabel}${deuda.remainingInstallments > 0 ? `\n📆 Cuotas restantes: ${deuda.remainingInstallments}` : ''}`;
     }
 
     case 'registrar_gastos_fijos': {
