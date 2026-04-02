@@ -736,7 +736,11 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       );
       const exists = data.budgets.some(b => b.cat.toLowerCase() === action.category.toLowerCase());
       if (!exists) budgets.push({ cat: action.category, limit: budgetLimit });
-      await saveData(userId, { ...data, budgets });
+      // Asegurar que la categoría existe en data.categories para que aparezca en la app
+      const categories = { ...(data.categories || {}) };
+      const catExists = Object.keys(categories).some(k => k.toLowerCase() === action.category.toLowerCase());
+      if (!catExists && budgetLimit > 0) categories[action.category] = '📦';
+      await saveData(userId, { ...data, budgets, categories });
       if (budgetLimit === 0) return `✅ Límite de *${action.category}* quitado — ya no tiene presupuesto asignado.`;
       return `🎯 *Presupuesto actualizado!*\n\n📦 ${action.category}: ${fmt(budgetLimit)} por mes`;
     }

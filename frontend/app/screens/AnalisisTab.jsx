@@ -142,7 +142,7 @@ export default function AnalisisTab({ data, onSave }) {
               <Text style={{ color:'#fff', fontSize:12, fontWeight:'700' }}>+ Nueva</Text>
             </TouchableOpacity>
           </View>
-          {Object.keys(cats).map(cat => {
+          {Array.from(new Set([...Object.keys(cats), ...data.budgets.filter(b => b.limit > 0).map(b => b.cat)])).map(cat => {
             const b = data.budgets.find(x => x.cat === cat) || { cat, limit: 0 };
             const spent = expByCat[b.cat] || 0;
             const rawPct = b.limit > 0 ? (spent/b.limit)*100 : 0;
