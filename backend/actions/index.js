@@ -1286,11 +1286,13 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       let txAmount = monto;
       let pagoLabel = fmt(monto);
       let quedaLabel;
+      let unitsPaid = monto; // for installment comparison: in debt's native currency
       if (deuda.currency === 'usd') {
         const dolar = await getDolarPrice();
         const rate = dolar?.blue || deuda.arsRate || 0;
         const prevUSD = deuda.remainingUSD ?? deuda.amountUSD ?? 0;
         const usdPagado = Math.min(monto, prevUSD);
+        unitsPaid = usdPagado;
         deuda.remainingUSD = Math.max(0, prevUSD - usdPagado);
         txAmount = rate ? usdPagado * rate : 0;
         deuda.remaining = Math.max(0, deuda.remaining - txAmount);
@@ -1300,7 +1302,13 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
         deuda.remaining = Math.max(0, deuda.remaining - monto);
         quedaLabel = fmt(deuda.remaining);
       }
-      deuda.remainingInstallments = Math.max(0, (deuda.remainingInstallments || 0) - 1);
+      // Only decrement installments when at least 90% of a full installment is paid
+      if ((deuda.remainingInstallments || 0) > 0 && deuda.installment > 0) {
+        const instAmt = deuda.currency === 'usd' ? (deuda.installmentUSD || deuda.installment) : deuda.installment;
+        if (instAmt === 0 || unitsPaid >= instAmt * 0.9) {
+          deuda.remainingInstallments = Math.max(0, (deuda.remainingInstallments || 0) - 1);
+        }
+      }
       debts[idx] = deuda;
       const tx = { id: crypto.randomUUID(), type: 'gasto', description: `Pago: ${deuda.name}`, amount: txAmount, category: 'Préstamo tarjeta', date: today(), savingsId: '' };
       await saveData(userId, { ...data, debts, transactions: [...data.transactions, tx] });

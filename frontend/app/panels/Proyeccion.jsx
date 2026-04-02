@@ -37,6 +37,7 @@ export default function Proyeccion({ data, onSave }) {
   };
 
   const recurringIncomes = data.recurringIncomes || [];
+  const recurringIncomesTotal = useMemo(() => recurringIncomes.filter(ri=>ri.active!==false).reduce((s,ri)=>s+(ri.amount||0),0), [recurringIncomes]);
   const budgetItems = useMemo(() => data.budgets.filter(b=>b.limit>0), [data.budgets]);
   const budgetTotal = useMemo(() => budgetItems.reduce((s,b)=>s+b.limit,0), [budgetItems]);
   const gastosFijos = useMemo(() => (data.recurringExpenses || []).filter(g=>g.active), [data.recurringExpenses]);
@@ -47,8 +48,8 @@ export default function Proyeccion({ data, onSave }) {
     const income = getIncome(m, y);
     const cuotas=activeDebts.filter(d=>i<d.remainingInstallments).map(d=>({name:d.name,amount:d.installment}));
     const totalCuotas=cuotas.reduce((s,d)=>s+d.amount,0);
-    return {label:MONTH_NAMES[m],year:y,income,cuotas,totalCuotas,balance:income-budgetTotal-gastosFijosTotal-totalCuotas};
-  }), [activeDebts, budgetTotal, gastosFijosTotal, avgIncome, overrides]);
+    return {label:MONTH_NAMES[m],year:y,income,cuotas,totalCuotas,balance:income+recurringIncomesTotal-budgetTotal-gastosFijosTotal-totalCuotas};
+  }), [activeDebts, budgetTotal, gastosFijosTotal, recurringIncomesTotal, avgIncome, overrides]);
 
   const saveOverride = () => {
     const amount = parseAmt(newSalary);
@@ -74,7 +75,7 @@ export default function Proyeccion({ data, onSave }) {
     <ScrollView contentContainerStyle={{ padding:16, paddingBottom:40 }} showsVerticalScrollIndicator={false}>
       <View style={{ flexDirection:'row', gap:10, flexWrap:'wrap', marginBottom:14 }}>
         {[
-          { label:'Ingreso base', val:avgIncome, sub:'Prom. 3 meses' },
+          { label:'Ingreso base', val:avgIncome+recurringIncomesTotal, sub:recurringIncomesTotal>0?'Sueldo + recurrentes':'Prom. 3 meses' },
           { label:'Gastos fijos', val:budgetTotal+gastosFijosTotal, sub:`${budgetItems.length} categorías · ${gastosFijos.length} fijos` },
           { label:'Cuotas este mes', val:months[0].totalCuotas, sub:`${months[0].cuotas.length} cuota(s)` },
           { label:'Balance estimado', val:months[0].balance, sub:months[0].balance>=0?'Superávit':'Déficit' },

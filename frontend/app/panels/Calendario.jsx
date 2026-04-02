@@ -49,12 +49,15 @@ export default function Calendario({ data, onSave }) {
   const confirmPago = () => {
     const amt = parseAmt(payAmt);
     if (!amt || amt <= 0) return Alert.alert('Error', 'Ingresá un monto válido');
+    const cats = data.categories || {};
+    const preferred = payTarget.type === 'pago' ? 'Servicios' : 'Otros';
+    const category = cats[preferred] ? preferred : (Object.keys(cats)[0] || 'Otros');
     const tx = {
       id: Date.now().toString(),
       type: 'gasto',
       description: payTarget.title,
       amount: amt,
-      category: payTarget.type === 'pago' ? 'Servicios' : 'Otros',
+      category,
       date: new Date().toISOString().split('T')[0],
     };
     onSave({

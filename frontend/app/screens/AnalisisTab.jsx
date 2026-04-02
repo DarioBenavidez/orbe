@@ -38,6 +38,7 @@ export default function AnalisisTab({ data, onSave }) {
   const addCategory = () => {
     if (!catForm.name.trim()) return;
     const key = catForm.name.trim();
+    if (cats[key]) { Alert.alert('Ya existe', `La categoría "${key}" ya está creada.`); return; }
     onSave({ ...data, categories:{ ...cats, [key]:catForm.icon }, budgets:[...data.budgets, { cat:key, limit:0 }] });
     setCatModal(false); setCatForm({ icon:'📦', name:'' });
   };
@@ -78,7 +79,7 @@ export default function AnalisisTab({ data, onSave }) {
     return {
       label: MONTH_NAMES[m],
       income:  mTxs.filter(t => t.type==='ingreso'||t.type==='sueldo').reduce((a,t) => a+t.amount, 0),
-      expense: mTxs.filter(t => t.type==='gasto').reduce((a,t) => a+t.amount, 0),
+      expense: mTxs.filter(t => t.type==='gasto' || t.type==='ahorro_meta').reduce((a,t) => a+t.amount, 0),
     };
   }), [data.transactions, data.selectedMonth, data.selectedYear]);
 

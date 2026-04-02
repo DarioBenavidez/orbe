@@ -226,7 +226,7 @@ export default function MainApp({ user, onLogout }) {
     if (key === '__add__') { setAddModal(true); return; }
     if (key === '__whatsapp__') {
       if (waLinked) {
-        Linking.openURL('https://wa.me/5491125728211').catch(() => {});
+        Linking.openURL(`https://wa.me/${WA_BOT_NUMBER}`).catch(() => {});
         return;
       }
       // Verificar en Supabase por si ya vinculó en otra sesión
@@ -234,7 +234,7 @@ export default function MainApp({ user, onLogout }) {
       const wa = waRows?.[0];
       if (wa?.phone) {
         setWaLinked(wa.phone);
-        Linking.openURL('https://wa.me/5491125728211').catch(() => {});
+        Linking.openURL(`https://wa.me/${WA_BOT_NUMBER}`).catch(() => {});
       } else {
         setWaLinked(false);
         setWaStep('phone'); setWaPhone(''); setWaOtp(''); setWaCode(''); setWaError('');
@@ -396,7 +396,7 @@ export default function MainApp({ user, onLogout }) {
               </View>
               <TouchableOpacity
                 style={{ flexDirection:'row', alignItems:'center', justifyContent:'center', gap:8, backgroundColor:'#25D366', borderRadius:16, paddingVertical:14, marginBottom:12 }}
-                onPress={() => { Linking.openURL(`https://wa.me/5491125728211?text=ORBE:%20${waCode}`); if (!waPolling) startPolling(); }}
+                onPress={() => { Linking.openURL(`https://wa.me/${WA_BOT_NUMBER}?text=ORBE:%20${waCode}`); if (!waPolling) startPolling(); }}
               >
                 <FontAwesome5 name="whatsapp" size={18} color="#fff" solid/>
                 <Text style={{ color:'#fff', fontWeight:'800', fontSize:15 }}>Abrir WhatsApp y enviar</Text>

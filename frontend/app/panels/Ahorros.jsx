@@ -41,7 +41,7 @@ export default function Ahorros({ data, onSave }) {
     }] });
     setModal(false); setForm(emptyF);
   };
-  const openEdit = (sv) => { setEditTarget(sv.id); setEditForm({ name:sv.name, target:sv.target.toString(), current:sv.current.toString() }); setEditModal(true); };
+  const openEdit = (sv) => { setEditTarget(sv.id); setEditForm({ name:sv.name, target:sv.target.toString(), current:sv.current.toString(), currency:sv.currency||'ars' }); setEditModal(true); };
   const saveEdit = () => {
     onSave({ ...data, savings:data.savings.map(sv => sv.id===editTarget ? { ...sv, name:editForm.name, target:parseAmt(editForm.target)||sv.target, current:parseAmt(editForm.current)||0 } : sv) });
     setEditModal(false);
@@ -143,7 +143,7 @@ export default function Ahorros({ data, onSave }) {
         </View>
       </ModalSheet>
       <ModalSheet visible={editModal} onClose={() => setEditModal(false)} title="Editar ahorro">
-        <AhorroForm frm={editForm} setFrm={setEditForm}/>
+        <AhorroForm frm={editForm} setFrm={setEditForm} showCurrency/>
         <View style={{ flexDirection:'row', gap:10 }}>
           <Btn label="Cancelar" variant="ghost" style={{ flex:1 }} onPress={() => setEditModal(false)}/>
           <Btn label="Guardar" style={{ flex:1 }} onPress={saveEdit}/>

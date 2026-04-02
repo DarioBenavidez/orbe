@@ -78,17 +78,33 @@ export default function Deudas({ data, onSave }) {
   const saveEdit = () => {
     const inst = parseAmt(editForm.installment)||0;
     const ri = parseInt(editForm.remainingInstallments)||(inst>0?Math.ceil(parseAmt(editForm.remaining)/inst):0);
-    onSave({ ...data, debts:data.debts.map(d => d.id===editTarget ? { ...d, name:editForm.name, remaining:parseAmt(editForm.remaining)||d.remaining, installment:inst, remainingInstallments:ri } : d) });
+    onSave({ ...data, debts:data.debts.map(d => { if (d.id!==editTarget) return d; const newRem=parseAmt(editForm.remaining)||d.remaining; return { ...d, name:editForm.name, remaining:newRem, total:Math.max(newRem, d.total||0), installment:inst, remainingInstallments:ri }; }) });
     setEditModal(false);
   };
   const pay = (id) => {
     const amt = parseAmt(payAmt[id]||'0'); if (!amt) return;
     const deuda = data.debts.find(d => d.id===id);
-    const realAmt = Math.min(amt, deuda.remaining);
-    const debts = data.debts.map(d => d.id===id ? { ...d, remaining:Math.max(0,d.remaining-realAmt), remainingInstallments:Math.max(0,(d.remainingInstallments||0)-1) } : d);
     const cats = data.categories || DEFAULT_CATEGORIES;
     const payCategory = cats['Préstamo tarjeta'] ? 'Préstamo tarjeta' : 'Otros';
-    const tx = { id:Date.now().toString(), type:'gasto', description:`Pago: ${deuda.name}`, amount:realAmt, category:payCategory, date:new Date().toISOString().split('T')[0] };
+    const today = new Date().toISOString().split('T')[0];
+    let debts, txAmount;
+    if (deuda.currency === 'usd') {
+      const rate = dolarBlue || deuda.arsRate || 0;
+      if (!rate) {
+        Alert.alert('Sin cotización', 'No se pudo obtener el precio del dólar. Intentá de nuevo en unos segundos.');
+        return;
+      }
+      const prevUSD = deuda.remainingUSD ?? deuda.amountUSD ?? 0;
+      const usdAmt = Math.min(amt, prevUSD);
+      const arsAmt = usdAmt * rate;
+      debts = data.debts.map(d => d.id===id ? { ...d, remainingUSD:Math.max(0,prevUSD-usdAmt), remaining:Math.max(0,d.remaining-arsAmt), remainingInstallments:Math.max(0,(d.remainingInstallments||0)-1) } : d);
+      txAmount = arsAmt;
+    } else {
+      const realAmt = Math.min(amt, deuda.remaining);
+      debts = data.debts.map(d => d.id===id ? { ...d, remaining:Math.max(0,d.remaining-realAmt), remainingInstallments:Math.max(0,(d.remainingInstallments||0)-1) } : d);
+      txAmount = realAmt;
+    }
+    const tx = { id:Date.now().toString(), type:'gasto', description:`Pago: ${deuda.name}`, amount:txAmount, category:payCategory, date:today };
     onSave({ ...data, debts, transactions:[...data.transactions, tx] });
     setPayAmt({ ...payAmt, [id]:'' });
   };
@@ -157,11 +173,14 @@ export default function Deudas({ data, onSave }) {
                     <TextInput
                       style={{ flex:1, backgroundColor:C.surface2, borderWidth:1, borderColor:C.border, borderRadius:12, padding:10, fontSize:13, color:C.text }}
                       value={payAmt[d.id]||''} onChangeText={v => setPayAmt(p => ({ ...p, [d.id]:fmtAmt(v) }))}
-                      placeholder="Registrar pago $" keyboardType="numeric" placeholderTextColor={C.textDim}
+                      placeholder={d.currency==='usd' ? 'Registrar pago USD' : 'Registrar pago $'} keyboardType="numeric" placeholderTextColor={C.textDim}
                     />
                     <Btn label="Pagar" onPress={() => pay(d.id)} style={{ paddingHorizontal:18, paddingVertical:10 }}/>
                   </View>
-                  <Text style={{ fontSize:10, color:C.textMuted, marginTop:6 }}>💡 El pago se registra como gasto automáticamente</Text>
+                  {d.currency==='usd' && dolarBlue && (
+                    <Text style={{ fontSize:10, color:C.textMuted, marginTop:4 }}>💱 Blue: {fmt(dolarBlue)}/USD · el pago se convierte a pesos automáticamente</Text>
+                  )}
+                  <Text style={{ fontSize:10, color:C.textMuted, marginTop:2 }}>💡 El pago se registra como gasto automáticamente</Text>
                 </Card>
               );
             })
