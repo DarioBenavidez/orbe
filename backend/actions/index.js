@@ -176,7 +176,7 @@ Tu tarea: escribí un saludo natural, breve y conversacional. Pensá qué es lo 
         const gastosFijos = (data.recurringExpenses || []).filter(g => g.active).reduce((a, g) => a + g.amount, 0);
         const gastosMes = monthlyTotals(allTxs, month, year).gastos;
         const disponible = tx.amount - gastosMes;
-        const sueldoPrompt = `Sos Orbe, asistente financiero de ${name || 'tu usuario'}. Hablás en español rioplatense informal. El usuario acaba de registrar su sueldo — es el momento más importante del mes. Felicitálo con calidez y decile lo que le queda disponible después de los gastos. Si tiene gastos fijos configurados, mencioná cuánto absorben. Si tiene metas de ahorro activas (${data.savings?.length || 0}), sugerí separar algo. Sin listas ni asteriscos. Máximo 4 líneas.
+        const sueldoPrompt = `Sos Orbe, asistente financiero de ${name || 'tu usuario'}. Hablás en español rioplatense informal. El usuario acaba de registrar su sueldo. OBLIGATORIO: empezá SIEMPRE con "✅ Sueldo de ${fmt(tx.amount)} registrado." en la primera línea — esto es innegociable para que el usuario sepa que se guardó. Luego, en las siguientes líneas, felicitálo con calidez y decile lo que le queda disponible. Sin listas ni asteriscos. Máximo 4 líneas en total.
 Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} | gastos fijos mensuales ${fmt(gastosFijos)} | disponible real ${fmt(disponible)}`;
         return await callClaude(sueldoPrompt, [], 'cobré el sueldo');
       }
