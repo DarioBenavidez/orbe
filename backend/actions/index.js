@@ -332,8 +332,13 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       const gastosFijosRest = (data.recurringExpenses || []).filter(g => g.active && g.day > dayOfMonth).reduce((s, g) => s + g.amount, 0);
       const disponible = balance - gastosFijosRest;
       const porDia = daysLeft > 0 ? Math.round(disponible / daysLeft) : disponible;
+      const avgDailySpend = gastos > 0 && dayOfMonth > 1 ? Math.round(gastos / (dayOfMonth - 1)) : 0;
+      const diasDura = avgDailySpend > 0 ? Math.floor(disponible / avgDailySpend) : null;
       const emoji = porDia > 0 ? '🟢' : '🔴';
-      return `${emoji} *Presupuesto diario*\n\n💰 Balance actual: ${fmt(balance)}\n🔧 Gastos fijos que restan: ${fmt(gastosFijosRest)}\n💡 Disponible real: ${fmt(disponible)}\n📅 Días restantes: ${daysLeft}\n\n💸 *Podés gastar: ${fmt(Math.max(0, porDia))} por día*`;
+      const duracionLine = diasDura !== null
+        ? `\n⏳ A tu ritmo actual (${fmt(avgDailySpend)}/día), el sueldo te dura *${diasDura} días más*`
+        : '';
+      return `${emoji} *Presupuesto diario*\n\n💰 Balance actual: ${fmt(balance)}\n🔧 Gastos fijos que restan: ${fmt(gastosFijosRest)}\n💡 Disponible real: ${fmt(disponible)}\n📅 Días restantes: ${daysLeft}\n\n💸 *Podés gastar: ${fmt(Math.max(0, porDia))} por día*${duracionLine}`;
     }
 
     case 'modo_ahorro': {
