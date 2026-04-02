@@ -19,6 +19,7 @@ import Calendario  from './panels/Calendario';
 import Proyeccion    from './panels/Proyeccion';
 import Suscripciones from './panels/Suscripciones';
 import GastosFijos   from './panels/GastosFijos';
+import Presupuesto   from './panels/Presupuesto';
 
 const TABS = [
   { key:'inicio',        label:'Inicio',   icon:'🏠' },
@@ -37,6 +38,7 @@ const PANEL_LABELS = {
   turnos: 'Turnos', calendario: 'Eventos', proyeccion: 'Proyección',
   suscripciones: 'Suscripciones',
   gastosfijos: 'Gastos Fijos',
+  presupuesto: 'Presupuesto & Categorías',
 };
 
 export default function MainApp({ user, onLogout }) {
@@ -277,6 +279,7 @@ export default function MainApp({ user, onLogout }) {
               {panel==='proyeccion'     && <Proyeccion     data={data} onSave={save}/>}
               {panel==='suscripciones' && <Suscripciones  data={data} onSave={save}/>}
               {panel==='gastosfijos'   && <GastosFijos    data={data} onSave={save}/>}
+              {panel==='presupuesto'   && <Presupuesto   data={data} onSave={save}/>}
             </View>
           </ThemeCtx.Provider>
         </Modal>
