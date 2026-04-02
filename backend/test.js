@@ -422,6 +422,155 @@ await test('interpretMessage', 'no crashea con historial largo (35 msgs)', async
   assert(typeof r === 'object', 'Debería retornar objeto');
 });
 
+// ── Deudas USD ────────────────────────────────────────────
+await test('Deudas USD', 'agregar_deuda en USD', async () => {
+  const r = await act({ type:'agregar_deuda', name:'BBVA', amountUSD:100, remainingUSD:100, currency:'usd', arsRate:1400 }, mockData(), UID, NAME);
+  assertIncludes(r, 'BBVA'); assertIncludes(r, 'USD');
+});
+
+await test('Deudas USD', 'pagar_deuda USD descuenta remainingUSD', async () => {
+  const d = mockData({ debts:[{ id:'d2', name:'BBVA', currency:'usd', amountUSD:100, remainingUSD:100, remaining:140000, installment:0, remainingInstallments:0, arsRate:1400 }] });
+  const r = await act({ type:'pagar_deuda', keyword:'BBVA', amount:50 }, d, UID, NAME);
+  assertIncludes(r, 'USD 50'); assertIncludes(r, 'Queda');
+});
+
+await test('Deudas USD', 'pagar_deuda USD salda deuda', async () => {
+  const d = mockData({ debts:[{ id:'d2', name:'BBVA', currency:'usd', amountUSD:50, remainingUSD:50, remaining:70000, installment:0, remainingInstallments:0, arsRate:1400 }] });
+  const r = await act({ type:'pagar_deuda', keyword:'BBVA', amount:50 }, d, UID, NAME);
+  assertIncludes(r, 'saldada');
+});
+
+// ── Suscripciones ─────────────────────────────────────────
+await test('Suscripciones', 'agregar_suscripcion con monto válido', async () => {
+  const r = await act({ type:'agregar_suscripcion', name:'Disney+', amount:8000, day:15, currency:'ars' }, mockData(), UID, NAME, [], PHONE);
+  assertIncludes(r, 'Disney'); assertIncludes(r, '8.000');
+});
+
+await test('Suscripciones', 'agregar_suscripcion sin monto pide precio', async () => {
+  const r = await act({ type:'agregar_suscripcion', name:'Netflix', amount:0, day:1, currency:'ars' }, mockData(), UID, NAME, [], PHONE);
+  assertIncludes(r, '¿Cuánto');
+});
+
+await test('Suscripciones', 'cancelar_suscripcion existente', async () => {
+  const d = mockData({ suscripciones:[{ id:'s1', name:'Spotify', amount:11400, day:30, active:true }] });
+  const r = await act({ type:'cancelar_suscripcion', keyword:'spotify' }, d, UID, NAME);
+  assertIncludes(r, 'Spotify'); assertIncludes(r, 'cancelada');
+});
+
+await test('Suscripciones', 'cancelar_todas_suscripciones', async () => {
+  const d = mockData({ suscripciones:[
+    { id:'s1', name:'Spotify', amount:11400, day:30, active:true },
+    { id:'s2', name:'Netflix', amount:15000, day:1,  active:true },
+  ]});
+  const r = await act({ type:'cancelar_todas_suscripciones' }, d, UID, NAME);
+  assertIncludes(r, 'Spotify'); assertIncludes(r, 'Netflix');
+});
+
+await test('Suscripciones', 'cancelar_todas sin suscripciones activas', async () => {
+  const r = await act({ type:'cancelar_todas_suscripciones' }, mockData({ suscripciones:[] }), UID, NAME);
+  assertIncludes(r, 'No tenés');
+});
+
+// ── Préstamos — edge cases ────────────────────────────────
+await test('Préstamos edge', 'pago de más genera saldo a favor', async () => {
+  const r = await act({ type:'registrar_pago_prestamo', name:'Claudio', amount:15000 }, mockData(), UID, NAME);
+  assertIncludes(r, 'saldó'); // pagó más de lo que debía (8000)
+});
+
+await test('Préstamos edge', 'borrar_prestamo existente', async () => {
+  const r = await act({ type:'borrar_prestamo', name:'Claudio' }, mockData(), UID, NAME);
+  assertIncludes(r, 'Claudio'); assertIncludes(r, 'elimin');
+});
+
+await test('Préstamos edge', 'borrar_prestamo inexistente', async () => {
+  const r = await act({ type:'borrar_prestamo', name:'XYZ' }, mockData(), UID, NAME);
+  assertIncludes(r, 'encontr');
+});
+
+// ── Ahorros — edge cases ──────────────────────────────────
+await test('Ahorros edge', 'depositar monto 0 no suma nada', async () => {
+  const r = await act({ type:'depositar_ahorro', keyword:'vacaciones', amount:0 }, mockData(), UID, NAME);
+  assertStr(r); // no debe crashear
+});
+
+// ── Turnos ────────────────────────────────────────────────
+await test('Turnos', 'agendar_turno', async () => {
+  const r = await act({ type:'agendar_turno', description:'Médico clínico', date:'2026-04-15', time:'10:00', turnoType:'medico' }, mockData(), UID, NAME);
+  assertIncludes(r, 'Médico'); assertIncludes(r, '15');
+});
+
+await test('Turnos', 'consultar_turnos con datos', async () => {
+  const d = mockData({ turnos:[{ id:'t1', description:'Dentista', date:'2026-04-20', time:'09:00', turnoType:'medico' }] });
+  const r = await act({ type:'consultar_turnos' }, d, UID, NAME);
+  assertIncludes(r, 'Dentista');
+});
+
+await test('Turnos', 'consultar_turnos vacío', async () => {
+  const r = await act({ type:'consultar_turnos' }, mockData({ turnos:[] }), UID, NAME);
+  assertIncludes(r, 'No tenés');
+});
+
+await test('Turnos', 'cancelar_turno existente', async () => {
+  const d = mockData({ turnos:[{ id:'t1', description:'Dentista', date:'2026-04-20', time:'09:00', turnoType:'medico' }] });
+  const r = await act({ type:'cancelar_turno', keyword:'dentista' }, d, UID, NAME);
+  assertIncludes(r, 'Dentista'); assertIncludes(r, 'cancel');
+});
+
+// ── Silenciar / Reanudar ──────────────────────────────────
+await test('Silenciar', 'silenciar por días', async () => {
+  const r = await act({ type:'silenciar', dias:3 }, mockData(), UID, NAME);
+  assertIncludes(r, 'molesto'); assertIncludes(r, '2026'); // fecha futura
+});
+
+await test('Silenciar', 'reanudar notificaciones', async () => {
+  const r = await act({ type:'reanudar' }, mockData({ silencedUntil:'2099-01-01' }), UID, NAME);
+  assertIncludes(r, 'Bienvenido');
+});
+
+// ── Gastos compartidos ────────────────────────────────────
+await test('Gastos compartidos', 'gasto_compartido registra mitad', async () => {
+  const r = await act({ type:'gasto_compartido', description:'Cena', amount:20000, category:'Comida' }, mockData(), UID, NAME, [], PHONE);
+  assertIncludes(r, '10.000'); // mitad del gasto
+});
+
+// ── Ingresos recurrentes — edge cases ─────────────────────
+await test('Ingresos recurrentes', 'borrar ingreso existente', async () => {
+  const r = await act({ type:'borrar_ingreso_recurrente', keyword:'astrid' }, mockData(), UID, NAME);
+  assertIncludes(r, 'astrid'); assertIncludes(r, 'Borré');
+});
+
+await test('Ingresos recurrentes', 'borrar ingreso inexistente', async () => {
+  const r = await act({ type:'borrar_ingreso_recurrente', keyword:'nadie' }, mockData(), UID, NAME);
+  assertIncludes(r, 'encontr');
+});
+
+// ── Tareas ────────────────────────────────────────────────
+await test('Tareas', 'agregar_tarea', async () => {
+  const r = await act({ type:'agregar_tarea', description:'Pagar impuestos', dueDate:'2026-04-30' }, mockData(), UID, NAME);
+  assertIncludes(r, 'Pagar impuestos');
+});
+
+await test('Tareas', 'consultar_tareas vacío', async () => {
+  const r = await act({ type:'consultar_tareas' }, mockData({ tareas:[] }), UID, NAME);
+  assertStr(r); assertIncludes(r, 'No tenés');
+});
+
+// ── Validaciones críticas ─────────────────────────────────
+await test('Validaciones', 'agregar_transaccion monto 0 rechaza', async () => {
+  const r = await act({ type:'agregar_transaccion', txType:'gasto', description:'Test', amount:0, category:'Comida', date:today() }, mockData(), UID, NAME, [], PHONE);
+  assertIncludes(r, '🤔'); // debe rechazar
+});
+
+await test('Validaciones', 'agregar_transaccion sin descripcion rechaza', async () => {
+  const r = await act({ type:'agregar_transaccion', txType:'gasto', description:'', amount:5000, category:'Comida', date:today() }, mockData(), UID, NAME, [], PHONE);
+  assertIncludes(r, '🤔');
+});
+
+await test('Validaciones', 'actualizar_presupuesto limite 0 rechaza', async () => {
+  const r = await act({ type:'actualizar_presupuesto', category:'Comida', limit:0 }, mockData(), UID, NAME);
+  assertIncludes(r, '🤔');
+});
+
 // ═══════════════════════════════════════════════════════════
 //  REPORTE FINAL
 // ═══════════════════════════════════════════════════════════
