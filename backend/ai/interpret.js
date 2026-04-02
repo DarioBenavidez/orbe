@@ -121,6 +121,7 @@ ACCIONES DISPONIBLES:
 {"type":"consultar_presupuesto"}
 {"type":"consultar_presupuesto_categoria","category":"Ropa"}
 {"type":"actualizar_presupuesto","category":"Ropa","limit":5000}
+{"type":"actualizar_presupuesto","category":"Vivienda","limit":0}
 {"type":"consultar_ahorros"}
 {"type":"consultar_deudas"}
 {"type":"consultar_vencimientos"}
@@ -263,6 +264,7 @@ REGLAS DE INTERPRETACIÓN:
 - "dividí con X el gasto de Y", "gasté Z con mi pareja/amigo/familiar en X", "gasto compartido" → gasto_compartido (amount: monto TOTAL, la mitad se registra automáticamente)
 - "qué me recomendás", "conviene que...", "qué hago con...", "es buen momento para..." → conversacion (Claude responde con consejo financiero personalizado usando el contexto disponible)
 - "cuánto tengo por día", "presupuesto diario", "cuánto puedo gastar por día" → presupuesto_diario
+- "eliminá/quitá/sacá/borrá el presupuesto de X / poné el límite de X en 0 / quiero sacar el presupuesto de X" → actualizar_presupuesto (category: X, limit: 0)
 - "modo ahorro X%", "reducí los presupuestos X%", "quiero ahorrar más este mes" → modo_ahorro (porcentaje: número entre 1-50)
 - "si pido X en Y cuotas", "simulá un préstamo de X", "cuánto pago si saco X" → simular_prestamo (amount, cuotas, tna si la menciona sino 0)
 - "qué deuda pago primero", "estrategia para mis deudas", "cómo salgo de las deudas" → estrategia_deudas

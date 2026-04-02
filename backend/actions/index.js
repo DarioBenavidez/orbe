@@ -728,7 +728,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
 
     case 'actualizar_presupuesto': {
       const budgetLimit = parseFloat(action.limit);
-      if (!budgetLimit || budgetLimit < 0) return `🤔 El presupuesto debe ser un monto positivo. ¿Cuánto querés asignar para *${action.category}*?`;
+      if (isNaN(budgetLimit) || budgetLimit < 0) return `🤔 Ingresá un monto válido para *${action.category}* (o 0 para quitar el límite).`;
       const budgets = data.budgets.map(b =>
         b.cat.toLowerCase() === action.category.toLowerCase()
           ? { ...b, limit: budgetLimit }
@@ -737,6 +737,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       const exists = data.budgets.some(b => b.cat.toLowerCase() === action.category.toLowerCase());
       if (!exists) budgets.push({ cat: action.category, limit: budgetLimit });
       await saveData(userId, { ...data, budgets });
+      if (budgetLimit === 0) return `✅ Límite de *${action.category}* quitado — ya no tiene presupuesto asignado.`;
       return `🎯 *Presupuesto actualizado!*\n\n📦 ${action.category}: ${fmt(budgetLimit)} por mes`;
     }
 
