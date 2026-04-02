@@ -115,11 +115,22 @@ export default function Proyeccion({ data, onSave }) {
           <Text style={{ fontSize:11, fontWeight:'700', color:C.textMuted, letterSpacing:0.5, marginBottom:8 }}>INGRESOS RECURRENTES</Text>
           {recurringIncomes.map((ri, i) => (
             <View key={i} style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center', paddingVertical:8, borderBottomWidth:1, borderBottomColor:C.border }}>
-              <View>
+              <View style={{ flex:1 }}>
                 <Text style={{ fontSize:13, color:C.text, fontWeight:'600' }}>{ri.name}</Text>
                 <Text style={{ fontSize:11, color:C.textMuted, marginTop:2 }}>Día {ri.day} de cada mes</Text>
               </View>
-              <Text style={{ fontSize:14, fontWeight:'800', color:C.green }}>{fmt(ri.amount)}</Text>
+              <Text style={{ fontSize:14, fontWeight:'800', color:C.green, marginRight:12 }}>{fmt(ri.amount)}</Text>
+              <TouchableOpacity onPress={() => {
+                Alert.alert('Eliminar', `¿Eliminar "${ri.name}"?`, [
+                  { text:'Cancelar' },
+                  { text:'Eliminar', style:'destructive', onPress: () => {
+                    const updated = recurringIncomes.filter((_, idx) => idx !== i);
+                    onSave({ ...data, recurringIncomes: updated });
+                  }},
+                ]);
+              }}>
+                <Text style={{ fontSize:16, color:C.red }}>✕</Text>
+              </TouchableOpacity>
             </View>
           ))}
         </Card>
