@@ -1277,6 +1277,20 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       return `💳 *Deuda registrada!*\n\n📝 ${deuda.name}\n💸 Monto: ${action.currency === 'usd' ? `${fmtUSD(action.remainingUSD)} (≈ ${fmt(remainingARS)})` : fmt(remainingARS)}${usdDeudaNote}${installmentARS > 0 ? `\n📆 Cuota mensual: ${fmt(installmentARS)}\n🗓️ Cuotas estimadas: ${ri}` : ''}\n\nCuando hagas un pago, avisame y lo descuento del total.`;
     }
 
+    case 'agregar_gasto_a_deuda': {
+      const debts = data.debts || [];
+      const idx = debts.findIndex(d => d.name.toLowerCase().includes((action.keyword || '').toLowerCase()));
+      if (idx === -1) return `🤔 No encontré ninguna deuda que coincida con *${action.keyword}*. ¿Cómo se llama exactamente?`;
+      const monto = parseFloat(action.amount);
+      if (!monto || monto <= 0) return `🤔 Ingresá un monto válido.`;
+      const deuda = { ...debts[idx] };
+      deuda.remaining = (deuda.remaining || 0) + monto;
+      deuda.total = Math.max(deuda.total || 0, deuda.remaining);
+      debts[idx] = deuda;
+      await saveData(userId, { ...data, debts });
+      return `💳 *Gasto sumado a ${deuda.name}*\n\n➕ Agregué: ${fmt(monto)}\n💸 Deuda total ahora: ${fmt(deuda.remaining)}`;
+    }
+
     case 'borrar_deuda': {
       const debts = data.debts || [];
       const idx = debts.findIndex(d => d.name.toLowerCase().includes((action.keyword || '').toLowerCase()));
