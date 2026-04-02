@@ -16,7 +16,7 @@ function monthlyTotals(transactions, month, year) {
   return {
     txs,
     ingresos: txs.filter(t => t.type === 'ingreso' || t.type === 'sueldo').reduce((s, t) => s + t.amount, 0),
-    gastos:   txs.filter(t => t.type === 'gasto').reduce((s, t) => s + t.amount, 0),
+    gastos:   txs.filter(t => t.type === 'gasto' || t.type === 'ahorro_meta').reduce((s, t) => s + t.amount, 0),
     sueldo:   txs.filter(t => t.type === 'sueldo').reduce((s, t) => s + t.amount, 0),
   };
 }

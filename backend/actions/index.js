@@ -539,7 +539,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
     case 'consultar_suscripciones': {
       const subs = (data.suscripciones || []).filter(s => s.active);
       if (!subs.length) return `📭 No tenés suscripciones registradas.`;
-      const total = subs.reduce((s, sub) => s + sub.amount, 0);
+      const total = subs.reduce((s, sub) => s + (sub.amount || 0), 0);
       const anual = total * 12;
       return `📱 *Tus suscripciones*\n\n${subs.map(s => `• *${s.name}*: ${fmt(s.amount)}/mes (día ${s.day})`).join('\n')}\n\n💸 Total mensual: ${fmt(total)}\n📅 Total anual: ${fmt(anual)}`;
     }
@@ -549,7 +549,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       if (!activas.length) return `📭 No tenés suscripciones activas para cancelar.`;
       const suscripciones = (data.suscripciones || []).map(s => ({ ...s, active: false }));
       await saveData(userId, { ...data, suscripciones, recurringExpenses: [] });
-      const total = activas.reduce((s, sub) => s + sub.amount, 0);
+      const total = activas.reduce((s, sub) => s + (sub.amount || 0), 0);
       const lista = activas.map(s => `• ${s.name}`).join('\n');
       return `🗑️ Cancelé todas tus suscripciones:\n\n${lista}\n\n💸 Te liberás ${fmt(total)}/mes · ${fmt(total * 12)}/año.`;
     }
@@ -1072,7 +1072,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
         }).join('\n') + '\n';
         // Total: si hay mezcla USD+ARS, mostrar ambos
         const usdLoans = activos.filter(l => l.currency === 'usd');
-        const totalUSD = usdLoans.reduce((s, l) => s + (l.amountUSD || 0), 0);
+        const totalUSD = usdLoans.reduce((s, l) => s + (l.remainingUSD ?? l.amountUSD ?? 0), 0);
         const arsOnlyLoans = activos.filter(l => l.currency !== 'usd');
         const totalARS = arsOnlyLoans.reduce((s, l) => s + l.remaining, 0);
         if (usdLoans.length > 0 && arsOnlyLoans.length > 0) {
@@ -1118,7 +1118,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       const lineas = activos.map(p => {
         const usdLoans = p.loans.filter(l => l.currency === 'usd');
         const arsLoans = p.loans.filter(l => l.currency !== 'usd');
-        const totalUSD = usdLoans.reduce((s, l) => s + (l.amountUSD || 0), 0);
+        const totalUSD = usdLoans.reduce((s, l) => s + (l.remainingUSD ?? l.amountUSD ?? 0), 0);
         const totalARS = arsLoans.reduce((s, l) => s + l.remaining, 0);
         let montoStr;
         if (usdLoans.length > 0 && arsLoans.length > 0) {
