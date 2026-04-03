@@ -102,8 +102,8 @@ export async function loadData(uid) {
     salaryOverrides:    Array.isArray(d.salaryOverrides)    ? d.salaryOverrides    : [],
     suscripciones:      Array.isArray(d.suscripciones)      ? d.suscripciones      : [],
     recurringExpenses:  Array.isArray(d.recurringExpenses)  ? d.recurringExpenses  : [],
-    selectedMonth:    typeof d.selectedMonth === 'number' ? d.selectedMonth : new Date().getMonth(),
-    selectedYear:     typeof d.selectedYear  === 'number' ? d.selectedYear  : new Date().getFullYear(),
+    selectedMonth:    (() => { const now = new Date(); const sm = typeof d.selectedMonth === 'number' ? d.selectedMonth : now.getMonth(); const sy = typeof d.selectedYear === 'number' ? d.selectedYear : now.getFullYear(); return (sy < now.getFullYear() || (sy === now.getFullYear() && sm < now.getMonth())) ? now.getMonth() : sm; })(),
+    selectedYear:     (() => { const now = new Date(); const sm = typeof d.selectedMonth === 'number' ? d.selectedMonth : now.getMonth(); const sy = typeof d.selectedYear === 'number' ? d.selectedYear : now.getFullYear(); return (sy < now.getFullYear() || (sy === now.getFullYear() && sm < now.getMonth())) ? now.getFullYear() : sy; })(),
   };
 }
 
