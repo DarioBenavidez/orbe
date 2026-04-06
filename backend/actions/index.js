@@ -82,15 +82,17 @@ Tu tarea: escribí un saludo natural, breve y conversacional. Pensá qué es lo 
       if (realIdx === -1) return `🤔 No encontré ninguna transacción de este mes que coincida con *"${action.keyword}"*.`;
       const original = txs[realIdx];
       const cambios = [];
-      if (action.newAmount)      cambios.push(`monto: ${fmt(original.amount)} → ${fmt(parseFloat(action.newAmount))}`);
-      if (action.newDescription) cambios.push(`descripción: "${original.description}" → "${action.newDescription}"`);
-      if (action.newCategory)    cambios.push(`categoría: ${original.category} → ${action.newCategory}`);
+      if (action.newAmount)         cambios.push(`monto: ${fmt(original.amount)} → ${fmt(parseFloat(action.newAmount))}`);
+      if (action.newDescription)    cambios.push(`descripción: "${original.description}" → "${action.newDescription}"`);
+      if (action.newCategory)       cambios.push(`categoría: ${original.category} → ${action.newCategory}`);
+      if (action.newPaymentMethod)  cambios.push(`medio de pago: ${original.paymentMethod || 'sin dato'} → ${action.newPaymentMethod}`);
       await savePendingSuggestion(phone, JSON.stringify({
         type: 'confirm_edit',
         txId: original.id,
         newAmount: action.newAmount || null,
         newDescription: action.newDescription || null,
         newCategory: action.newCategory || null,
+        newPaymentMethod: action.newPaymentMethod || null,
       }));
       return `✏️ Encontré esto:\n\n📝 *${original.description}* — ${fmt(original.amount)} (${original.date})\n\n${cambios.join('\n')}\n\n¿Lo actualizo? (Sí / No)`;
     }
@@ -144,6 +146,7 @@ Tu tarea: escribí un saludo natural, breve y conversacional. Pensá qué es lo 
         date: action.date || today(),
         savingsId: '',
         note: action.note || '',
+        ...(action.paymentMethod ? { paymentMethod: action.paymentMethod } : {}),
       };
       // Deduplicación: evitar registrar dos veces la misma transacción
       if (tx.type === 'ingreso' || tx.type === 'sueldo') {
@@ -236,6 +239,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
           category: t.category || 'Otros',
           date: t.date || today(),
           savingsId: '',
+          ...(t.paymentMethod ? { paymentMethod: t.paymentMethod } : {}),
         }));
       if (!nuevas.length) return `🤔 No pude leer los montos. ¿Podés pasarme cada gasto por separado?`;
       await saveData(userId, { ...data, transactions: [...data.transactions, ...nuevas] });
@@ -250,6 +254,7 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
       const txType = action.txType || '';
       const dateFrom = action.dateFrom || '';
       const dateTo = action.dateTo || '';
+      const paymentMethod = (action.paymentMethod || '').toLowerCase();
 
       const results = data.transactions.filter(t => {
         if (keyword && !t.description?.toLowerCase().includes(keyword) && !t.category?.toLowerCase().includes(keyword)) return false;
@@ -257,12 +262,16 @@ Datos: sueldo ${fmt(tx.amount)} | gastos del mes hasta ahora ${fmt(gastosMes)} |
         if (txType && t.type !== txType) return false;
         if (dateFrom && t.date < dateFrom) return false;
         if (dateTo && t.date > dateTo) return false;
+        if (paymentMethod && (t.paymentMethod || '').toLowerCase() !== paymentMethod) return false;
         return true;
       }).slice().reverse().slice(0, 15);
 
       if (!results.length) return `🔍 No encontré transacciones que coincidan con tu búsqueda.`;
       const total = results.reduce((s, t) => s + (t.type === 'gasto' ? t.amount : -t.amount), 0);
-      const lineas = results.map(t => `${t.type === 'gasto' ? '💸' : '💰'} ${t.description} — ${fmt(t.amount)} (${t.date})`).join('\n');
+      const lineas = results.map(t => {
+        const pm = t.paymentMethod ? ` · ${t.paymentMethod}` : '';
+        return `${t.type === 'gasto' ? '💸' : '💰'} ${t.description} — ${fmt(t.amount)} (${t.date}${pm})`;
+      }).join('\n');
       return `🔍 *${results.length} resultado${results.length > 1 ? 's' : ''}*\n\n${lineas}\n\n📊 Total: ${fmt(Math.abs(total))}`;
     }
 

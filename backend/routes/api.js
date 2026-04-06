@@ -112,6 +112,26 @@ router.post('/verify-phone-otp', async (req, res) => {
   }
 });
 
+// ── Vincular teléfono directamente (sin OTP) ─────────────
+router.post('/link-phone', linkCodeLimiter, async (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) return res.status(401).json({ error: 'No autorizado' });
+  const token = authHeader.slice(7);
+  try {
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) return res.status(401).json({ error: 'Token inválido' });
+    const phone = (req.body?.phone || '').replace(/\D/g, '');
+    const validPhone = /^549\d{10}$/.test(phone);
+    if (!validPhone) return res.status(400).json({ error: 'Número inválido. Usá formato argentino: 549XXXXXXXXXX' });
+    const userName = user.user_metadata?.full_name || user.user_metadata?.nombre || user.email?.split('@')[0] || 'Usuario';
+    await linkPhoneToUser(phone, user.id, userName);
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('❌ Error vinculando teléfono:', err.message);
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
 // ── Cotización del dólar (para el frontend) ───────────────
 router.get('/dolar', async (req, res) => {
   try {

@@ -235,9 +235,10 @@ async function handlePending(pendingRaw, incomingMsg, data, userId, history, fro
       const original = txs[txIdx];
       const updated = {
         ...original,
-        ...(parsed.newAmount      ? { amount:      parseFloat(parsed.newAmount) }   : {}),
-        ...(parsed.newDescription ? { description: parsed.newDescription }           : {}),
-        ...(parsed.newCategory    ? { category:    parsed.newCategory }              : {}),
+        ...(parsed.newAmount         ? { amount:         parseFloat(parsed.newAmount) } : {}),
+        ...(parsed.newDescription    ? { description:    parsed.newDescription }         : {}),
+        ...(parsed.newCategory       ? { category:       parsed.newCategory }            : {}),
+        ...(parsed.newPaymentMethod  ? { paymentMethod:  parsed.newPaymentMethod }       : {}),
       };
       txs[txIdx] = updated;
       await saveData(userId, { ...data, transactions: txs });
